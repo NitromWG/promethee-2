@@ -198,11 +198,19 @@ void essaisElectroniqueL3(FenetrePrincipale& f, const Verifier& verifier0) {
       }
     const bool choisi = cliquerSymbole(a, doc, "R1");
     auto* h = ins->page() ? ins->page()->findChild<QDoubleSpinBox*>(QStringLiteral("hauteurComposant")) : nullptr;
+    std::string suite;
     if (h) {
       ins->ensureWidgetVisible(h);
       attendre(50);
       saisir(h, QStringLiteral("12"));
-      if (auto* confirmer = ins->page()->findChild<QPushButton*>(QStringLiteral("confirmerHauteur")); confirmer && confirmer->isVisible()) {
+      auto* confirmer = ins->page() ? ins->page()->findChild<QPushButton*>(QStringLiteral("confirmerHauteur")) : nullptr;
+      suite += ", champ " + std::to_string(h->value()) + (confirmer ? confirmer->isVisible() ? ", confirmation montrée" : ", confirmation cachée" : ", pas de confirmation");
+      if (confirmer && confirmer->isVisible()) {
+        ins->ensureWidgetVisible(confirmer);  // dans un inspecteur étroit, le bouton peut être sous le bord
+        attendre(50);
+        const QPoint ici = confirmer->mapTo(confirmer->window(), confirmer->rect().center());
+        QWidget* dessus = confirmer->window()->childAt(ici);
+        suite += std::string(", dessus du bouton : ") + (dessus ? dessus->metaObject()->className() + std::string(" ") + dessus->objectName().toStdString() : std::string("—"));
         reel::cliquer(confirmer, confirmer->rect().center());
         attendre(150);
       }
@@ -225,7 +233,7 @@ void essaisElectroniqueL3(FenetrePrincipale& f, const Verifier& verifier0) {
                  std::abs(boitier - 12) < 1e-6 && source == "saisie" && provenance && provenance->text().contains(QStringLiteral("saisie")),
              "3.4 : 12 mm saisis dans l'inspecteur donnent un corps de 12 mm en 3D et dans le boîtier ; la provenance montrée est « saisie »",
              "corps " + std::to_string(corps ? corps->hauteur.mm : -1.0) + " mm, boîtier " + std::to_string(boitier) + " mm (" + source + ")" + (choisi ? "" : ", R1 pas choisi") +
-                 (h ? h->isVisible() ? "" : ", champ caché" : ", pas de champ") + ", page " + ins->clePage().toStdString());
+                 (h ? h->isVisible() ? "" : ", champ caché" : ", pas de champ") + ", page " + ins->clePage().toStdString() + suite);
     reel::touche(vs, Qt::Key_Escape);
     vs->setFocus(Qt::OtherFocusReason);
     reel::touche(vs, Qt::Key_Z, Qt::ControlModifier);

@@ -731,6 +731,9 @@ class PageComposant : public PageSchema {
     h->setSuffix(QStringLiteral(" mm"));
     auto* provenance = inspecteur::texte();
     provenance->setObjectName(QStringLiteral("provenanceHauteur"));
+    // Un mot, sans retour à la ligne : un libellé qui se replie rend la ligne « hauteur pour largeur », et le
+    // formulaire, dans un inspecteur étroit, lui donnait alors une hauteur nulle (le champ disparaissait, 3.4)
+    provenance->setWordWrap(false);
     auto* aConfirmer = new QWidget;
     aConfirmer->setObjectName(QStringLiteral("hauteurAConfirmer"));
     auto* lc = new QHBoxLayout(aConfirmer);
@@ -770,16 +773,23 @@ class PageComposant : public PageSchema {
       ecrire(*enAttente);
     });
     action(garder);
+    // Le champ, sa provenance et la confirmation dans une seule ligne du formulaire : une ligne pleine largeur cachée
+    // puis montrée à côté laissait, après certains parcours, la ligne de la hauteur à une hauteur nulle (3.4)
+    auto* ligneHauteur = new QWidget;
+    auto* lv = new QVBoxLayout(ligneHauteur);
+    lv->setContentsMargins(0, 0, 0, 0);
+    lv->setSpacing(4);
     auto* ligneH = new QWidget;
     auto* lh = new QHBoxLayout(ligneH);
     lh->setContentsMargins(0, 0, 0, 0);
     lh->addWidget(h, 1);
     lh->addWidget(provenance);
+    lv->addWidget(ligneH);
+    lv->addWidget(aConfirmer);
     h->setMinimumWidth(72);
     h->setToolTip(QStringLiteral("Hauteur de ce composant, distincte de la hauteur par défaut de son empreinte : la 3D, le boîtier et la vérification la lisent"));
     // Libellé court : un libellé long poussait le champ hors d'un inspecteur étroit
-    fl->addRow(QStringLiteral("Hauteur"), ligneH);  // distincte de la hauteur par défaut de l'empreinte (T2)
-    fl->addRow(aConfirmer);
+    fl->addRow(QStringLiteral("Hauteur"), ligneHauteur);  // distincte de la hauteur par défaut de l'empreinte (T2)
     // Modèle 3D exact (6.2) : il remplace la boîte du corps, et sa hauteur devient celle du composant
     {
       auto* ligneM = new QWidget;
