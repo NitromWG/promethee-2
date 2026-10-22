@@ -61,6 +61,9 @@ struct ConceptionElec {
   // Empreintes utilisées, figées dans le projet à la mise à jour du circuit (EL-35) : une évolution du générateur
   // ne change pas une carte existante ; « actualiserEmpreintes » reprend la version de la bibliothèque.
   std::map<std::string, DefEmpreinte> empreintes;
+  // Articles utilisés, figés dans le projet comme les symboles et les empreintes (4.2) : une mise à jour homonyme de
+  // la bibliothèque ne les change pas sans qu'on l'accepte
+  std::map<std::string, Article> articles;
   // Noms automatiques figés (EL-01) : « UUID du composant:numéro de broche » → nom donné à son réseau quand le
   // circuit a été mis à jour. Renommer R1 en R5, ajouter un composant ou poser une étiquette ne change plus le
   // réseau que portent les pistes : l'ancien nom reste un alias du réseau.
@@ -308,7 +311,7 @@ int annoter(ConceptionElec& c, bool toutRenumeroter);
 struct LigneNomenclature {
   int quantite = 0;
   std::vector<std::string> references;
-  std::string valeur, empreinte, fabricant, mpn, fournisseur, description;
+  std::string valeur, empreinte, fabricant, mpn, fournisseur, description, lcsc;
 };
 std::vector<LigneNomenclature> nomenclature(const ConceptionElec& c);
 // Passage d'un composant à la nomenclature et au fichier de placement, selon son genre (3.17, SAI-45) et ses cases

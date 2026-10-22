@@ -1,6 +1,7 @@
 // Prométhée : conception électronique — connectivité, vérification électrique (ERC), annotation, nomenclature,
 // liste des réseaux, mise à jour du circuit imprimé depuis le schéma, pastilles placées. Licence GPL-3.0-only.
 #include "promethee/electronique.hpp"
+#include "promethee/articles.hpp"
 #include "promethee/synchronisation.hpp"
 #include "promethee/valeurs.hpp"
 
@@ -82,6 +83,7 @@ std::string poserSymbole(ConceptionElec& c, std::size_t feuille, const std::stri
     // Genre du symbole (3.17) ; un symbole mécanique sans empreinte ne va qu'à la nomenclature
     k.genre = d->genre;
     if (k.genre == GenreComposant::Mecanique && d->empreinte.empty()) k.horsCarte = true;
+    remplirDepuisArticle(c, k);  // symbole d'un article (« art:<id> ») : le composant réel
     c.composants.push_back(k);
     s.composant = k.uuid;
   }
@@ -1145,6 +1147,21 @@ std::vector<Violation> verifierERC(const ConceptionElec& c, const Connectivite& 
                 feuille, ou, {x.uuid});
       }
     }
+    // ERC-08 (4.11) : un passif posé sur l'empreinte d'une autre sorte (une inductance sur un fusible) ; le
+    // brochage tient, la fonction non
+    if (d && !x.empreinte.empty() && !d->empreinte.empty()) {
+      static const std::set<std::string> passifs{"R", "C", "CP", "L", "Fuse", "LED"};
+      const std::string sa = sorteEmpreinte(d->empreinte), sb = sorteEmpreinte(x.empreinte);
+      const bool condensateurs = (sa == "C" || sa == "CP") && (sb == "C" || sb == "CP");
+      if (passifs.count(sa) && passifs.count(sb) && sa != sb && !condensateurs)
+        ajouter(Gravite::Avertissement, "ERC-08",
+                x.reference + " : « " + d->nom + " » posé sur l’empreinte « " + x.empreinte + " », écrite pour une autre sorte de composant",
+                "Choisis une empreinte de sa sorte (filtre « compatibles » de la fenêtre de choix), ou confirme l’exception en l’excluant de l’ERC.", feuille, ou, {x.uuid});
+    }
+    // ERC-44 (4.21) : composant générique provisoire, jusqu'à son remplacement par un article réel
+    if (const auto ia = c.articles.find(x.article); ia != c.articles.end() && ia->second.generique)
+      ajouter(Gravite::Erreur, "ERC-44", x.reference + " : composant générique « " + ia->second.exigences + " » à remplacer par un article réel",
+              "Ouvre la standardisation : elle propose l’article que la recherche trouve pour ces exigences et le pose en une commande.", feuille, ou, {x.uuid});
     // Valeur vide sur un composant à monter (E10, relevé dès le schéma)
     if (d && !d->mecanique && !d->alimentation && !d->drapeau && !x.nePasMonter && !x.horsNomenclature && x.valeur.empty())
       ajouter(Gravite::Avertissement, "ERC-26", x.reference + " n’a pas de valeur", "Donne-lui sa valeur (double-clic sur le symbole) : la nomenclature en a besoin.", feuille, ou, {x.uuid});
@@ -1516,6 +1533,8 @@ std::vector<Violation> verifierDRCReglee(const ConceptionElec& c, const Connecti
 
 bool brochageAVerifier(const ConceptionElec& c, const ComposantElec& x) {
   if (x.empreinte.empty() || x.brochageVerifie == x.empreinte) return false;
+  // Les tables de l'article (4.11) : son brochage est écrit pour son empreinte
+  if (const auto ia = c.articles.find(x.article); ia != c.articles.end() && ia->second.empreinte == x.empreinte && !ia->second.generique) return false;
   const DefSymbole* d = c.symbole(x.symbole);
   if (!d || d->empreinte.empty() || d->empreinte == x.empreinte || d->alimentation || d->drapeau || d->mecanique || d->broches.size() < 2) return false;
   auto numerotees = [&c](const std::string& id) {
@@ -1634,6 +1653,7 @@ std::vector<LigneNomenclature> nomenclature(const ConceptionElec& c) {
     l.fabricant = x.fabricant;
     l.mpn = x.mpn;
     if (l.fournisseur.empty()) l.fournisseur = x.fournisseur;
+    if (l.lcsc.empty()) l.lcsc = x.lcsc.empty() && x.champs.count("LCSC") ? x.champs.at("LCSC") : x.lcsc;
     if (l.description.empty()) l.description = x.description;
   }
   std::vector<LigneNomenclature> r;

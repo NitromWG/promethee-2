@@ -33,10 +33,6 @@ std::optional<Couche> coucheDepuisTexte(const std::string& t) {
   return std::nullopt;
 }
 
-std::string nomFeuille(const ConceptionElec& c, int f) {
-  return f >= 0 && f < static_cast<int>(c.feuilles.size()) ? c.feuilles[static_cast<std::size_t>(f)].nom : std::string();
-}
-
 void ajouterPosition(LigneObjet& l, Pt p, bool modifiable = true) {
   l.textes[P::X] = ecrireNombreObjet(mm(p.x));
   l.textes[P::Y] = ecrireNombreObjet(mm(p.y));

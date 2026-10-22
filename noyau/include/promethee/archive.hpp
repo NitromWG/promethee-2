@@ -12,5 +12,9 @@ namespace prom {
 // les tableurs (XLSX) et les logiciels d'impression 3D (3MF)
 std::string zipStocke(const std::vector<std::pair<std::string, std::string>>& fichiers);
 uint32_t crc32(const std::string& octets);
+// Lecture (4.17) : un flux DEFLATE brut, et les fichiers d'une archive zip (stockés ou compressés par DEFLATE), dans
+// l'ordre du répertoire central ; lève std::runtime_error sur une archive abîmée
+std::string inflerBrut(const std::string& donnees);
+std::vector<std::pair<std::string, std::string>> lireZip(const std::string& octets);
 
 }  // namespace prom

@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <map>
+#include <set>
 #include <optional>
 #include <string>
 #include <vector>
@@ -86,6 +87,40 @@ struct DefSymbole {
 const std::vector<DefSymbole>& bibliothequeSymboles();
 const DefSymbole* symboleBibliotheque(const std::string& id);
 
+// Article (lot L4, 4.2 ; BIB-01) : un composant réel, achetable — symbole, empreinte, correspondance des broches
+// aux pastilles, valeur, paramètres, hauteur, fabricant, références des fournisseurs. Le symbole est générique
+// (« Q_NMOS ») ; le brochage de l'article dit quelle pastille porte chaque broche (IRLZ44N en TO-220 : G 1, D 2, S 3 ;
+// 2N7002 en SOT-23 : G 1, S 2, D 3). Un article peut dériver d'un article de base, champ par champ (4.14).
+struct OffreArticle {
+  std::string distributeur, reference, devise = "EUR";
+  int conditionnement = 1, stock = -1;            // −1 : inconnu
+  std::vector<std::pair<int, double>> prix;       // quantité minimale → prix unitaire
+  friend bool operator==(const OffreArticle&, const OffreArticle&) = default;
+};
+struct SecondeSource {
+  std::string fabricant, mpn, cycleVie = "actif";  // « actif », « NRND », « fin de vie »
+  int rang = 2;
+  friend bool operator==(const SecondeSource&, const SecondeSource&) = default;
+};
+struct Article {
+  std::string id, nom, description, categorie, symbole, empreinte, valeur;
+  std::string fabricant, mpn, fiche, lcsc;
+  // Numéro de broche du symbole → numéro(s) de pastille (« 2,4 » : une broche sur deux pastilles) ; vide : mêmes numéros
+  std::map<std::string, std::string> brochage;
+  std::map<std::string, std::string> parametres;
+  double hauteur = 0;   // mm au-dessus de la carte ; 0 : générique de l'empreinte
+  std::string base;     // article dont celui-ci hérite les champs qu'il n'écrit pas (4.14)
+  std::set<std::string> nonHerites;  // champs coupés de l'héritage : vides chez lui, ils restent vides
+  std::vector<OffreArticle> offres;
+  std::vector<SecondeSource> secondes;
+  // Composant générique provisoire (4.21, BIB-20) : décrit par ses exigences (« LDO 3,3 V 500 mA »), signalé par
+  // l'ERC et la publication jusqu'à son remplacement par un article réel
+  bool generique = false;
+  std::string exigences;
+  int version = 1;
+  friend bool operator==(const Article&, const Article&) = default;
+};
+
 // Composant créé par l'utilisateur : une liste de broches suffit, le symbole (corps rectangulaire, broches au pas
 // de 2,54 mm, toutes sur la grille) est dessiné automatiquement. Côté : −1 automatique (alimentations en haut,
 // masses en bas, entrées à gauche, sorties à droite, le reste réparti), 0 gauche, 1 droite, 2 haut, 3 bas.
@@ -136,6 +171,11 @@ struct ComposantElec {
   // Attributs repris de KiCad (X7) : hors nomenclature (« exclude_from_bom » : mire, logo), hors fichier de
   // placement (« exclude_from_pos_files » : trou de fixation métallisé)
   bool horsNomenclature = false, horsPlacement = false;
+  // Article d'où vient ce composant (4.2) et sa version au moment de la pose : une version plus récente propose la
+  // mise à jour, avec les différences (4.10) ; code LCSC repris dans la nomenclature (4.12)
+  std::string article;
+  int versionArticle = 0;
+  std::string lcsc;
   friend bool operator==(const ComposantElec&, const ComposantElec&) = default;
 };
 

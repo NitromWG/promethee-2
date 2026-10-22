@@ -566,12 +566,12 @@ std::string csvNomenclature(const ConceptionElec& c) {
     return r + "\"";
   };
   std::ostringstream s;
-  s << "\xEF\xBB\xBF" << "Quantité;Références;Valeur;Empreinte;Fabricant;Référence fabricant;Fournisseur;Description\n";
+  s << "\xEF\xBB\xBF" << "Quantité;Références;Valeur;Empreinte;Fabricant;Référence fabricant;Fournisseur;Description;LCSC\n";
   for (const auto& l : nomenclature(c)) {
     std::string refs;
     for (const auto& r : l.references) refs += (refs.empty() ? "" : ", ") + r;
     s << l.quantite << ";" << champ(refs) << ";" << champ(l.valeur) << ";" << champ(l.empreinte) << ";" << champ(l.fabricant) << ";" << champ(l.mpn) << ";" << champ(l.fournisseur) << ";"
-      << champ(l.description) << "\n";
+      << champ(l.description) << ";" << champ(l.lcsc) << "\n";
   }
   return s.str();
 }

@@ -3,6 +3,7 @@
 #include "promethee/electronique.hpp"
 #include "promethee/valeurs.hpp"
 #include "promethee/hauteurs.hpp"
+#include "promethee/articles.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -375,6 +376,11 @@ J versJson(const ConceptionElec& c) {
     if (x.horsNomenclature) y["horsNomenclature"] = true;
     if (x.horsPlacement) y["horsPlacement"] = true;
     if (!x.champs.empty()) y["champs"] = x.champs;
+    if (!x.article.empty()) {
+      y["article"] = x.article;
+      y["versionArticle"] = x.versionArticle;
+    }
+    if (!x.lcsc.empty()) y["lcsc"] = x.lcsc;
     rendreInconnues(c, "composant:" + x.uuid, y);
     comps.push_back(y);
   }
@@ -477,6 +483,11 @@ J versJson(const ConceptionElec& c) {
       em.push_back(y);
     }
     o["bibliothequeEmpreintes"] = em;
+  }
+  if (!c.articles.empty()) {
+    J ar = J::array();
+    for (const auto& [id, a] : c.articles) ar.push_back(articleVersJson(a));
+    o["articles"] = ar;
   }
   const Circuit& k = c.circuit;
   J ci = {{"contour", {{"origine", pt(k.contour.origine)}, {"largeur", k.contour.largeur}, {"hauteur", k.contour.hauteur}, {"rayon", k.contour.rayon}, {"libre", points(k.contour.libre)}}},
@@ -650,7 +661,10 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
   c.nom = txt(o, "nom", c.nom);
   garderInconnues(c, "conception", o,
                   {"uuid", "nom", "format", "formatElectronique", "pilotageBoitier", "schemaSeul", "verrouillee", "publications", "cartouche", "composants", "feuilles", "symboles", "nomsReseaux",
-                   "erc", "bibliothequeEmpreintes", "circuit", "synchroSurConfirmation", "variables"});
+                   "erc", "bibliothequeEmpreintes", "circuit", "synchroSurConfirmation", "variables", "articles"});
+  for (const auto& x : tableau(o, "articles"))
+    if (x.is_object())
+      if (Article a = articleDepuisJson(x); !a.id.empty()) c.articles[a.id] = a;
   // Format de la conception (ECH-10) : « format », « formatElectronique » dans les fichiers de la 0.29, rien jusqu'à
   // la 0.28. Plus récent que ce logiciel : lecture tolérante, et l'alerte dit ce qu'enregistrer peut perdre.
   const int format = o.is_object() && o.contains("format") && o["format"].is_number() ? ent(o, "format", 1) : ent(o, "formatElectronique", 1);
@@ -783,9 +797,13 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
     if (x.contains("champs") && x["champs"].is_object())
       for (auto it = x["champs"].begin(); it != x["champs"].end(); ++it)
         if (it.value().is_string()) k.champs[it.key()] = it.value().get<std::string>();
+    k.article = txt(x, "article");
+    k.versionArticle = ent(x, "versionArticle");
+    k.lcsc = txt(x, "lcsc");
     garderInconnues(c, "composant:" + k.uuid, x,
                     {"uuid", "ref", "valeur", "symbole", "empreinte", "fabricant", "mpn", "fournisseur", "description", "fiche", "nePasMonter", "horsCarte", "hauteur", "provenanceHauteur",
-                     "sourceHauteur", "genre", "horsSimulation", "formule", "parametres", "valeurLue", "brochageVerifie", "horsNomenclature", "horsPlacement", "champs"});
+                     "sourceHauteur", "genre", "horsSimulation", "formule", "parametres", "valeurLue", "brochageVerifie", "horsNomenclature", "horsPlacement", "champs", "article",
+                     "versionArticle", "lcsc"});
     c.composants.push_back(k);
   }
   for (const auto& x : tableau(o, "feuilles")) {

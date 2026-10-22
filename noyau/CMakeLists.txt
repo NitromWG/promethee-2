@@ -12,7 +12,7 @@ add_library(promethee_noyau
   src/forme.cpp
   src/esquisse.cpp
   src/piece.cpp
-  src/unites.cpp src/valeurs.cpp src/formules.cpp src/hauteurs.cpp src/synchronisation.cpp src/remplacement.cpp src/objets.cpp
+  src/unites.cpp src/valeurs.cpp src/formules.cpp src/hauteurs.cpp src/synchronisation.cpp src/remplacement.cpp src/objets.cpp src/articles.cpp
   src/ecad.cpp
   src/schema.cpp
   src/circuit.cpp
