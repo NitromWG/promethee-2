@@ -36,6 +36,7 @@
 #include <QWheelEvent>
 
 #include "BandeauOutil.hpp"
+#include "CartoucheRoutage.hpp"
 #include "GestesSelection.hpp"
 #include "GlisserArticle.hpp"
 #include "Icones.hpp"
@@ -46,6 +47,8 @@
 #include "SelectionElectronique.hpp"
 #include "SignesCanevas.hpp"
 #include "promethee/commandes.hpp"
+#include "promethee/placement_circuit.hpp"
+#include "promethee/routeur.hpp"
 #include "promethee/modele.hpp"
 #include "promethee/police.hpp"
 
@@ -77,6 +80,7 @@ VueCircuit::VueCircuit(Document* doc, QWidget* parent) : QWidget(parent), m_doc(
   m_visibles[static_cast<std::size_t>(Couche::EncombrementDessous)] = false;
   setSelectionPartagee(nullptr);
   m_bandeau = new BandeauOutil(this);
+  m_cartouche = new CartoucheRoutage(*this);
   // Navigation commune (1.19) : molette, pavé, boutons du milieu et de droite, menu à marques
   m_nav = new NavigationVue(this, NavigationVue::secteursOrigine("circuit.changerFace"), [this](const std::string& a) { executerGeste(a); }, [this](QPointF d) {
     m_origine += d;
@@ -309,12 +313,20 @@ void VueCircuit::abandonnerArticle() {
 }
 
 void VueCircuit::dragEnterEvent(QDragEnterEvent* e) {
+  if (e->mimeData()->hasFormat(QStringLiteral("application/x-promethee-aplacer"))) {
+    if (!refuseVerrou()) e->acceptProposedAction();
+    return;
+  }
   const auto d = GlisserArticle::article(e->mimeData());
   if (!d || !d->mecanique || refuseVerrou()) return;
   suivreArticle(*d, e->position());
   e->acceptProposedAction();
 }
 void VueCircuit::dragMoveEvent(QDragMoveEvent* e) {
+  if (e->mimeData()->hasFormat(QStringLiteral("application/x-promethee-aplacer"))) {
+    e->acceptProposedAction();
+    return;
+  }
   if (const auto d = GlisserArticle::article(e->mimeData()); d && d->mecanique) {
     suivreArticle(*d, e->position());
     e->acceptProposedAction();
@@ -322,6 +334,12 @@ void VueCircuit::dragMoveEvent(QDragMoveEvent* e) {
 }
 void VueCircuit::dragLeaveEvent(QDragLeaveEvent*) { abandonnerArticle(); }
 void VueCircuit::dropEvent(QDropEvent* e) {
+  if (e->mimeData()->hasFormat(QStringLiteral("application/x-promethee-aplacer"))) {
+    std::vector<std::string> ids;
+    for (const QString& id : QString::fromUtf8(e->mimeData()->data(QStringLiteral("application/x-promethee-aplacer"))).split(QLatin1Char('\n'), Qt::SkipEmptyParts)) ids.push_back(id.toStdString());
+    if (poserGroupe(ids, monde(e->position())) > 0) e->acceptProposedAction();
+    return;
+  }
   if (const auto d = GlisserArticle::article(e->mimeData()); d && d->mecanique) {
     suivreArticle(*d, e->position());
     if (poserArticle(e->position())) e->acceptProposedAction();
@@ -369,6 +387,7 @@ void VueCircuit::setOutil(Outil o) {
   if (o != Outil::Selection && !m_sel->vide()) m_sel->vider();  // un outil armé vide la sélection (S11)
   appliquerCurseur();
   majBandeau();
+  majCartouche();
   emit outilChange();
   update();
 }
@@ -1204,6 +1223,8 @@ void VueCircuit::paintEvent(QPaintEvent*) {
   // Aperçu de l'outil armé (piste en cours, contour, mesure, cadre)
   m_outils.actif()->dessiner(g);
   peindreReperes(g, *c);
+  // Le cartouche du tracé suit la tête quand la vue défile ou change d'échelle
+  if (m_cartouche && m_cartouche->isVisible()) QTimer::singleShot(0, this, [this] { majCartouche(); });
 }
 
 void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
@@ -1471,6 +1492,7 @@ void VueCircuit::mouseReleaseEvent(QMouseEvent* ev) {
       // Clic droit sans glisser : pendant une piste, son menu (supprimer une piste gênante, via, coude, fin : ERG-21) ;
       // ailleurs, fin du geste puis de l'outil (le menu contextuel général viendra au lot L2)
       if (outil() == Outil::Router && m_outils.actif()->geste()) menuRoutage(ev->position());
+      else if (const auto l = outil() == Outil::Selection ? liaisonSous(ev->position()) : std::nullopt) menuLiaison(ev->position(), *l);
       else if (!m_outils.actif()->echap() && outil() != Outil::Selection) setOutil(Outil::Selection);
       majBandeau();
       appliquerCurseur();
@@ -1835,4 +1857,70 @@ bool VueCircuit::exporterPlanMontage(const QString& chemin) const {
                  .arg(QLocale().toString(em.epaisseur, 'f', 1), QString::fromStdString(em.vernis)));
   g.end();
   return true;
+}
+
+// ---------- Placement et liaisons (lot L5) ----------
+std::string VueCircuit::repereSous(QPointF q) const {
+  const ConceptionElec* c = conception();
+  if (!c || !c->circuit.serigraphie.reperes) return {};
+  const Pt w = monde(q);
+  const Nm h = std::max<Nm>(c->circuit.serigraphie.hauteur, 500'000);
+  for (const auto& e : c->circuit.empreintes) {
+    const ComposantElec* k = c->composant(e.composant);
+    const DefEmpreinte* d = c->empreinte(e.empreinte);
+    if (!k || !d || k->reference.empty() || !coucheVisible(e.dessous ? Couche::SerigraphieDessous : Couche::SerigraphieDessus)) continue;
+    const Pt centre = positionRepere(e, *d, c->circuit.serigraphie.hauteur);
+    const Nm demiL = static_cast<Nm>(static_cast<double>(k->reference.size()) * static_cast<double>(h) * 0.42) + 100'000, demiH = h * 6 / 10;
+    if (std::abs(w.x - centre.x) <= demiL && std::abs(w.y - centre.y) <= demiH) return e.composant;
+  }
+  return {};
+}
+
+std::optional<Liaison> VueCircuit::liaisonSous(QPointF q) const {
+  if (!m_calc) return std::nullopt;
+  const double tolerance = 5.0 / m_echelle * 1e6;
+  const Pt w = monde(q);
+  std::optional<Liaison> r;
+  double mieux = tolerance;
+  for (const auto& l : m_calc->etat.chevelu) {
+    const double d = distancePointSegment(w, l.a, l.b);
+    if (d <= mieux) {
+      mieux = d;
+      r = l;
+    }
+  }
+  return r;
+}
+
+std::string VueCircuit::routerLiaisonChoisie(const Liaison& l) {
+  const ConceptionElec* c = conception();
+  if (!c || refuseVerrou()) return "la conception ne se modifie pas";
+  ConceptionElec essai = *c;
+  const std::string raison = routerLiaison(essai, l);
+  if (!raison.empty()) {
+    emit message(QStringLiteral("<span style='color:#C2402E'><b>Liaison %1 restée au chevelu</b></span> : %2.").arg(QString::fromStdString(l.reseau).toHtmlEscaped(), QString::fromStdString(raison).toHtmlEscaped()));
+    return raison;
+  }
+  modifier([&](ConceptionElec& cc) { cc.circuit.pistes = essai.circuit.pistes; });
+  emit message(QStringLiteral("Liaison <b>%1</b> routée.").arg(QString::fromStdString(l.reseau).toHtmlEscaped()));
+  return {};
+}
+
+void VueCircuit::menuLiaison(QPointF q, const Liaison& l) {
+  auto* menu = new QMenu(this);
+  menu->setObjectName(QStringLiteral("menuLiaison"));
+  menu->setAttribute(Qt::WA_DeleteOnClose);
+  menu->addSection(QStringLiteral("Liaison %1").arg(QString::fromStdString(l.reseau)));
+  QAction* router = menu->addAction(QStringLiteral("Router cette liaison"), this, [this, l] { routerLiaisonChoisie(l); });
+  router->setObjectName(QStringLiteral("routerLiaison"));
+  menu->addAction(QStringLiteral("Surligner le réseau"), this, [this, l] { setReseauSurligne(l.reseau); });
+  menu->popup(mapToGlobal(q.toPoint()));
+}
+
+int VueCircuit::poserGroupe(const std::vector<std::string>& composants, Pt coin) {
+  if (composants.empty() || refuseVerrou()) return 0;
+  int n = 0;
+  modifier([&](ConceptionElec& c) { n = placerGroupe(c, composants, surGrille(coin, pasPlacement())); });
+  emit message(QStringLiteral("%1 composant(s) posé(s) sur la carte.").arg(n));
+  return n;
 }

@@ -4,6 +4,7 @@
 #include "promethee/articles.hpp"
 #include "promethee/synchronisation.hpp"
 #include "promethee/valeurs.hpp"
+#include "promethee/verification.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -1525,7 +1526,12 @@ std::vector<Violation> verifierDRCReglee(const ConceptionElec& c, const Connecti
       if (it->second == GraviteReglee::Ignorer) continue;
       v.gravite = it->second == GraviteReglee::Erreur ? Gravite::Erreur : Gravite::Avertissement;
     }
-    if (exclusionDe(c, v)) continue;
+    if (const ExclusionErc* e = exclusionDe(c, v)) {
+      // Exclue tant que rien ne bouge ; ses objets déplacés, elle revient « à revoir » (5.13)
+      if (e->signature.empty() || e->signature == signatureObjets(c, v.objets)) continue;
+      v.aRevoir = true;
+      v.message = "À revoir (exclue, mais ses objets ont bougé) : " + v.message;
+    }
     r.push_back(std::move(v));
   }
   return r;

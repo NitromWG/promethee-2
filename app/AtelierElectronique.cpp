@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <array>
+#include <cctype>
 #include <map>
 #include <set>
 #include <utility>
@@ -70,6 +71,10 @@
 #include "PeripheriquesEntree.hpp"
 #include "ZoneMessages.hpp"
 #include "PanneauBibliotheque.hpp"
+#include "PanneauAPlacer.hpp"
+#include "DialogueCercle.hpp"
+#include "FenetreRapport.hpp"
+#include "promethee/placement_circuit.hpp"
 #include "ListeRaccourcis.hpp"
 #include "RegistreActions.hpp"
 #include "RemplacerPage.hpp"
@@ -225,6 +230,15 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
   connect(m_selection, &SelectionElectronique::changee, this, [this] {
     if (m_tableauChamps->portee() == TableauChamps::Portee::Selection) majTableauChamps();
   });
+  // « À placer » (5.2) : à gauche, avec le projet ; les empreintes rangées hors de la carte, par feuille
+  m_aPlacer = new PanneauAPlacer(*this);
+  m_dockAPlacer = panneau("dockAPlacer", QStringLiteral("À placer"), m_aPlacer);
+  connect(m_dockAPlacer, &QDockWidget::visibilityChanged, this, [this](bool oui) {
+    if (oui) m_aPlacer->refaire();
+  });
+  connect(m_doc, &Document::change, m_aPlacer, [this] {
+    if (m_dockAPlacer && m_dockAPlacer->isVisible()) m_aPlacer->refaire();
+  });
   // Apprendre (2.17) : à droite, avec l'inspecteur, fermé sauf au premier lancement
   m_apprendre = new PanneauApprendre(*this);
   m_dockApprendre = panneau("dockApprendre", QStringLiteral("Apprendre"), m_apprendre);
@@ -243,15 +257,18 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
   m_fenetre->tabifyDockWidget(m_dockEcarts, m_dockChamps);
   m_fenetre->addDockWidget(Qt::RightDockWidgetArea, m_dockApprendre);
   m_fenetre->tabifyDockWidget(m_dockInspecteur, m_dockApprendre);
+  m_fenetre->addDockWidget(Qt::LeftDockWidgetArea, m_dockAPlacer);
+  m_fenetre->tabifyDockWidget(m_dockProjet, m_dockAPlacer);
   m_dockMessages->hide();
   m_dockVerifications->hide();
   m_dockRecherche->hide();
   m_dockEcarts->hide();
   m_dockChamps->hide();
   m_dockApprendre->hide();
+  m_dockAPlacer->hide();
   m_dockInspecteur->raise();
   m_dispositions = new DispositionsAtelier(m_fenetre, m_doc, QStringLiteral("electronique"), [this] { dispositionOrigine(); }, this);
-  for (QDockWidget* d : {m_dockProjet, m_dockBibliotheque, m_dockInspecteur, m_dockMessages, m_dockVerifications, m_dockRecherche, m_dockApprendre, m_dockEcarts, m_dockChamps}) m_dispositions->suivre(d);
+  for (QDockWidget* d : {m_dockProjet, m_dockBibliotheque, m_dockInspecteur, m_dockMessages, m_dockVerifications, m_dockRecherche, m_dockApprendre, m_dockEcarts, m_dockChamps, m_dockAPlacer}) m_dispositions->suivre(d);
   // La bibliothèque, que le mode cache hors du schéma : « ouverte » est le choix de l'utilisateur, gardé avec la
   // disposition
   m_dispositions->setComplement([this] { return QJsonObject{{QStringLiteral("bibliotheque"), m_bibliothequeOuverte}}; },
@@ -711,6 +728,7 @@ void AtelierElectronique::recalculerApresModification() {
   if (m_ecarts) m_ecarts->majPlusTard();  // la pastille des écarts suit chaque modification
   majTableauChamps();
   if (m_tableauObjets && m_vues->visibleDansMosaique(m_tableauObjets)) m_tableauObjets->recharger();
+  if (m_aPlacer && m_dockAPlacer && !m_dockAPlacer->isHidden()) m_aPlacer->refaire();
   const ChangementConception ch = std::exchange(m_enAttente, ChangementConception{});
   // Une valeur, un fabricant, une hauteur, le cartouche : la connectivité, le cuivre et la DRC restent valables ;
   // seule l'ERC peut voir un brochage vérifié ou une empreinte (A12). Un calcul en fond part d'un état plus ancien :
@@ -1008,7 +1026,7 @@ void AtelierElectronique::mettreAJourCircuit() {
   }, QStringLiteral("Synchroniser le circuit et le schéma"));
   if (m_ecarts) m_ecarts->maj();
   (void)ecarts;
-  afficherMessage(QStringLiteral("<b>Circuit mis à jour</b> : %1 empreinte(s) ajoutée(s), %2 changée(s), %3 retirée(s). Les nouvelles attendent à droite de la carte.%4")
+  afficherMessage(QStringLiteral("<b>Circuit mis à jour</b> : %1 empreinte(s) ajoutée(s), %2 changée(s), %3 retirée(s). Les nouvelles attendent à droite de la carte, et dans la liste « À placer ».%4")
                       .arg(b.ajoutees)
                       .arg(b.changees)
                       .arg(b.retirees)
@@ -1016,7 +1034,9 @@ void AtelierElectronique::mettreAJourCircuit() {
                            // Conflits d'affectation de classes après un renommage, jamais tranchés en silence (R11)
                            (b.conflitsClasses.empty() ? QString()
                                                       : QStringLiteral(" <span style='color:#A8620E'>%1</span>").arg(QString::fromStdString(b.conflitsClasses.front()).toHtmlEscaped() +
-                                                                                                                     (b.conflitsClasses.size() > 1 ? QStringLiteral(" (et %1 autre(s))").arg(b.conflitsClasses.size() - 1) : QString())))), NiveauMessage::Avertissement);
+                                                                                                                     (b.conflitsClasses.size() > 1 ? QStringLiteral(" (et %1 autre(s))").arg(b.conflitsClasses.size() - 1) : QString())))), NiveauMessage::Avertissement,
+                  b.ajoutees > 0 ? std::function<void()>([this] { montrerAPlacer(); }) : std::function<void()>());
+  if (m_aPlacer && m_dockAPlacer->isVisible()) m_aPlacer->refaire();
   if (mode() == Schema) m_ruban->setCurrentIndex(Circuit);
   m_circuit->recadrer();
 }
@@ -1073,6 +1093,7 @@ QDockWidget* AtelierElectronique::panneau(Panneau p) const {
     case Panneau::Apprendre: return m_dockApprendre;
     case Panneau::Ecarts: return m_dockEcarts;
     case Panneau::Champs: return m_dockChamps;
+    case Panneau::APlacer: return m_dockAPlacer;
   }
   return nullptr;
 }
@@ -1170,7 +1191,7 @@ void AtelierElectronique::montrerEcarts() {
 }
 
 void AtelierElectronique::dispositionOrigine() {
-  const std::array<QDockWidget*, 9> tous{m_dockProjet, m_dockBibliotheque, m_dockInspecteur, m_dockMessages, m_dockVerifications, m_dockRecherche, m_dockApprendre, m_dockEcarts, m_dockChamps};
+  const std::array<QDockWidget*, 10> tous{m_dockProjet, m_dockBibliotheque, m_dockInspecteur, m_dockMessages, m_dockVerifications, m_dockRecherche, m_dockApprendre, m_dockEcarts, m_dockChamps, m_dockAPlacer};
   for (QDockWidget* d : tous) {
     d->setFloating(false);
     m_fenetre->removeDockWidget(d);
@@ -1189,6 +1210,8 @@ void AtelierElectronique::dispositionOrigine() {
   m_fenetre->tabifyDockWidget(m_dockEcarts, m_dockChamps);
   m_fenetre->addDockWidget(Qt::RightDockWidgetArea, m_dockApprendre);
   m_fenetre->tabifyDockWidget(m_dockInspecteur, m_dockApprendre);
+  m_fenetre->addDockWidget(Qt::LeftDockWidgetArea, m_dockAPlacer);
+  m_fenetre->tabifyDockWidget(m_dockProjet, m_dockAPlacer);
   m_dockProjet->show();
   m_dockInspecteur->show();
   m_dockMessages->hide();
@@ -1197,6 +1220,7 @@ void AtelierElectronique::dispositionOrigine() {
   m_dockEcarts->hide();
   m_dockChamps->hide();
   m_dockApprendre->hide();
+  m_dockAPlacer->hide();
   m_dockInspecteur->raise();
   majBibliotheque();
   // Les largeurs d'avant les panneaux, si elles ont été choisies (P25)
@@ -1346,24 +1370,12 @@ int AtelierElectronique::relierTexte(const QString& texte) {
 }
 
 void AtelierElectronique::changerEmpreinte() {
-  const ConceptionElec* c = conceptionCourante();
-  bool un = false;
-  if (c && mode() == Schema && m_schema->selection().size() == 1)
-    if (const Feuille* f = m_schema->feuille() < static_cast<int>(c->feuilles.size()) ? &c->feuilles[static_cast<std::size_t>(m_schema->feuille())] : nullptr)
-      for (const auto& s : f->symboles) un |= m_schema->selection().count(s.uuid) && !s.composant.empty();
-  if (!un) {
-    afficherMessage(QStringLiteral("Choisis d’abord un composant : sa liste d’empreintes s’ouvre dans l’inspecteur."));
+  // La fenêtre de choix des empreintes (4.6), non modale, pour les composants choisis
+  if (!conceptionCourante() || m_selection->composants().empty()) {
+    afficherMessage(QStringLiteral("Choisis d’abord un ou plusieurs composants : la fenêtre des empreintes compatibles s’ouvre pour eux."));
     return;
   }
-  majPanneau();
-  m_dockInspecteur->show();
-  m_dockInspecteur->raise();
-  QTimer::singleShot(0, this, [this] {
-    if (auto* l = m_inspecteur->findChild<QComboBox*>(QStringLiteral("empreinteComposant")); l && l->isVisible()) {
-      l->setFocus(Qt::ShortcutFocusReason);
-      l->showPopup();
-    }
-  });
+  ouvrirChoixEmpreinte();
 }
 
 void AtelierElectronique::ouvrirTableauChamps() {
@@ -1774,3 +1786,59 @@ void AtelierElectronique::routerAutomatiquement() {
   d->show();
 }
 
+
+// ---------- Circuit (lot L5) ----------
+FenetreRapport* AtelierElectronique::rapport() const { return m_rapport; }
+
+void AtelierElectronique::montrerAPlacer() {
+  if (!m_dockAPlacer) return;
+  m_aPlacer->refaire();
+  m_dockAPlacer->show();
+  m_dockAPlacer->raise();
+}
+
+void AtelierElectronique::disposerEnCercle() {
+  const ConceptionElec* c = conceptionCourante();
+  if (!c) return;
+  // Les empreintes choisies, dans l'ordre de leurs repères (R2 avant R10)
+  std::vector<std::pair<std::string, std::string>> tri;
+  for (const auto& id : m_selection->composants())
+    for (const auto& e : c->circuit.empreintes)
+      if (e.composant == id)
+        if (const ComposantElec* k = c->composant(id)) tri.push_back({k->reference, id});
+  if (tri.size() < 2) {
+    afficherMessage(QStringLiteral("Choisis au moins deux empreintes au circuit : elles se rangent en cercle."));
+    return;
+  }
+  auto cle = [](const std::string& r) {
+    std::string p;
+    long n = 0;
+    for (char ch : r)
+      if (std::isdigit(static_cast<unsigned char>(ch))) n = n * 10 + (ch - '0');
+      else p += ch;
+    return std::make_pair(p, n);
+  };
+  std::sort(tri.begin(), tri.end(), [&](const auto& a, const auto& b) { return cle(a.first) < cle(b.first); });
+  std::vector<std::string> ids;
+  for (const auto& [r, id] : tri) ids.push_back(id);
+  // Centre proposé : celui de la carte
+  const Boite b = boite(c->circuit.contour.polygone());
+  DialogueCercle d(b.vide() ? Pt{} : b.centre(), this);
+  if (d.exec() != QDialog::Accepted) return;
+  const OptionsCercle o = d.options();
+  int n = 0;
+  modifierConception([&](ConceptionElec& cc) { n = prom::ecad::disposerEnCercle(cc, ids, o); }, QStringLiteral("Disposer %1 composants en cercle").arg(ids.size()));
+  afficherMessage(QStringLiteral("<b>%1 composant(s)</b> rangé(s) en cercle de %2 mm de rayon%3.")
+                      .arg(n)
+                      .arg(QLocale(QLocale::French).toString(prom::ecad::mm(o.rayon), 'g', 6))
+                      .arg(o.renumeroter ? QStringLiteral(", renumérotés dans l’ordre du cercle") : QString()),
+                  NiveauMessage::Succes);
+}
+
+void AtelierElectronique::ouvrirRapport() {
+  if (!m_rapport) m_rapport = new FenetreRapport(*this, this);
+  else m_rapport->refaire();
+  m_rapport->show();
+  m_rapport->raise();
+  m_rapport->activateWindow();
+}

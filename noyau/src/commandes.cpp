@@ -91,6 +91,8 @@ ChangementConception differencier(const ConceptionElec& a, const ConceptionElec&
                                                        {x.fournisseur != y.fournisseur, "fournisseur"},
                                                        {x.description != y.description, "description"},
                                                        {x.fiche != y.fiche, "fiche"},
+                                                       {x.lcsc != y.lcsc, "lcsc"},
+                                                       {x.article != y.article, "article"},
                                                        {x.nePasMonter != y.nePasMonter, "nePasMonter"},
                                                        {x.horsCarte != y.horsCarte, "horsCarte"},
                                                        {x.champs != y.champs, "champs"},
@@ -233,6 +235,7 @@ std::string ComposantElec::* champTexte(const std::string& p) {
   if (p == "fournisseur") return &ComposantElec::fournisseur;
   if (p == "description") return &ComposantElec::description;
   if (p == "fiche") return &ComposantElec::fiche;
+  if (p == "lcsc") return &ComposantElec::lcsc;
   return nullptr;
 }
 const char* libelle(const std::string& p) {
@@ -243,6 +246,7 @@ const char* libelle(const std::string& p) {
   if (p == "fournisseur") return "Fournisseur";
   if (p == "description") return "Description";
   if (p == "fiche") return "Fiche technique";
+  if (p == "lcsc") return "Code LCSC";
   return "Propriété";
 }
 std::string court(const std::string& t) {

@@ -32,6 +32,7 @@
 #include "SelectionElectronique.hpp"
 #include "Theme.hpp"
 #include "VueSchema.hpp"
+#include "promethee/articles.hpp"
 #include "promethee/modele.hpp"
 
 using namespace prom::ecad;
@@ -668,6 +669,8 @@ class VueSchema::OutilPose : public OutilBase {
     }
   }
   void setDefinition(const DefSymbole& d) { m_definition = d; }
+  // Article réel (L4) : installé dans le projet (article, symbole, empreinte) avec la pose, en un pas
+  void setArticle(const Article& a) { m_article = a; }
   const std::string& symbole() const { return m_symbole; }
   void setSerie(bool oui) {
     m_serie = oui;
@@ -849,6 +852,7 @@ class VueSchema::OutilPose : public OutilBase {
     const int rot = m_rotation, fi = m_vue.m_feuille;
     const bool miroir = m_miroir;
     const std::optional<DefSymbole> def = m_definition;
+    const std::optional<Article> article = m_article;
     const std::optional<ComposantElec> modele = m_modele;
     const std::string unites = m_composantUnites;
     const bool annoter = !electrique() && VueSchema::annotationALaPose();
@@ -870,7 +874,8 @@ class VueSchema::OutilPose : public OutilBase {
     m_vue.modifier(
         [&](Feuille&, ConceptionElec& cc) {
           // Définition et pose en un seul pas d'annulation (S4)
-          if (def && !cc.symbole(def->id)) cc.symboles[def->id] = *def;
+          if (article) installerArticle(cc, *article);
+          else if (def && !cc.symbole(def->id)) cc.symboles[def->id] = *def;
           // Unités enchaînées : l'unité suivante du même composant (SYM-04)
           const int u = unites.empty() || !cc.composant(unites) ? 0 : uniteSuivante(cc, unites);
           pose = u > 0 ? poserUniteEn(cc, static_cast<std::size_t>(fi), unites, u, p, rot) : poserSymbole(cc, static_cast<std::size_t>(fi), id, p, rot);
@@ -945,6 +950,7 @@ class VueSchema::OutilPose : public OutilBase {
   }
   std::string m_symbole;
   std::optional<DefSymbole> m_definition;
+  std::optional<Article> m_article;
   // Un autre nom d'alimentation, saisi sur place près du curseur
   void demanderNom() {
     OutilPose* moi = this;
@@ -1620,6 +1626,21 @@ void VueSchema::armerPose(const DefSymbole& d) {
   setOutil(d.alimentation || d.drapeau ? Outil::Alimentation : Outil::Placer, d.id);
   if (auto* p = dynamic_cast<OutilPose*>(m_outils.actif())) p->setDefinition(d);
   update();
+}
+
+void VueSchema::armerArticle(const Article& a) {
+  const ConceptionElec* c = conception();
+  if (!c) return;
+  // Le symbole de l'article, calculé sur une copie des définitions : la conception ne change qu'à la pose
+  ConceptionElec essai;
+  essai.symboles = c->symboles;
+  essai.empreintes = c->empreintes;
+  essai.articles = c->articles;
+  const std::string id = installerArticle(essai, a);
+  const DefSymbole* d = id.empty() ? nullptr : essai.symbole(id);
+  if (!d) return;
+  armerPose(*d);
+  if (auto* p = dynamic_cast<OutilPose*>(m_outils.actif())) p->setArticle(a);
 }
 
 void VueSchema::glisserArticle(const DefSymbole& d, QPointF q) {

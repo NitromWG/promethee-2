@@ -220,6 +220,9 @@ struct EmpreintePlacee {
   Pt position;
   double rotation = 0;  // degrés, sens direct
   bool dessous = false, verrou = false;
+  // Repère de sérigraphie déplacé à la main (5.5, C6) : sa place dans le repère de l'empreinte, qui le suit quand elle
+  // bouge ; absent, il se met au-dessus de l'encombrement
+  std::optional<Pt> repere;
   friend bool operator==(const EmpreintePlacee&, const EmpreintePlacee&) = default;
 };
 struct Piste {

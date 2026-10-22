@@ -114,6 +114,7 @@ ChampTexteLie* champComposant(AtelierElectronique& a, std::function<std::string(
     if (propriete == "fournisseur") return QString::fromStdString(k->fournisseur);
     if (propriete == "description") return QString::fromStdString(k->description);
     if (propriete == "fiche") return QString::fromStdString(k->fiche);
+    if (propriete == "lcsc") return QString::fromStdString(k->lcsc);
     return {};
   };
   auto ecrire = [atelier, composant, propriete, lire](const QString& t, std::uint64_t saisie) {

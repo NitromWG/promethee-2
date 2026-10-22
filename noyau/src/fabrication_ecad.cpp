@@ -169,6 +169,13 @@ Polygone regionAvecCoupures(const Polygone& exterieur, const Polygones& trous) {
   return r;
 }
 
+Pt positionRepere(const EmpreintePlacee& e, const DefEmpreinte& d, Nm hauteurTexte) {
+  if (e.repere) return versCarte(e, *e.repere);
+  const Nm h = std::max<Nm>(hauteurTexte, 500'000), ep = epaisseurTexte(h);
+  const Boite b = boite(encombrementSurCarte(e, d));
+  return {b.centre().x, b.y0 - ep - h / 2};
+}
+
 std::vector<TraitSerigraphie> textesSerigraphie(const ConceptionElec& c) {
   std::vector<TraitSerigraphie> r;
   const OptionsSerigraphie& o = c.circuit.serigraphie;
@@ -187,7 +194,7 @@ std::vector<TraitSerigraphie> textesSerigraphie(const ConceptionElec& c) {
       const Boite b = boite(encombrementSurCarte(e, *d));
       const Couche face = e.dessous ? Couche::SerigraphieDessous : Couche::SerigraphieDessus;
       // Repère au-dessus de l'encombrement, valeur au-dessous : hors des pastilles, lisible sans tourner la carte
-      if (o.reperes && !x->reference.empty()) ecrire(x->reference, {b.centre().x, b.y0 - ep - h / 2}, h, 0, face, x->uuid);
+      if (o.reperes && !x->reference.empty()) ecrire(x->reference, positionRepere(e, *d, o.hauteur), h, 0, face, x->uuid);
       if (o.valeurs && !x->valeur.empty()) ecrire(x->valeur, {b.centre().x, b.y1 + ep + h / 2}, h, 0, face, x->uuid);
     }
   for (const auto& t : c.circuit.textes) {

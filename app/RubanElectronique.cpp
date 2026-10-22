@@ -109,6 +109,12 @@ void AtelierElectronique::enregistrerCommandes() {
   };
   c["schema.choisirComposant"] = [this] { montrerBibliotheque(); };
   c["composant.creer"] = [this] { creerComposant(); };
+  c["bibliotheque.articles"] = [this] { ouvrirChoixComposant(); };
+  c["bibliotheque.standardiser"] = [this] { ouvrirStandardisation(); };
+  c["bibliotheque.misesAJour"] = [this] { ouvrirMisesAJourArticles(); };
+  c["circuit.aPlacer"] = [this] { montrerAPlacer(); };
+  c["circuit.disposerCercle"] = [this] { disposerEnCercle(); };
+  c["verification.rapport"] = [this] { ouvrirRapport(); };
   c["schema.alimentation.gnd"] = alimentation("GND");
   c["schema.alimentation.5v"] = alimentation("+5V");
   c["schema.alimentation.3v3"] = alimentation("+3V3");

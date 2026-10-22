@@ -122,6 +122,31 @@ class VueCircuit : public QWidget {
   std::string reseauPropose(const prom::ecad::Polygone& contour) const;
   // Routage piloté (essais) : départ sur une pastille, points de passage, fin
   bool router(const std::vector<prom::ecad::Pt>& points, bool forcer = false);
+  // ---------- Routeur interactif (lot L5) ----------
+  // Contourner (par défaut) : le tracé qui heurterait un obstacle le contourne à l'isolement, sans Ctrl ; Pousser :
+  // les pistes gênantes s'écartent ; Ignorer : le tracé suit la souris, la collision montrée en rouge
+  enum class ModeRouteur : std::uint8_t { Contourner, Pousser, Ignorer };
+  ModeRouteur modeRouteur() const { return m_modeRouteur; }
+  void setModeRouteur(ModeRouteur m);
+  static QString nomModeRouteur(ModeRouteur m);
+  // Auréole d'isolement (5.20) : autour des objets proches de la tête du tracé, à l'isolement exact
+  struct AureoleRoutage {
+    std::string objet;
+    prom::ecad::Polygone forme, contour;  // l'objet, et son auréole
+    prom::ecad::Nm isolement = 0;
+  };
+  std::vector<AureoleRoutage> aureolesRoutage() const;
+  class CartoucheRoutage* cartouche() const { return m_cartouche; }
+  prom::ecad::Nm largeurTrace() const;  // largeur du tracé en cours, 0 hors tracé
+  void setLargeurTrace(prom::ecad::Nm l);
+  // Repère de sérigraphie sous le point (5.5) : l'UUID de son composant, sinon vide
+  std::string repereSous(QPointF q) const;
+  // Liaison du chevelu sous le point (5.21), à 5 pixels près ; son menu la route d'office
+  std::optional<prom::ecad::Liaison> liaisonSous(QPointF q) const;
+  void menuLiaison(QPointF q, const prom::ecad::Liaison& l);
+  std::string routerLiaisonChoisie(const prom::ecad::Liaison& l);  // vide si posée, sinon la raison
+  // Groupe de la liste « À placer » lâché sur la carte (5.2) : posé en rangées à partir du point
+  int poserGroupe(const std::vector<std::string>& composants, prom::ecad::Pt coin);
   // Plan de montage en PDF (A4 paysage) : faces dessus et dessous à l'échelle, contour coté, pastilles, sérigraphie,
   // repères des composants, cartouche. C'est le dessin que l'on garde à côté de soi pour câbler la carte.
   bool exporterPlanMontage(const QString& chemin) const;
@@ -249,6 +274,10 @@ class VueCircuit : public QWidget {
   int sommetSous(QPointF q) const;
   std::pair<int, prom::ecad::Pt> areteSous(QPointF q) const;
   void dessinerCouche(class QPainter& g, prom::ecad::Couche c, double opacite);
+
+  ModeRouteur m_modeRouteur = ModeRouteur::Contourner;
+  class CartoucheRoutage* m_cartouche = nullptr;
+  void majCartouche();
 
   Document* m_doc;
   int m_conception = -1;

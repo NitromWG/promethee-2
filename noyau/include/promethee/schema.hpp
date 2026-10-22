@@ -105,6 +105,7 @@ struct SecondeSource {
 struct Article {
   std::string id, nom, description, categorie, symbole, empreinte, valeur;
   std::string fabricant, mpn, fiche, lcsc;
+  std::string modele3D;  // modèle 3D joint (STEP ou WRL), chemin relatif à la bibliothèque de l'article
   // Numéro de broche du symbole → numéro(s) de pastille (« 2,4 » : une broche sur deux pastilles) ; vide : mêmes numéros
   std::map<std::string, std::string> brochage;
   std::map<std::string, std::string> parametres;

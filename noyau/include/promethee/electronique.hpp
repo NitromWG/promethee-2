@@ -41,6 +41,8 @@ struct ExclusionErc {
   std::string code;
   std::vector<std::string> objets;  // UUID des objets visés ; vide : toutes les violations de ce code
   std::string raison, auteur, date;
+  // Géométrie des objets visés au moment de l'exclusion (5.13, R8) : si elle change, l'exclusion revient « à revoir »
+  std::string signature;
   friend bool operator==(const ExclusionErc&, const ExclusionErc&) = default;
 };
 struct ReglagesErc {
@@ -286,6 +288,7 @@ struct Violation {
   Pt position;
   std::vector<std::string> objets;
   NiveauErc niveau = NiveauErc::Complet;
+  bool aRevoir = false;  // exclue, mais ses objets ont bougé depuis (5.13)
 };
 std::vector<Violation> verifierERC(const ConceptionElec& c, const Connectivite& k);
 // ERC par niveau (2.11, S9) : seulement les règles des niveaux jusqu'à « jusqua » ; gravités réglées et exclusions
@@ -433,6 +436,8 @@ struct TraitSerigraphie {
   std::string texte;
 };
 std::vector<TraitSerigraphie> textesSerigraphie(const ConceptionElec& c);
+// Centre du repère de sérigraphie d'une empreinte posée (5.5) : sa place gardée, sinon au-dessus de l'encombrement
+Pt positionRepere(const EmpreintePlacee& e, const DefEmpreinte& d, Nm hauteurTexte = 1'000'000);
 
 // Typon pour la gravure maison (insoleuse, transfert de toner) : une couche de cuivre à l'échelle 1, vue côté
 // cuivre (la face dessous est donc en miroir), avec un miroir de plus pour le transfert de toner, en positif

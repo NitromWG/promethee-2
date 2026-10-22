@@ -24,6 +24,7 @@
 #include "Theme.hpp"
 #include "VueCircuit.hpp"
 #include "VueSchema.hpp"
+#include "promethee/verification.hpp"
 
 using namespace prom::ecad;
 
@@ -312,13 +313,11 @@ void PanneauVerifications::exclure(const Violation& v) {
       m_raison->setPlaceholderText(QStringLiteral("une raison est demandée"));
       return;
     }
-    ExclusionErc e;
-    e.code = v.code;
-    e.objets = v.objets;
-    e.raison = raison.toStdString();
-    e.auteur = qEnvironmentVariable("USER", qEnvironmentVariable("USERNAME")).toStdString();
-    e.date = QDateTime::currentDateTime().toString(Qt::ISODate).toStdString();
-    m_atelier.modifierConception([&](ConceptionElec& c) { c.erc.exclusions.push_back(e); }, QStringLiteral("Exclure %1").arg(q(v.code)));
+    // La signature des objets visés est gardée : s'ils bougent, la violation revient « à revoir » (5.13)
+    const std::string auteur = qEnvironmentVariable("USER", qEnvironmentVariable("USERNAME")).toStdString();
+    const std::string date = QDateTime::currentDateTime().toString(Qt::ISODate).toStdString();
+    m_atelier.modifierConception([&](ConceptionElec& c) { c.erc.exclusions.push_back(exclusionPour(c, v, raison.toStdString(), auteur, date)); },
+                                 QStringLiteral("Exclure %1").arg(q(v.code)));
     m_exclusion->hide();
     refaire();
   };
@@ -381,3 +380,4 @@ void PanneauVerifications::menuElement(const QPoint& p) {
   menu->addAction(QStringLiteral("C’est quoi ?"), this, [this, code] { m_atelier.afficherMessage(QStringLiteral("<b>%1</b> · %2").arg(q(code), aide::explicationRegle(code))); });
   menu->popup(m_liste->viewport()->mapToGlobal(p));
 }
+

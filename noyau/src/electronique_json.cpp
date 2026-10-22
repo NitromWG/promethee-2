@@ -378,7 +378,7 @@ J versJson(const ConceptionElec& c) {
     if (!x.champs.empty()) y["champs"] = x.champs;
     if (!x.article.empty()) {
       y["article"] = x.article;
-      y["versionArticle"] = x.versionArticle;
+      if (x.versionArticle != 0) y["versionArticle"] = x.versionArticle;
     }
     if (!x.lcsc.empty()) y["lcsc"] = x.lcsc;
     rendreInconnues(c, "composant:" + x.uuid, y);
@@ -466,7 +466,11 @@ J versJson(const ConceptionElec& c) {
     if (!c.erc.matrice.empty()) e["matrice"] = c.erc.matrice;
     if (!c.erc.exclusions.empty()) {
       J x = J::array();
-      for (const auto& ex : c.erc.exclusions) x.push_back({{"code", ex.code}, {"objets", ex.objets}, {"raison", ex.raison}, {"auteur", ex.auteur}, {"date", ex.date}});
+      for (const auto& ex : c.erc.exclusions) {
+        J un = {{"code", ex.code}, {"objets", ex.objets}, {"raison", ex.raison}, {"auteur", ex.auteur}, {"date", ex.date}};
+        if (!ex.signature.empty()) un["signature"] = ex.signature;
+        x.push_back(un);
+      }
       e["exclusions"] = x;
     }
     rendreInconnues(c, "erc", e);
@@ -511,6 +515,7 @@ J versJson(const ConceptionElec& c) {
     J y = {{"composant", px->composant}, {"empreinte", px->empreinte}, {"p", pt(px->position)}, {"rot", px->rotation}};
     if (px->dessous) y["dessous"] = true;
     if (px->verrou) y["verrou"] = true;
+    if (px->repere) y["repere"] = pt(*px->repere);
     rendreInconnues(c, "empreintePlacee:" + px->composant, y);
     em.push_back(y);
   }
@@ -737,6 +742,7 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
       ex.raison = txt(x, "raison");
       ex.auteur = txt(x, "auteur");
       ex.date = txt(x, "date");
+      ex.signature = txt(x, "signature");
       if (!ex.code.empty()) c.erc.exclusions.push_back(ex);
     }
   }
@@ -938,8 +944,9 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
       e.rotation = num(y, "rot");
       e.dessous = vrai(y, "dessous");
       e.verrou = vrai(y, "verrou");
+      if (y.contains("repere")) e.repere = lirePt(champ(y, "repere"));
       if (e.composant.empty()) continue;
-      garderInconnues(c, "empreintePlacee:" + e.composant, y, {"composant", "empreinte", "p", "rot", "dessous", "verrou"});
+      garderInconnues(c, "empreintePlacee:" + e.composant, y, {"composant", "empreinte", "p", "rot", "dessous", "verrou", "repere"});
       ci.empreintes.push_back(e);
     }
     for (const auto& y : tableau(k, "pistes")) {

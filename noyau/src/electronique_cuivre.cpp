@@ -575,16 +575,28 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
         if (dansLiaison(a, b, inter.vide() ? Pt{(std::max(a.boite.x0, b.boite.x0) + std::min(a.boite.x1, b.boite.x1)) / 2, (std::max(a.boite.y0, b.boite.y0) + std::min(a.boite.y1, b.boite.y1)) / 2}
                                            : inter.centre()))
           continue;
+        // Les deux objets en cause (5.13) : une exclusion les vise, une ligne du rapport y mène
+        auto ident = [&](const Objet& o) -> std::string {
+          switch (o.type) {
+            case Objet::Type::Pastille: return pp[static_cast<std::size_t>(o.indice)].composant;
+            case Objet::Type::Piste: return c.circuit.pistes[static_cast<std::size_t>(o.indice)].uuid;
+            case Objet::Type::Via: return c.circuit.vias[static_cast<std::size_t>(o.indice)].uuid;
+          }
+          return {};
+        };
+        std::vector<std::string> enCause;
+        for (const Objet* o : {&a, &b})
+          if (const std::string id = o->texte ? std::string() : ident(*o); !id.empty() && std::find(enCause.begin(), enCause.end(), id) == enCause.end()) enCause.push_back(id);
         if (d <= 0)
           ajouter(Gravite::Erreur, "DRC-21", "Court-circuit : " + decrire(a, pp) + " touche " + decrire(b, pp), "Les deux cuivres se touchent : déplace la piste ou le composant.",
-                  x.centre());
+                  x.centre(), enCause);
         else if (memeEmpreinte)
           ajouter(Gravite::Erreur, "DRC-01", "Isolement de " + mmTexte(d) + " entre " + decrire(a, pp) + " et " + decrire(b, pp) + " de la même empreinte (minimum " +
                                                  mmTexte(static_cast<double>(requis)) + ")",
-                  "L’empreinte est trop serrée pour ces règles : choisis une variante plus large ou un procédé plus fin.", x.centre());
+                  "L’empreinte est trop serrée pour ces règles : choisis une variante plus large ou un procédé plus fin.", x.centre(), enCause);
         else
           ajouter(Gravite::Erreur, "DRC-01", "Isolement de " + mmTexte(d) + " entre " + decrire(a, pp) + " et " + decrire(b, pp) + " (minimum " + mmTexte(static_cast<double>(requis)) + ")",
-                  "Écarte les deux cuivres, ou affine la piste.", x.centre());
+                  "Écarte les deux cuivres, ou affine la piste.", x.centre(), enCause);
       }
     }
   }

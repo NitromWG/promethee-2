@@ -142,6 +142,12 @@ RegistreActions::RegistreActions() {
   // Commandes de l'atelier, sans touche, que le ruban porte (1.20) : le fichier du ruban ne cite que des
   // identifiants du registre
   ajouter("composant.creer", QStringLiteral("Créer un composant"), P::Atelier, {});
+  ajouter("bibliotheque.articles", QStringLiteral("Choisir un article réel dans la fenêtre de choix"), P::Atelier, {});
+  ajouter("bibliotheque.standardiser", QStringLiteral("Standardiser les composants sans article réel"), P::Atelier, {});
+  ajouter("bibliotheque.misesAJour", QStringLiteral("Mettre à jour les composants depuis leurs articles"), P::Atelier, {});
+  ajouter("circuit.aPlacer", QStringLiteral("Liste des composants à placer sur la carte"), P::Circuit, {});
+  ajouter("circuit.disposerCercle", QStringLiteral("Disposer les empreintes choisies en cercle"), P::Circuit, {});
+  ajouter("verification.rapport", QStringLiteral("Rapport de vérification, groupé par règle"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
   ajouter("schema.alimentation.3v3", QStringLiteral("Alimentation +3V3"), P::Schema, {});
@@ -221,6 +227,12 @@ RegistreActions::RegistreActions() {
   static constexpr Presentation presentations[] = {
       {"schema.choisirComposant", "Placer un composant", "composants", "bibliothèque de symboles, avec aperçu"},
       {"composant.creer", "Créer un composant…", "creer-composant", "son symbole est dessiné depuis la liste de ses broches"},
+      {"bibliotheque.articles", "Articles…", "composants", "composants réels : valeur, empreinte, fabricant, hauteur ; recherche « 10k 0603 »"},
+      {"bibliotheque.standardiser", "Standardiser…", "proprietes", "remplace les composants sans article réel par l’article trouvé"},
+      {"bibliotheque.misesAJour", "Mises à jour…", "proprietes", "composants dont l’article a changé dans la bibliothèque"},
+      {"circuit.aPlacer", "À placer", "composants", "empreintes qui attendent hors de la carte, par feuille ; elles se glissent sur la carte"},
+      {"circuit.disposerCercle", "En cercle…", "pivoter", "les empreintes choisies sur un cercle ou un arc, tournées vers le centre"},
+      {"verification.rapport", "Rapport…", "drc", "rapport HTML groupé par règle, exclusions à part ; chaque ligne mène à l’objet"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},
       {"schema.etiquetteGlobale", "Étiquette globale", "etiquette", "relie les fils du même nom sur toutes les feuilles"},

@@ -345,6 +345,8 @@ bool poserDepuisBibliotheque(AtelierElectronique* a, const QString& nom, Pt ou, 
 void essaisElectroniqueL1(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL2(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL3(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void essaisElectroniqueL4(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void essaisElectroniqueL5(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 
 namespace {
 // Objectifs de la charte d'interaction : 16 ms pour un retour de souris, 50 ms pour un clic, 100 ms pour une
@@ -525,6 +527,8 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
     if (lots.contains(QStringLiteral("L1"))) essaisElectroniqueL1(f, v);
     if (lots.contains(QStringLiteral("L2"))) essaisElectroniqueL2(f, v);
     if (lots.contains(QStringLiteral("L3"))) essaisElectroniqueL3(f, v);
+    if (lots.contains(QStringLiteral("L4"))) essaisElectroniqueL4(f, v);
+    if (lots.contains(QStringLiteral("L5"))) essaisElectroniqueL5(f, v);
     std::printf("%d échec(s)\n", g_echecs);
     std::fflush(stdout);
     QDir(dossier).removeRecursively();
@@ -1232,6 +1236,12 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
 
   // ---------- Lot L3 : vérité du composant (EssaisElectroniqueL3.cpp) ----------
   essaisElectroniqueL3(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
+
+  // ---------- Lot L4 : empreintes et bibliothèque (EssaisElectroniqueL4.cpp) ----------
+  essaisElectroniqueL4(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
+
+  // ---------- Lot L5 : circuit imprimé (EssaisElectroniqueL5.cpp) ----------
+  essaisElectroniqueL5(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
 
   // ---------- Mesures (1.1, Q5, ERG-10) : la carte de mesure de 300 composants dans l'atelier, par de vrais gestes ;
   // temps relevés à chaque construction (lignes « MESURE »), sans seuil avant le lot L9 ----------

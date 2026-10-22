@@ -118,6 +118,8 @@ class VueSchema : public QWidget {
   // Pose d'un composant dont la définition n'est pas encore dans le projet (bibliothèque personnelle) : elle y entre
   // avec la pose, en un seul pas d'annulation (S4)
   void armerPose(const prom::ecad::DefSymbole& d);
+  // Pose d'un article réel (L4) : son symbole armé, l'article installé dans le projet avec la pose
+  void armerArticle(const prom::ecad::Article& a);
   // Pose en série : l'outil reste armé, un clic par exemplaire, jusqu'à « Terminer » (bouton du bandeau)
   void setPoseEnSerie(bool oui);
   bool poseEnSerie() const;

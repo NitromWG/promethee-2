@@ -37,6 +37,7 @@
 #include "VueCircuit.hpp"
 #include "PanneauEcarts.hpp"
 #include "ChampValeur.hpp"
+#include "promethee/articles.hpp"
 #include "promethee/circuit.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/hauteurs.hpp"
@@ -626,7 +627,23 @@ class PageComposant : public PageSchema {
         if (auto* k = c2.composant(id)) k->empreinte = v;
       });
     });
-    fl->addRow(QStringLiteral("Empreinte"), emp);
+    // « … » : la fenêtre de choix des empreintes (4.6), filtrée, triable, avec aperçu et application en série
+    auto* ligneEmp = new QWidget;
+    auto* hEmp = new QHBoxLayout(ligneEmp);
+    hEmp->setContentsMargins(0, 0, 0, 0);
+    hEmp->setSpacing(2);
+    hEmp->addWidget(emp, 1);
+    auto* plusEmp = new QToolButton;
+    plusEmp->setObjectName(QStringLiteral("choisirEmpreinte"));
+    plusEmp->setText(QStringLiteral("…"));
+    plusEmp->setToolTip(QStringLiteral("Choisir l’empreinte dans la fenêtre : compatibles, filtre, tri, aperçu, en série pour la sélection"));
+    connect(plusEmp, &QToolButton::clicked, this, [this] {
+      std::vector<std::string> ids(m_atelier.selection()->composants().begin(), m_atelier.selection()->composants().end());
+      if (std::find(ids.begin(), ids.end(), idComposant()) == ids.end()) ids = {idComposant()};
+      m_atelier.ouvrirChoixEmpreinte(ids);
+    });
+    hEmp->addWidget(plusEmp);
+    fl->addRow(QStringLiteral("Empreinte"), ligneEmp);
     lier(emp, [this, emp] {
       const ConceptionElec* c = conception();
       const DefSymbole* d = definition();
@@ -640,9 +657,12 @@ class PageComposant : public PageSchema {
       if (emp->property("signature").toString().toStdString() != signature) {
         emp->clear();
         emp->addItem(QStringLiteral("— aucune —"), QString());
-        for (const auto& i : catalogueEmpreintes())
-          if (i.pastilles == static_cast<int>(numeros.size()) || i.pastilles == static_cast<int>(numeros.size()) + 1 || i.id == x->empreinte)
-            emp->addItem(q(i.id) + QStringLiteral("  ·  ") + q(i.description), q(i.id));
+        // Les empreintes compatibles (4.6) : même sorte que celle du symbole, même nombre de pastilles ; « … » ouvre
+        // la fenêtre de choix, où le filtre se décoche
+        for (const auto& i : empreintesCompatibles(*d, true)) emp->addItem(q(i.id) + QStringLiteral("  ·  ") + q(i.description), q(i.id));
+        if (!x->empreinte.empty() && emp->findData(q(x->empreinte)) < 0)
+          for (const auto& i : catalogueEmpreintes())
+            if (i.id == x->empreinte) emp->addItem(q(i.id) + QStringLiteral("  ·  ") + q(i.description), q(i.id));
         std::set<std::string> vues;
         auto proposer = [&](const DefEmpreinte& de) {
           std::set<std::string> p;
@@ -827,6 +847,7 @@ class PageComposant : public PageSchema {
     for (const auto& [libelle, propriete] : std::initializer_list<std::pair<QString, std::string>>{{QStringLiteral("Fabricant"), "fabricant"},
                                                                                                     {QStringLiteral("Réf. fabricant"), "mpn"},
                                                                                                     {QStringLiteral("Fournisseur"), "fournisseur"},
+                                                                                                    {QStringLiteral("Code LCSC"), "lcsc"},
                                                                                                     {QStringLiteral("Description"), "description"},
                                                                                                     {QStringLiteral("Fiche technique"), "fiche"}}) {
       auto* champ = inspecteur::champComposant(m_atelier, idc, propriete);

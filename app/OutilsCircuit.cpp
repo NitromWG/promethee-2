@@ -23,7 +23,9 @@
 #include "RegistreActions.hpp"
 #include "SelectionElectronique.hpp"
 #include "VueCircuit.hpp"
+#include "CartoucheRoutage.hpp"
 #include "promethee/modele.hpp"
+#include "promethee/routeur.hpp"
 
 using namespace prom::ecad;
 using namespace encres_circuit;
@@ -92,6 +94,19 @@ class VueCircuit::OutilSelection : public OutilBase {
       m_appuye = true;
       return;
     }
+    // Repère de sérigraphie (5.5, C6) : il se glisse seul et garde sa place, qui suit ensuite l'empreinte
+    if (!(g.mods & (Qt::ShiftModifier | Qt::ControlModifier)))
+      if (const std::string k = m_vue.repereSous(g.ecran); !k.empty()) {
+        m_repere = k;
+        m_appuye = true;
+        m_cadre = false;
+        m_vue.choisir(Genre::Empreinte, k);
+        if (const ConceptionElec* c = m_vue.conception())
+          for (const auto& e : c->circuit.empreintes)
+            if (e.composant == k)
+              if (const DefEmpreinte* d = c->empreinte(e.empreinte)) m_ecartRepere = w - positionRepere(e, *d, c->circuit.serigraphie.hauteur);
+        return;
+      }
     const ObjetChoisi sous = m_vue.objetSous(g.ecran);
     const auto mode = m_vue.m_sel->modeClic(g.mods);  // Maj, Ctrl, ou le mode du bandeau
     m_mode = static_cast<int>(mode);
@@ -108,6 +123,27 @@ class VueCircuit::OutilSelection : public OutilBase {
       return;
     }
     VueCircuit& v = m_vue;
+    if (m_appuye && !m_repere.empty()) {
+      if (!m_glisse) {
+        if ((m_souris - m_pression).manhattanLength() <= 3) return;
+        if (v.refuseVerrou()) {
+          m_appuye = false;
+          m_repere.clear();
+          return;
+        }
+        v.m_doc->debutGesteConception(v.m_conception);
+        m_glisse = true;
+      }
+      const Pt p = v.surGrilleRoutage(v.monde(m_souris) - m_ecartRepere);
+      const std::string id = m_repere;
+      const int ci = v.m_conception;
+      v.m_doc->pendantGeste([&](prom::Projet& pr) {
+        if (ci < 0 || ci >= static_cast<int>(pr.electronique.size())) return;
+        for (auto& e : pr.electronique[static_cast<std::size_t>(ci)].circuit.empreintes)
+          if (e.composant == id) e.repere = versEmpreinte(e, p);
+      }, true);
+      return;
+    }
     if (m_appuye && m_sommet >= 0 && v.m_genre == Genre::Zone) {
       if (!m_glisse) {
         v.m_doc->debutGesteConception(v.m_conception);
@@ -174,6 +210,7 @@ class VueCircuit::OutilSelection : public OutilBase {
       return;
     }
     m_sommet = -1;
+    m_repere.clear();
     if (m_glisse) {
       m_glisse = false;
       m_vue.m_accroches.clear();
@@ -282,6 +319,8 @@ class VueCircuit::OutilSelection : public OutilBase {
   int m_mode = 0, m_sommet = -1;
   bool m_appuye = false, m_glisse = false, m_cadre = false, m_surChoisi = false, m_surVerrou = false;
   Pt m_delta{};
+  std::string m_repere;  // composant dont le repère de sérigraphie se glisse
+  Pt m_ecartRepere{};
 };
 
 // ---------- Routage ----------
@@ -296,6 +335,11 @@ class VueCircuit::OutilRoutage : public OutilBase {
     m_vue.update();
   }
   void glisser(const GesteVue& g) override { survol(g); }
+  bool enCours() const { return m_route; }
+  Pt tete() const { return m_courant; }
+  const std::string& reseau() const { return m_reseau; }
+  Nm largeur() const { return m_route ? m_largeur : 0; }
+  QPointF souris() const { return m_souris; }
   void appui(const GesteVue& g) override {
     m_souris = g.ecran;
     VueCircuit& v = m_vue;
@@ -360,6 +404,7 @@ class VueCircuit::OutilRoutage : public OutilBase {
     m_segments.clear();
     m_vias.clear();
     m_coupures.clear();
+    m_vue.majCartouche();
     emit m_vue.message(QStringLiteral("Tracé retiré : rien n’a été posé."));
     m_vue.update();
     return true;
@@ -367,6 +412,17 @@ class VueCircuit::OutilRoutage : public OutilBase {
   void dessiner(QPainter& g) const override {
     if (!m_route) return;
     const VueCircuit& v = m_vue;
+    // Auréole d'isolement autour des objets proches (5.20) : le bord que le cuivre du tracé ne doit pas franchir
+    {
+      QPen pen(QColor(255, 196, 64, 170), 1, Qt::DashLine);
+      g.setPen(pen);
+      g.setBrush(Qt::NoBrush);
+      for (const auto& a : v.aureolesRoutage()) {
+        QPolygonF poly;
+        for (const Pt q : a.contour) poly << v.ecran(q);
+        g.drawPolygon(poly);
+      }
+    }
     for (const auto& s : m_segments) {
       g.setPen(QPen(couleurCuivre(s.couche), std::max(1.0, mm(s.largeur) * v.m_echelle), Qt::SolidLine, Qt::RoundCap));
       g.drawLine(v.ecran(s.a), v.ecran(s.b));
@@ -433,6 +489,14 @@ class VueCircuit::OutilRoutage : public OutilBase {
     for (const auto& [x, y] : VueCircuit::pairesPossibles(static_cast<int>(cuivres.size())))
       choixPaire.choix.push_back({QStringLiteral("%1 ↔ %2").arg(courte(x), courte(y)), [v, x = x, y = y] { v->setPaireCouches(x, y); }, paire == std::pair{x, y}});
     c.actions.push_back(choixPaire);
+    // Mode du routeur (5.7) : contourner, pousser, ignorer
+    ActionBandeau mode;
+    mode.id = QStringLiteral("modeRouteur");
+    mode.libelle = VueCircuit::nomModeRouteur(m_vue.m_modeRouteur);
+    mode.choix.push_back({QStringLiteral("Quand le tracé heurte un obstacle"), {}, false, true, {}, {}, true});
+    for (const auto x : {ModeRouteur::Contourner, ModeRouteur::Pousser, ModeRouteur::Ignorer})
+      mode.choix.push_back({VueCircuit::nomModeRouteur(x), [v, x] { v->setModeRouteur(x); }, m_vue.m_modeRouteur == x});
+    c.actions.push_back(mode);
     if (m_route) {
       // Largeur : celle de la classe du réseau, ou une valeur courante, pour les segments qui suivent
       ActionBandeau largeur;
@@ -505,11 +569,40 @@ class VueCircuit::OutilRoutage : public OutilBase {
     m_route = true;
     m_segments.clear();
     m_vias.clear();
+    m_cacheValide = false;
     v.update();
     v.majBandeau();
+    v.majCartouche();
     return true;
   }
   bool avancer(Pt cible, bool forcer) {
+    // Pousser (5.7, ROU-02) : les pistes gênantes s'écartent ; ce qui est déjà tracé est posé avec elles, en un pas
+    if (!forcer && m_vue.m_modeRouteur == ModeRouteur::Pousser && collision(trajetDirect(cible)))
+      if (const ConceptionElec* c = m_vue.conception()) {
+        ConceptionElec essai = *c;
+        for (const auto& s : m_segments) essai.circuit.pistes.push_back({nouvelUuid(), m_reseau, s.couche, s.a, s.b, s.largeur});
+        for (const Pt& p : m_vias) essai.circuit.vias.push_back({nouvelUuid(), m_reseau, p, viaDiametre(essai.circuit.regles, m_reseau), viaPercage(essai.circuit.regles, m_reseau)});
+        OptionsTrace o;
+        o.reseau = m_reseau;
+        o.couche = m_vue.m_coucheActive;
+        o.largeur = m_largeur;
+        const ResultatPoussee r = pousser(essai, m_courant, cible, o);
+        if (!r.ok) {
+          emit m_vue.message(QStringLiteral("<span style='color:#C2402E'><b>Rien ne s’écarte</b> : %1.</span>").arg(q(r.raison).toHtmlEscaped()));
+          return false;
+        }
+        m_vue.modifier([&](ConceptionElec& cc) { cc.circuit = essai.circuit; });
+        m_segments.clear();
+        m_vias.clear();
+        m_courant = cible;
+        m_cacheValide = false;
+        QStringList noms;
+        for (const auto& n : r.deplacees) noms << q(n).toHtmlEscaped();
+        emit m_vue.message(QStringLiteral("Segment posé ; %1 écartée(s) : %2.").arg(noms.size()).arg(noms.join(QStringLiteral(", "))));
+        m_vue.update();
+        m_vue.majCartouche();
+        return true;
+      }
     const auto segs = trajet(cible);
     std::string avec;
     if (!forcer && collision(segs, &avec)) {
@@ -518,7 +611,9 @@ class VueCircuit::OutilRoutage : public OutilBase {
     }
     for (const auto& [a, b] : segs) m_segments.push_back({a, b, m_vue.m_coucheActive, m_largeur});
     m_courant = cible;
+    m_cacheValide = false;
     m_vue.update();
+    m_vue.majCartouche();
     return true;
   }
   void finir() {
@@ -531,7 +626,9 @@ class VueCircuit::OutilRoutage : public OutilBase {
     m_segments.clear();
     m_vias.clear();
     m_coupures.clear();
+    m_cacheValide = false;
     m_vue.majBandeau();
+    m_vue.majCartouche();
     if (segments.empty() && vias.empty()) {
       m_vue.update();
       return;
@@ -568,8 +665,10 @@ class VueCircuit::OutilRoutage : public OutilBase {
     v.m_coucheActive = suivante;
     emit v.message(QStringLiteral("Via posée : la piste continue sur %1.").arg(QString::fromUtf8(nomCouche(v.m_coucheActive))));
     emit v.coucheActiveChangee();
+    m_cacheValide = false;
     v.update();
     v.majBandeau();
+    v.majCartouche();
   }
   void retirerCoude() {
     if (!m_route || m_segments.empty()) return;
@@ -596,16 +695,45 @@ class VueCircuit::OutilRoutage : public OutilBase {
   }
   void setLargeur(Nm l) {
     m_largeur = l;
+    m_cacheValide = false;
     m_vue.update();
+    m_vue.majBandeau();
+    m_vue.majCartouche();
   }
   void basculerAngle() {
     m_droitDabord = !m_droitDabord;
+    m_cacheValide = false;
     m_vue.update();
     m_vue.majBandeau();
   }
 
  private:
+  // Tracé vers la cible : direct ; en mode Contourner, autour de l'obstacle qu'il heurterait (5.7, ROU-01), sans Ctrl
   std::vector<std::pair<Pt, Pt>> trajet(Pt cible) const {
+    auto direct = trajetDirect(cible);
+    if (m_vue.m_modeRouteur != ModeRouteur::Contourner || !collision(direct)) return direct;
+    const ConceptionElec* c = m_vue.conception();
+    if (!c || !m_vue.m_calc) return direct;
+    if (m_cacheValide && m_cacheCible == cible && m_cacheGeneration == m_vue.m_generationCalculs && m_cacheCouche == m_vue.m_coucheActive) return m_cacheTrajet;
+    OptionsTrace o;
+    o.reseau = m_reseau;
+    o.couche = m_vue.m_coucheActive;
+    o.largeur = m_largeur;
+    o.pastilles = &m_vue.m_calc->pastilles;
+    o.etendue = 8 * NM_PAR_MM;
+    // Le tracé en cours, déjà fixé, compte comme obstacle pour lui-même : non (même réseau) ; le reste de la carte, oui
+    const ResultatTrace r = contourner(*c, m_courant, cible, o);
+    std::vector<std::pair<Pt, Pt>> t;
+    if (r.ok)
+      for (std::size_t i = 1; i < r.points.size(); ++i) t.push_back({r.points[i - 1], r.points[i]});
+    m_cacheTrajet = r.ok ? t : direct;
+    m_cacheCible = cible;
+    m_cacheGeneration = m_vue.m_generationCalculs;
+    m_cacheCouche = m_vue.m_coucheActive;
+    m_cacheValide = true;
+    return m_cacheTrajet;
+  }
+  std::vector<std::pair<Pt, Pt>> trajetDirect(Pt cible) const {
     const Nm dx = cible.x - m_courant.x, dy = cible.y - m_courant.y, ax = std::abs(dx), ay = std::abs(dy), d = std::min(ax, ay);
     const Nm sx = dx > 0 ? 1 : dx < 0 ? -1 : 0, sy = dy > 0 ? 1 : dy < 0 ? -1 : 0;
     Pt milieu = m_droitDabord ? (ax > ay ? Pt{m_courant.x + sx * (ax - d), m_courant.y} : Pt{m_courant.x, m_courant.y + sy * (ay - d)}) : Pt{m_courant.x + sx * d, m_courant.y + sy * d};
@@ -674,6 +802,12 @@ class VueCircuit::OutilRoutage : public OutilBase {
   std::vector<Coupure> m_coupures;
   QPointF m_souris;
   Couche m_coucheSuspendue = Couche::CuivreDessus;
+  // Contournement calculé pour la dernière cible (la souris bouge souvent sans changer de point de grille)
+  mutable bool m_cacheValide = false;
+  mutable Pt m_cacheCible{};
+  mutable std::uint64_t m_cacheGeneration = 0;
+  mutable Couche m_cacheCouche = Couche::CuivreDessus;
+  mutable std::vector<std::pair<Pt, Pt>> m_cacheTrajet;
 };
 
 // ---------- Via ----------
@@ -1031,4 +1165,89 @@ bool VueCircuit::router(const std::vector<Pt>& points, bool forcer) {
   for (std::size_t i = 1; i < points.size() && ok; ++i) ok = r->avancer(points[i], forcer);
   r->finir();
   return ok;
+}
+
+// ---------- Routeur interactif (lot L5) ----------
+void VueCircuit::setModeRouteur(ModeRouteur m) {
+  m_modeRouteur = m;
+  update();
+  majBandeau();
+  majCartouche();
+}
+
+QString VueCircuit::nomModeRouteur(ModeRouteur m) {
+  switch (m) {
+    case ModeRouteur::Contourner: return QStringLiteral("Contourner");
+    case ModeRouteur::Pousser: return QStringLiteral("Pousser");
+    case ModeRouteur::Ignorer: return QStringLiteral("Ignorer");
+  }
+  return {};
+}
+
+Nm VueCircuit::largeurTrace() const {
+  const auto* r = dynamic_cast<const OutilRoutage*>(m_outils.actif());
+  return r ? r->largeur() : 0;
+}
+
+void VueCircuit::setLargeurTrace(Nm l) {
+  if (auto* r = dynamic_cast<OutilRoutage*>(m_outils.actif()); r && r->enCours()) r->setLargeur(l);
+}
+
+std::vector<VueCircuit::AureoleRoutage> VueCircuit::aureolesRoutage() const {
+  std::vector<AureoleRoutage> res;
+  const auto* r = dynamic_cast<const OutilRoutage*>(m_outils.actif());
+  const ConceptionElec* c = conception();
+  if (!r || !r->enCours() || !c || !m_calc) return res;
+  const Regles& R = c->circuit.regles;
+  const Nm w2 = r->largeur() / 2;
+  // Les objets à moins de trois millimètres (et d'un isolement) de la tête ou de la souris
+  const Pt tete = r->tete(), souris = monde(r->souris());
+  auto proche = [&](const Boite& b) {
+    const Nm d = 3 * NM_PAR_MM + R.isolement + w2;
+    return b.gonflee(d).contient(tete) || b.gonflee(d).contient(souris);
+  };
+  for (const auto& p : m_calc->pastilles) {
+    if (!(p.couches & bit(m_coucheActive)) || (!p.reseau.empty() && p.reseau == r->reseau())) continue;
+    if (!proche(boite(p.forme))) continue;
+    const Nm iso = isolementEntre(R, r->reseau(), p.reseau);
+    const Polygones g = gonfler({p.forme}, iso);
+    if (g.empty()) continue;
+    res.push_back({p.reference + "." + p.numero, p.forme, g.front(), iso});
+  }
+  for (const auto& t : c->circuit.pistes) {
+    if (t.couche != m_coucheActive || (!t.reseau.empty() && t.reseau == r->reseau())) continue;
+    Boite b;
+    b.etendre(t.a);
+    b.etendre(t.b);
+    if (!proche(b.gonflee(t.largeur / 2))) continue;
+    const Nm iso = isolementEntre(R, r->reseau(), t.reseau);
+    res.push_back({t.uuid, oblong(t.a, t.b, t.largeur), oblong(t.a, t.b, t.largeur + 2 * iso), iso});
+  }
+  for (const auto& v : c->circuit.vias) {
+    if (!v.reseau.empty() && v.reseau == r->reseau()) continue;
+    Boite b;
+    b.etendre(v.p);
+    if (!proche(b.gonflee(v.diametre / 2))) continue;
+    const Nm iso = isolementEntre(R, r->reseau(), v.reseau);
+    res.push_back({v.uuid, cercle(v.p, v.diametre / 2), cercle(v.p, v.diametre / 2 + iso), iso});
+  }
+  return res;
+}
+
+void VueCircuit::majCartouche() {
+  if (!m_cartouche) return;
+  const auto* r = dynamic_cast<const OutilRoutage*>(m_outils.actif());
+  const ConceptionElec* c = conception();
+  if (!r || !r->enCours() || !c) {
+    m_cartouche->hide();
+    return;
+  }
+  m_cartouche->maj(QString::fromStdString(r->reseau()), m_coucheActive, r->largeur(), largeurPiste(c->circuit.regles, r->reseau()), viaDiametre(c->circuit.regles, r->reseau()), m_modeRouteur);
+  // Près de la tête du tracé, en bas à droite, gardé dans la vue
+  QPoint ou = ecran(r->tete()).toPoint() + QPoint(28, 28);
+  ou.setX(std::clamp(ou.x(), 0, std::max(0, width() - m_cartouche->width())));
+  ou.setY(std::clamp(ou.y(), 0, std::max(0, height() - m_cartouche->height())));
+  m_cartouche->move(ou);
+  m_cartouche->show();
+  m_cartouche->raise();
 }

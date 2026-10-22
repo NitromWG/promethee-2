@@ -47,6 +47,7 @@ J articleVersJson(const Article& a) {
   mettre("mpn", a.mpn);
   mettre("fiche", a.fiche);
   mettre("lcsc", a.lcsc);
+  mettre("modele3D", a.modele3D);
   if (!a.brochage.empty()) o["brochage"] = a.brochage;
   if (!a.parametres.empty()) o["parametres"] = a.parametres;
   if (a.hauteur > 0) o["hauteur"] = a.hauteur;
@@ -86,6 +87,7 @@ Article articleDepuisJson(const J& o) {
   a.mpn = txt(o, "mpn");
   a.fiche = txt(o, "fiche");
   a.lcsc = txt(o, "lcsc");
+  a.modele3D = txt(o, "modele3D");
   a.brochage = chaines(o, "brochage");
   a.parametres = chaines(o, "parametres");
   if (o.contains("hauteur") && o["hauteur"].is_number()) a.hauteur = std::max(0.0, o["hauteur"].get<double>());
@@ -121,6 +123,32 @@ Article articleDepuisJson(const J& o) {
   a.exigences = txt(o, "exigences");
   if (o.contains("version") && o["version"].is_number_integer()) a.version = std::max(1, o["version"].get<int>());
   return a;
+}
+
+// ---------- Fichier d'articles ----------
+std::vector<Article> lireArticles(const std::string& contenu, std::string* erreur) {
+  std::vector<Article> r;
+  try {
+    const auto j = nlohmann::ordered_json::parse(contenu);
+    if (!j.is_object() || !j.contains("articles") || !j["articles"].is_array()) {
+      if (erreur) *erreur = "ce n’est pas un fichier d’articles Prométhée";
+      return r;
+    }
+    for (const auto& x : j["articles"])
+      if (x.is_object()) {
+        Article a = articleDepuisJson(x);
+        if (!a.id.empty()) r.push_back(std::move(a));
+      }
+  } catch (const std::exception& e) {
+    if (erreur) *erreur = e.what();
+  }
+  return r;
+}
+
+std::string texteArticles(const std::vector<Article>& articles) {
+  nlohmann::ordered_json j = {{"format", "promethee-articles"}, {"version", 1}, {"articles", nlohmann::ordered_json::array()}};
+  for (const auto& a : articles) j["articles"].push_back(articleVersJson(a));
+  return j.dump(1) + "\n";
 }
 
 // ---------- Bibliothèque intégrée ----------
@@ -279,6 +307,7 @@ Article resoudreArticle(const Article& a, const std::function<const Article*(con
     prendre("mpn", r.mpn, b->mpn);
     prendre("fiche", r.fiche, b->fiche);
     prendre("lcsc", r.lcsc, b->lcsc);
+    prendre("modele3D", r.modele3D, b->modele3D);
     if (r.brochage.empty() && !a.nonHerites.count("brochage")) r.brochage = b->brochage;
     if (r.hauteur <= 0 && !a.nonHerites.count("hauteur")) r.hauteur = b->hauteur;
     for (const auto& [k, val] : b->parametres)
@@ -818,7 +847,7 @@ std::vector<ResultatRecherche> IndexArticles::chercher(const std::string& requet
     if (filtres.avecEmpreinte) garde &= !a.empreinte.empty();
     if (filtres.avecFiche) garde &= !a.fiche.empty();
     if (filtres.avecReference) garde &= !a.mpn.empty();
-    if (filtres.avec3D) garde &= !a.empreinte.empty() && (a.hauteur > 0 || genererEmpreinte(a.empreinte).has_value());
+    if (filtres.avec3D) garde &= !a.modele3D.empty() || (!a.empreinte.empty() && (a.hauteur > 0 || genererEmpreinte(a.empreinte).has_value()));
     if (filtres.avecSimulation) garde &= a.parametres.count("modeleSpice") > 0 || familleArticle(a) != FamilleValeur::Aucune;
     if (!garde) continue;
     // Valeur et boîtier demandés : en tête
@@ -1269,7 +1298,7 @@ ImportArchive importerArchiveComposant(const std::string& zip, const std::string
   a.mpn = s.mpn.empty() ? a.nom : s.mpn;
   a.fiche = s.fiche;
   if (r.empreinte) a.empreinte = r.empreinte->id;
-  if (!r.nomModele3D.empty()) a.parametres["modele3D"] = r.nomModele3D;
+  if (!r.nomModele3D.empty()) a.modele3D = r.nomModele3D;
   r.controles = controlerArticle(a, &s, r.empreinte ? &*r.empreinte : nullptr);
   return r;
 }

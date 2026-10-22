@@ -6,7 +6,8 @@
       "id": "schema",
       "titre": "Schéma",
       "groupes": [
-        {"titre": "Composant", "forme": "grand", "actions": ["schema.choisirComposant", "composant.creer"]},
+        {"titre": "Composant", "forme": "grand", "actions": ["schema.choisirComposant", "bibliotheque.articles", "composant.creer"]},
+        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour"]},
         {"titre": "Fil", "forme": "grand", "actions": ["schema.fil"]},
         {"titre": "Étiquette", "forme": "grand", "actions": ["schema.etiquette", "schema.etiquetteGlobale"]},
         {"titre": "Alimentation", "forme": "grand", "actions": ["schema.alimentation.gnd", "schema.alimentation.5v", "schema.alimentation.3v3", "schema.alimentation.12v", "schema.alimentation.vcc", "schema.drapeauAlimentation"]},
@@ -28,6 +29,7 @@
       "titre": "Circuit imprimé",
       "groupes": [
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
+        {"titre": "Placer", "forme": "grand", "actions": ["circuit.aPlacer", "circuit.disposerCercle"]},
         {"titre": "Router", "forme": "grand", "actions": ["circuit.router", "circuit.via", "circuit.routerAuto"]},
         {"titre": "Zone", "forme": "grand", "actions": ["circuit.zone", "circuit.contour", "circuit.decoupe", "circuit.texte"]},
         {"titre": "Modifier", "forme": "grille", "actions": ["objet.tourner", "objet.tournerInverse", "circuit.changerFace", "selection.supprimer", "circuit.mesurer"]},
@@ -35,7 +37,7 @@
         {"titre": "Vue", "forme": "grille", "actions": ["vue.toutVoir", "commun.inspecteur", "vue.zoomPlus", "vue.zoomMoins", "atelier.raccourcis"]},
         {"titre": "Couche active", "forme": "controle", "actions": ["circuit.coucheActive"]},
         {"titre": "Grille et unité", "forme": "controle", "actions": ["circuit.grilleUnite"]},
-        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc"]}
+        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport"]}
       ]
     },
     {

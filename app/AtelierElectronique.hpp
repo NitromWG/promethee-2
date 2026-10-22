@@ -21,6 +21,7 @@
 
 #include "VueCircuit.hpp"
 #include "ZoneMessages.hpp"
+#include "promethee/articles.hpp"
 #include "promethee/bibliotheque.hpp"
 #include "promethee/commandes.hpp"
 #include "promethee/electronique.hpp"
@@ -127,6 +128,33 @@ class AtelierElectronique : public QWidget {
   // Empreintes créées (tableau de pastilles) ou importées (.kicad_mod) : bibliothèque personnelle et projet ;
   // « composant » (UUID) reçoit l'empreinte s'il est donné
   static std::vector<prom::ecad::DefEmpreinte> empreintesPerso();
+  // ---------- Articles réels (lot L4) ----------
+  // Bibliothèque personnelle d'articles : « articles-electronique.json » à côté de la bibliothèque de symboles
+  static QString cheminArticlesPerso();
+  static std::vector<prom::ecad::Article> articlesPerso();
+  void rangerArticlesPerso(const std::vector<prom::ecad::Article>& articles);
+  // Articles proposés : intégrés, remplacés par ceux de la bibliothèque personnelle de même identifiant, puis ceux du
+  // projet qui ne sont nulle part ailleurs
+  std::vector<prom::ecad::Article> articlesDisponibles() const;
+  void armerArticle(const prom::ecad::Article& a);  // pose armée au schéma, la feuille reste utilisable
+  void rangerArchive(const prom::ecad::ImportArchive& imp);  // symbole, empreinte, modèle 3D et article rangés
+  void ouvrirChoixComposant(const QString& recherche = {});
+  class FenetreChoixComposant* choixComposant() const;
+  void ouvrirChoixEmpreinte(std::vector<std::string> composants = {});
+  class FenetreChoixEmpreinte* choixEmpreinte() const;
+  void ouvrirStandardisation();
+  class DialogueStandardisation* standardisation() const;
+  void ouvrirMisesAJourArticles();
+  class DialogueMisesAJour* misesAJourArticles() const;
+  // Articles de la bibliothèque qui diffèrent des composants posés d'après eux : un message propose la mise à jour
+  int signalerMisesAJourArticles();
+  // ---------- Circuit (lot L5) ----------
+  class PanneauAPlacer* aPlacer() const { return m_aPlacer; }
+  void montrerAPlacer();
+  // Les empreintes choisies au circuit, rangées en cercle ou en arc (dialogue), en un pas
+  void disposerEnCercle();
+  void ouvrirRapport();  // rapport de vérification, groupé par règle, dans Prométhée
+  class FenetreRapport* rapport() const;
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
   void creerEmpreinte(const std::string& composant);
   // Symbole à plusieurs unités : pose l'unité suivante non posée du composant de ce symbole, à côté de lui
@@ -159,7 +187,7 @@ class AtelierElectronique : public QWidget {
   // Panneaux (1.21, ERG-23) : sur une fenêtre principale imbriquée, les vues au centre, ils flottent (un second
   // écran), s'ancrent, se groupent en onglets ou se replient ; leurs dispositions nommées se gardent pour soi, dans
   // le projet ou dans un fichier (DispositionsAtelier)
-  enum class Panneau : std::uint8_t { Projet, Bibliotheque, Inspecteur, Messages, Verifications, Recherche, Apprendre, Ecarts, Champs };
+  enum class Panneau : std::uint8_t { Projet, Bibliotheque, Inspecteur, Messages, Verifications, Recherche, Apprendre, Ecarts, Champs, APlacer };
   // Écarts entre le schéma et le circuit (3.8) : la liste, et sa pastille dans la barre d'état
   class PanneauEcarts* ecarts() const { return m_ecarts; }
   void montrerEcarts();
@@ -265,7 +293,9 @@ class AtelierElectronique : public QWidget {
   QAction *m_actionMosaique = nullptr, *m_actionTableauObjets = nullptr;
   QMainWindow* m_fenetre = nullptr;
   QDockWidget *m_dockProjet = nullptr, *m_dockBibliotheque = nullptr, *m_dockInspecteur = nullptr, *m_dockMessages = nullptr, *m_dockVerifications = nullptr, *m_dockRecherche = nullptr, *m_dockApprendre = nullptr,
-              *m_dockEcarts = nullptr, *m_dockChamps = nullptr;
+              *m_dockEcarts = nullptr, *m_dockChamps = nullptr, *m_dockAPlacer = nullptr;
+  class PanneauAPlacer* m_aPlacer = nullptr;
+  QPointer<class FenetreRapport> m_rapport;
   class PanneauEcarts* m_ecarts = nullptr;
   class TableauChamps* m_tableauChamps = nullptr;
   std::string m_pinceau;                         // composant modèle du pinceau
@@ -275,6 +305,10 @@ class AtelierElectronique : public QWidget {
   std::vector<QPointer<QDockWidget>> m_flottantsCaches;
   SelectionElectronique* m_selection = nullptr;
   QPointer<class ListeRaccourcis> m_raccourcis;  // F1
+  QPointer<class FenetreChoixComposant> m_choixComposant;
+  QPointer<class FenetreChoixEmpreinte> m_choixEmpreinte;
+  QPointer<class DialogueStandardisation> m_standardisation;
+  QPointer<class DialogueMisesAJour> m_misesAJour;
   VueSchema* m_schema = nullptr;
   VueCircuit* m_circuit = nullptr;
   VuePiece* m_3d = nullptr;

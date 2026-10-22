@@ -25,6 +25,9 @@ namespace prom::ecad {
 // ---------- Fichier ----------
 nlohmann::ordered_json articleVersJson(const Article& a);
 Article articleDepuisJson(const nlohmann::ordered_json& j);
+// Fichier d'articles d'une bibliothèque (personnelle, d'équipe) : {"format":"promethee-articles","articles":[…]}
+std::vector<Article> lireArticles(const std::string& contenu, std::string* erreur = nullptr);
+std::string texteArticles(const std::vector<Article>& articles);
 
 // ---------- Bibliothèque intégrée et héritage ----------
 const std::vector<Article>& bibliothequeArticles();
