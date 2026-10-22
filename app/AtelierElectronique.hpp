@@ -327,6 +327,8 @@ class AtelierElectronique : public QWidget {
   void perimerVerification();  // la conception a changé : la vérification complète est « à refaire »
   void afficherEtat(int niveau);
   void allerAuProbleme(const QString& lien);  // compteur du bilan cliqué : la première violation
+  void recalculerSchema();  // connectivité et ERC seules, sur-le-champ ; le circuit attend
+  static bool estGrandeCarte(const prom::ecad::ConceptionElec& c);  // au-delà, le calcul complet part en fond
   void lancerCalcul(int niveau = 2);  // niveau 1 : pendant un geste (chevelu et pastilles), sans zones ni DRC
   void majEtatCalcul();
 
@@ -394,6 +396,7 @@ class AtelierElectronique : public QWidget {
  private:
   std::vector<prom::ecad::Violation> m_ercVerifiee;  // niveau complet, à la dernière vérification
   std::string m_conceptionVerifiee;                   // UUID de la conception vérifiée
+  std::string m_conceptionCalculee;                   // UUID de la conception du dernier résultat appliqué
   bool m_verificationFaite = false, m_verificationPerimee = false;
   // Changements reçus depuis le dernier calcul (A12) : ils disent quels moteurs refaire
   prom::ecad::ChangementConception m_enAttente;

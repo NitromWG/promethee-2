@@ -444,7 +444,24 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
     if (i == Schema) m_vues->setCurrentWidget(m_schema);
     else if (i == Vue3D) { m_vues->setCurrentWidget(m_3d); majVue3D(); }
     else m_vues->setCurrentWidget(m_circuit);
-    recalculer();
+    // Le calcul ne repart que si le dernier résultat n'est plus celui de la conception montrée : sans modification
+    // depuis, passer d'une vue à l'autre est immédiat (ERG-10 : F8 sous 100 ms). Le schéma ne lit que la
+    // connectivité et l'ERC ; le circuit d'une grande carte se montre aussitôt avec son dernier état, le calcul
+    // complet (zones, DRC) part en fond comme après un geste (9.4)
+    const ConceptionElec* c = conceptionCourante();
+    const bool rienEnAttente = c && c->uuid == m_conceptionCalculee && m_enAttente.vide() && !m_calculEnCours && !m_minuterie->isActive();
+    const bool grande = c && estGrandeCarte(*c);
+    if ((i == Schema && rienEnAttente) || (i != Schema && rienEnAttente && !m_circuitPerime && m_niveauCalcul == 2)) {
+      majEtatCalcul();  // résultats à jour : le bilan de la barre d'état suit la vue montrée
+    } else if (grande && i == Schema) {
+      recalculerSchema();
+    } else if (grande) {
+      ++m_generation;
+      if (!m_calculEnCours) lancerCalcul();
+      majEtatCalcul();
+    } else {
+      recalculer();
+    }
     // Le passage au circuit refait la vérification complète du schéma (S9)
     if (i == Circuit) retenirVerification();
     majZoom();
@@ -754,6 +771,18 @@ void AtelierElectronique::recalculer() {
   appliquerResultat(std::move(r));
 }
 
+bool AtelierElectronique::estGrandeCarte(const ConceptionElec& c) { return c.circuit.empreintes.size() >= GRANDE_CARTE; }
+
+void AtelierElectronique::recalculerSchema() {
+  const ConceptionElec* c = conceptionCourante();
+  if (!c) return;
+  ++m_generation;
+  Resultat r = calculerConception(*c, 0, nullptr);
+  r.generation = m_generation;
+  m_circuitPerime = true;
+  appliquerResultat(std::move(r));
+}
+
 void AtelierElectronique::recalculerApresModification() {
   const ConceptionElec* c = conceptionCourante();
   if (!c) return;
@@ -846,6 +875,7 @@ void AtelierElectronique::appliquerResultat(Resultat&& r) {
   if (!c) return;
   m_calculs.k = std::move(r.calculs.k);
   m_erc = std::move(r.erc);
+  m_conceptionCalculee = c->uuid;
   if (r.niveau >= 1) {
     m_calculs.pastilles = std::move(r.calculs.pastilles);
     m_calculs.zones = std::move(r.calculs.zones);
@@ -1077,20 +1107,25 @@ void AtelierElectronique::mettreAJourCircuit() {
     return;
   }
   // « Synchroniser maintenant » (3.8) : le panneau des écarts montre la liste quand il y en a une, puis tout
-  // s'applique en un pas
+  // s'applique en un pas. Les écarts sont comptés une fois, montrés puis appliqués (ERG-10 : F8 sous 100 ms)
+  const ConceptionElec* cs = conceptionCourante();
+  const bool schemaSeul = cs && cs->schemaSeul;
+  std::vector<prom::ecad::EcartSynchro> ecarts0 = cs && !schemaSeul ? prom::ecad::ecartsSynchronisation(*cs) : std::vector<prom::ecad::EcartSynchro>{};
   if (m_ecarts) {
-    m_ecarts->maj();
-    if (!m_ecarts->ecarts().empty()) montrerEcarts();
+    m_ecarts->setEcarts(ecarts0);
+    if (!ecarts0.empty()) montrerEcarts();
   }
   BilanMiseAJour b;
   int ecarts = 0;
-  modifierConception([&](ConceptionElec& c) {
+  const bool change = modifierConception([&](ConceptionElec& c) {
     c.schemaSeul = false;  // le circuit est demandé : il existe désormais (STR-13)
-    if (std::any_of(c.composants.begin(), c.composants.end(), [](const ComposantElec& x) { return x.reference.find('?') != std::string::npos; })) prom::ecad::annoter(c, false);
-    ecarts = prom::ecad::appliquerEcarts(c, prom::ecad::ecartsSynchronisation(c));  // liaisons tracées, broches routées compris
+    const bool annote = std::any_of(c.composants.begin(), c.composants.end(), [](const ComposantElec& x) { return x.reference.find('?') != std::string::npos; });
+    if (annote) prom::ecad::annoter(c, false);
+    // liaisons tracées, broches routées compris ; recomptés si l'annotation ou le premier circuit les change
+    ecarts = prom::ecad::appliquerEcarts(c, annote || schemaSeul ? prom::ecad::ecartsSynchronisation(c) : ecarts0);
     b = prom::ecad::mettreAJourCircuit(c);
   }, QStringLiteral("Synchroniser le circuit et le schéma"));
-  if (m_ecarts) m_ecarts->maj();
+  if (m_ecarts && change) m_ecarts->maj();
   (void)ecarts;
   afficherMessage(QStringLiteral("<b>Circuit mis à jour</b> : %1 empreinte(s) ajoutée(s), %2 changée(s), %3 retirée(s). Les nouvelles attendent à droite de la carte, et dans la liste « À placer ».%4")
                       .arg(b.ajoutees)

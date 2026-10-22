@@ -10,6 +10,8 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QRegularExpression>
+#include <memory>
+
 #include <QSettings>
 
 #include <QApplication>
@@ -246,7 +248,16 @@ std::vector<const Reglage*> RegistreReglages::chercher(const QString& texte) con
 
 QVariant RegistreReglages::valeur(const QString& cle) const {
   const Reglage* r = reglage(cle);
-  return QSettings().value(cle, r ? r->defaut : QVariant());
+  // Un QSettings gardé par fil : la vue en lit des réglages à chaque image, et en construire un par lecture coûte.
+  // Les QSettings d'un même processus partagent leurs valeurs : ce qu'un autre écrit se lit aussitôt. Il est refait
+  // si le format par défaut change (mode portable).
+  thread_local std::unique_ptr<QSettings> s;
+  thread_local QSettings::Format format = QSettings::NativeFormat;
+  if (!s || format != QSettings::defaultFormat()) {
+    s = std::make_unique<QSettings>();
+    format = QSettings::defaultFormat();
+  }
+  return s->value(cle, r ? r->defaut : QVariant());
 }
 
 void RegistreReglages::ecrire(const QString& cle, const QVariant& v) {

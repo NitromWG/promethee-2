@@ -58,7 +58,7 @@
         },
         "jeuxSorties": {
           "type": "array",
-          "description": "Jeux de sorties enregistrés (0.33) : dossier à variables (${PROJET}, ${VARIANTE}, ${REVISION}), liste de sorties, variante, archive zip, contrôles avant publication.",
+          "description": "Jeux de sorties enregistrés (0.33) : dossier à variables ({projet}, {carte}, {revision}, {variante}, {date}, et celles données par -D CLE=VALEUR), liste de sorties, variante, archive zip, contrôles avant publication.",
           "items": { "type": "object", "required": ["nom", "dossier", "sorties"], "properties": { "nom": { "type": "string" }, "dossier": { "type": "string" }, "sorties": { "type": "array", "items": { "type": "string" } }, "variante": { "type": "string" }, "zip": { "type": "boolean" }, "controler": { "type": "boolean" } } }
         },
         "erc": {

@@ -136,7 +136,7 @@ def projets(outil, donnees, travail):
     # exigences et réglages d'impression du boîtier
     c["variantesMontage"] = [{"nom": "sans LED"}]
     c["notes"] = [{"uuid": "note-essai", "genre": "commentaire", "texte": "essai de compatibilité"}]
-    c["jeuxSorties"] = [{"nom": "atelier", "dossier": "sorties/${PROJET}", "sorties": ["gerber", "percages"]}]
+    c["jeuxSorties"] = [{"nom": "atelier", "dossier": "sorties/{projet}", "sorties": ["gerber", "percages"]}]
     c["circuit"]["dessins"] = [{"uuid": "dessin-essai", "forme": "trait", "couche": "F.SilkS", "points": [[0, 0], [5000000, 0]], "epaisseur": 150000}]
     j["exigences"] = [{"id": "EX-1", "texte": "coût pour 100 cartes", "grandeur": "cout", "seuil": "40"}]
     j.setdefault("boitier", {})["impression"] = {"matiere": "PLA"}

@@ -133,6 +133,7 @@ VueSchema::VueSchema(Document* doc, QWidget* parent) : QWidget(parent), m_doc(do
   });
   connect(m_doc, &Document::change, this, [this] {
     ++m_generation;
+    ++m_modifications;
     // Sélection propre à la vue : ce qui a disparu en sort ; la sélection partagée, elle, est tenue par l'atelier
     if (m_sel == m_selPropre)
       if (const ConceptionElec* c = conception()) m_sel->filtrer(*c);
@@ -140,6 +141,7 @@ VueSchema::VueSchema(Document* doc, QWidget* parent) : QWidget(parent), m_doc(do
     update();
   });
   connect(m_doc, &Document::conceptionChangee, this, [this](const ChangementConception& ch) {
+    ++m_modifications;
     if (domaine() != Domaine::Electronique) return;
     const ConceptionElec* c = conception();
     if (c && (ch.conception.empty() || ch.conception == c->uuid)) {

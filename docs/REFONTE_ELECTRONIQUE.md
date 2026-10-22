@@ -149,7 +149,7 @@ Reste :
 
 ## L11 · Simulation
 
-Livré : Netlist SPICE tirée du schéma avec contrôles avant calcul ; ngspice lancé en processus, sur son fil, interruptible (ngspice doit être installé sur le poste) ; filtre RC à 1 %, astable 555 à 5 % ; valeur réglée pendant la simulation et réécrite au schéma en un pas ; sources en français.
+Livré : Netlist SPICE tirée du schéma avec contrôles avant calcul ; ngspice chargé comme bibliothèque partagée au moment du calcul, sur son fil, interruptible (libngspice doit être installée sur le poste) ; filtre RC à 1 %, astable 555 à 5 % ; valeur réglée pendant la simulation et réécrite au schéma en un pas ; sources en français.
 
 Reste :
 

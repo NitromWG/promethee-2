@@ -63,7 +63,7 @@ promethee comparer a.prom b.prom             # différences par catégorie ; fus
 promethee api projet.prom sortie.prom < requetes.jsonl  # requêtes JSON-RPC 2.0, une par ligne
 ```
 
-L'application ouverte écoute aussi les mêmes requêtes JSON-RPC sur un canal local réservé à l'utilisateur (`promethee-<utilisateur>`, tube nommé sous Windows, socket Unix ailleurs), jamais sur un port réseau : chaque requête, ou chaque lot de requêtes, est un seul pas d'annulation. `promethee aide` liste toutes les commandes.
+L'application ouverte écoute aussi les mêmes requêtes JSON-RPC sur un canal local réservé à l'utilisateur (`promethee-<utilisateur>`, tube nommé sous Windows, socket Unix ailleurs), jamais sur un port réseau : chaque requête, ou chaque lot de requêtes, est un seul pas d'annulation. `promethee aide` liste toutes les commandes. Vérifier un projet à chaque envoi sur GitHub : [docs/integration-continue.md](docs/integration-continue.md).
 
 Les fichiers `.prom.json` sont communs au prototype web et au logiciel natif.
 

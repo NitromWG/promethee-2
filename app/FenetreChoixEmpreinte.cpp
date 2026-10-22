@@ -119,11 +119,25 @@ void FenetreChoixEmpreinte::refaire() {
   std::set<std::string> numeros;
   for (const auto& b : d->broches)
     if (!b.numero.empty()) numeros.insert(b.numero);
+  // Filtre coché, une empreinte du projet ou personnelle n'est proposée que de la même sorte que celle du symbole
+  // (« perso:L_maison » pour une inductance), ou de la même famille : un bornier à deux pastilles ne vient pas
+  // pour une inductance (EMP-01)
+  const bool filtrer = m_compatibles->isChecked();
+  const std::string sorte = sorteEmpreinte(d->empreinte);
+  std::string familleRef;
+  for (const auto& i : catalogueEmpreintes())
+    if (i.id == d->empreinte) familleRef = i.famille;
+  auto memeSorte = [&](const DefEmpreinte& e) {
+    if (!filtrer) return true;
+    const std::string so = sorteEmpreinte(e.id.substr(e.id.find(':') == std::string::npos ? 0 : e.id.find(':') + 1));
+    if (!sorte.empty() && !so.empty()) return so == sorte;
+    return !familleRef.empty() && e.famille == familleRef;
+  };
   auto proposer = [&](const DefEmpreinte& e) {
     std::set<std::string> p;
     for (const auto& pa : e.pastilles)
       if (!pa.numero.empty()) p.insert(pa.numero);
-    if (p.size() != numeros.size()) return;
+    if (p.size() != numeros.size() || !memeSorte(e)) return;
     if (std::any_of(liste.begin(), liste.end(), [&](const InfoEmpreinte& i) { return i.id == e.id; })) return;
     liste.push_back({e.id, e.famille, e.description, static_cast<int>(p.size())});
   };

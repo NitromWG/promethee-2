@@ -749,8 +749,19 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
 
     // La souris qui entre dans le canevas lui donne le focus, sauf pendant une saisie
     if (ailleurs) reel::deplacer(ailleurs, ailleurs->rect().center());
-    reel::deplacer(vs, ecran(vs, vide));
+    const QWidget* focusAvant = QApplication::focusWidget();
+    // Un point du canevas lui-même : une bulle de message posée sur le canevas n'est pas le canevas
+    QPoint pointVide = ecran(vs, vide);
+    if (QApplication::widgetAt(vs->mapToGlobal(pointVide)) != vs)
+      for (const QPoint p : {QPoint(vs->width() - 40, vs->height() / 2), QPoint(vs->width() / 2, vs->height() / 3), QPoint(60, vs->height() / 2)})
+        if (QApplication::widgetAt(vs->mapToGlobal(p)) == vs) {
+          pointVide = p;
+          break;
+        }
+    reel::deplacer(vs, pointVide);
     const bool prisALEntree = vs->hasFocus();
+    const QWidget* sous = QApplication::widgetAt(vs->mapToGlobal(pointVide));
+    const std::string entree = std::string(" (avant : ") + (focusAvant ? focusAvant->metaObject()->className() : "—") + ", sous la souris : " + (sous ? sous->metaObject()->className() + std::string(" ") + sous->objectName().toStdString() : std::string("—")) + ")";
     reel::cliquer(vs, ecran(vs, centreR1));
     attendre(100);
     QLineEdit* valeur = nullptr;
@@ -763,7 +774,11 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
       reel::deplacer(vs, ecran(vs, vide));
       champGarde = valeur->hasFocus();
     }
-    verifier(prisALEntree && champGarde, "S21 : la souris qui entre dans le canevas lui donne le focus, sauf pendant une saisie", {});
+    const QWidget* fo = QApplication::focusWidget();
+    verifier(prisALEntree && champGarde, "S21 : la souris qui entre dans le canevas lui donne le focus, sauf pendant une saisie",
+             std::string("entrée ") + (prisALEntree ? "1" : "0") + entree + ", champ " + (champGarde ? "1" : "0") + (valeur ? "" : " (champ « 1k » introuvable)") + ", ailleurs " +
+                 (ailleurs ? ailleurs->metaObject()->className() + std::string(" ") + ailleurs->objectName().toStdString() : std::string("—")) + ", fenêtre active " +
+                 (vs->isActiveWindow() ? "oui" : "non") + ", focus " + (fo ? fo->metaObject()->className() + std::string(" ") + fo->objectName().toStdString() : std::string("—")));
 
     // Suppr et R, le focus sur les onglets du ruban : ils agissent sur la sélection du canevas ; R tapé dans un champ
     // reste une lettre
@@ -1831,6 +1846,8 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
       for (const auto& z : conception(doc)->circuit.zones)
         for (std::size_t i = 0; i < z.contour.size(); ++i) seule &= distancePointSegment(m, z.contour[i], z.contour[(i + 1) % z.contour.size()]) > 1'500'000;
       seule &= !(a->pileMessages()->isVisible() && a->pileMessages()->geometry().adjusted(-8, -8, 8, 8).contains(ecran(vc, m)));
+      // Hors des repères de sérigraphie, qui se prennent d'un clic pour être glissés (5.5)
+      seule &= vc->repereSous(ecran(vc, m)).empty();
       if (seule) {
         milieu = m;
         trouve = true;

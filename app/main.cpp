@@ -60,6 +60,7 @@
 #endif
 #include <cstring>
 #include "promethee/version.hpp"
+#include "ChronoComposition.hpp"
 
 namespace {
 #ifdef _WIN32
@@ -84,6 +85,16 @@ class ApplicationProtegee : public QApplication {
 public:
   using QApplication::QApplication;
   bool notify(QObject* cible, QEvent* evenement) override {
+    // Essais de temps : la pose des images est chronométrée à part (ChronoComposition.hpp)
+    if (composition::actif() && (evenement->type() == QEvent::UpdateRequest || evenement->type() == QEvent::Paint)) {
+      const composition::Mesure m(evenement->type() == QEvent::UpdateRequest);
+      return notifierProtege(cible, evenement);
+    }
+    return notifierProtege(cible, evenement);
+  }
+
+private:
+  bool notifierProtege(QObject* cible, QEvent* evenement) {
     try {
       return QApplication::notify(cible, evenement);
     } catch (const std::exception& e) {
@@ -96,7 +107,6 @@ public:
     return false;
   }
 
-private:
   void signaler(const QString& cause) {
     journal("action interrompue par une exception : " + cause.toStdString());
     if (m_enCours) return;  // un seul message à la fois

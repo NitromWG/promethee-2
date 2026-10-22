@@ -6,6 +6,8 @@
 // Licence GPL-3.0-only.
 #pragma once
 
+#include <unordered_map>
+
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -482,6 +484,17 @@ class VueSchema : public QWidget {
     friend bool operator==(const CleCache&, const CleCache&) = default;
   };
   CleCache cleCache() const;
+  // Zones des champs (référence, valeur) de la feuille montrée, à l'écran : calculées une fois par état de la vue,
+  // lues par chaque clic et chaque survol (champSous) au lieu de mesurer tous les textes à chaque fois (ERG-10)
+  struct ZonesChamps {
+    CleCache cle;
+    int affichage = -1;
+    std::uint64_t modifications = ~std::uint64_t{0};
+    std::unordered_map<std::string, std::pair<QRectF, QRectF>> zones;  // symbole → (référence, valeur)
+  };
+  std::uint64_t m_modifications = 0;  // chaque changement du projet ou de la conception, geste compris
+  const ZonesChamps& zonesChamps() const;
+  mutable ZonesChamps m_zonesChamps;
   void dessinerSurvol(class QPainter& g);
   QRect zoneSurvol(const std::string& objet) const;  // à l'écran, ce que couvre le contour de survol d'un objet
   QPixmap m_cache;

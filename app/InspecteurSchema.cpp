@@ -1163,6 +1163,11 @@ class PageComposant : public PageSchema {
       const Feuille* f = feuille();
       const Connectivite& k = m_atelier.calculs().k;
       const QSignalBlocker b(table);
+      // Remplissage sans mise en page cellule par cellule : la largeur des colonnes se calcule une fois, à la fin
+      // (la page d'un composant se construit à chaque clic, ERG-10)
+      QHeaderView* entete = table->horizontalHeader();
+      entete->setSectionResizeMode(QHeaderView::Interactive);
+      table->setUpdatesEnabled(false);
       std::vector<const Broche*> broches;
       std::set<std::string> listees;  // une broche commune répétée sur chaque unité n'est listée qu'une fois
       for (const auto& x : d->broches)
@@ -1199,6 +1204,8 @@ class PageComposant : public PageSchema {
         nc->setCheckState(marque ? Qt::Checked : Qt::Unchecked);
         table->setItem(l, NC, nc);
       }
+      entete->setSectionResizeMode(QHeaderView::ResizeToContents);
+      table->setUpdatesEnabled(true);
     });
   }
 

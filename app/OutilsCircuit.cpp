@@ -94,8 +94,9 @@ class VueCircuit::OutilSelection : public OutilBase {
       m_appuye = true;
       return;
     }
-    // Repère de sérigraphie (5.5, C6) : il se glisse seul et garde sa place, qui suit ensuite l'empreinte
-    if (!(g.mods & (Qt::ShiftModifier | Qt::ControlModifier)))
+    // Repère de sérigraphie (5.5, C6) : il se glisse seul et garde sa place, qui suit ensuite l'empreinte ; le filtre
+    // de sélection qui exclut les empreintes exclut aussi leurs repères (SAI-18)
+    if (!(g.mods & (Qt::ShiftModifier | Qt::ControlModifier)) && m_vue.m_sel->admis(SelectionElectronique::Genre::Empreinte))
       if (const std::string k = m_vue.repereSous(g.ecran); !k.empty()) {
         m_repere = k;
         m_appuye = true;

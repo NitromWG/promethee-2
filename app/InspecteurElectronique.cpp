@@ -72,7 +72,9 @@ std::string signature(const std::vector<Violation>& v) {
 }
 
 void listeProblemes(QVBoxLayout* col, const std::vector<Violation>& v, bool schema, AtelierElectronique& a) {
-  constexpr std::size_t MAX = 80;
+  // Les premiers problèmes seulement : chaque ligne est un texte riche que la mise en page du panneau mesure à
+  // chaque passage ; quatre-vingts lignes coûtaient plus de 100 ms au passage du schéma au circuit (ERG-10)
+  constexpr std::size_t MAX = 12;
   for (std::size_t n = 0; n < v.size() && n < MAX; ++n) {
     const Violation& x = v[n];
     const bool erreur = x.gravite == Gravite::Erreur;
@@ -313,15 +315,25 @@ bool SectionRefaite::refaire(const std::string& signature) {
   return true;
 }
 
-void SectionRefaite::construire(const std::string& signature) {
-  // Le contenu part au prochain tour de boucle : un bouton de la section qui a déclenché ce changement finit son signal
-  while (QLayoutItem* it = m_col->takeAt(0)) {
+namespace {
+// Vide une disposition, dispositions imbriquées comprises : leurs champs sont des enfants de la section, que la
+// suppression de la seule disposition laisserait en place, visibles et empilés d'une construction à l'autre
+void viderDisposition(QLayout* l) {
+  while (QLayoutItem* it = l->takeAt(0)) {
     if (QWidget* w = it->widget()) {
       w->hide();
       w->deleteLater();
+    } else if (QLayout* sous = it->layout()) {
+      viderDisposition(sous);
     }
     delete it;
   }
+}
+}  // namespace
+
+void SectionRefaite::construire(const std::string& signature) {
+  // Le contenu part au prochain tour de boucle : un bouton de la section qui a déclenché ce changement finit son signal
+  viderDisposition(m_col);
   m_construire(m_col);
   m_signature = signature;
   for (QWidget* p = parentWidget(); p; p = p->parentWidget())

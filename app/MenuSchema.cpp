@@ -8,6 +8,7 @@
 #include <cmath>
 
 #include <QApplication>
+#include <QFontMetricsF>
 #include <QKeyEvent>
 #include <QLineEdit>
 #include <QGuiApplication>
@@ -19,6 +20,7 @@
 #include "Document.hpp"
 #include "Icones.hpp"
 #include "RegistreActions.hpp"
+#include "RegistreReglages.hpp"
 #include "SelectionElectronique.hpp"
 #include "VueSchema.hpp"
 #include "promethee/modele.hpp"
@@ -172,37 +174,55 @@ std::optional<VueSchema::BrocheVisee> VueSchema::brocheSous(QPointF q) const {
 
 // ---------- Champs (2.6) ----------
 QRectF VueSchema::zoneChamp(const std::string& symbole, bool valeur) const {
+  const ZonesChamps& z = zonesChamps();
+  const auto it = z.zones.find(symbole);
+  if (it == z.zones.end()) return {};
+  return valeur ? it->second.second : it->second.first;
+}
+
+const VueSchema::ZonesChamps& VueSchema::zonesChamps() const {
+  CleCache cle = cleCache();
+  cle.selection = 0;  // la sélection ne déplace aucun champ
+  const int affichage = RegistreReglages::instance().valeur(QStringLiteral("schema/affichageValeurs")).toInt();
+  if (cle == m_zonesChamps.cle && affichage == m_zonesChamps.affichage && m_modifications == m_zonesChamps.modifications) return m_zonesChamps;
+  m_zonesChamps.cle = cle;
+  m_zonesChamps.affichage = affichage;
+  m_zonesChamps.modifications = m_modifications;
+  m_zonesChamps.zones.clear();
   const ConceptionElec* c = conception();
   const Feuille* f = feuilleCourante();
-  if (!c || !f) return {};
+  if (!c || !f) return m_zonesChamps;
+  QFont fo = font();
   for (const auto& s : f->symboles) {
-    if (s.uuid != symbole) continue;
     const DefSymbole* d = c->symbole(s.symbole);
-    if (!d) return {};
+    if (!d) continue;
     QString ref, val;
     textesDe(*f, s, *d, ref, val);
-    const QString& t = valeur ? val : ref;
-    if (t.isEmpty()) return {};
     const PlacesChamps p = placesChamps(*d, s, ref, val);
-    const double taille = (valeur ? 1.3 : 1.4) * m_echelle;
-    if (taille < 3) return {};
-    QFont fo = font();
-    fo.setPixelSize(std::max(1, static_cast<int>(taille)));
-    const double l = QFontMetricsF(fo).horizontalAdvance(t);
-    const QPointF a = ecran(valeur ? p.val : p.ref);
-    const int al = valeur ? p.alVal : p.alRef;
-    const double x = al < 0 ? a.x() : al > 0 ? a.x() - l : a.x() - l / 2;
-    return QRectF(x, a.y() - taille / 2, l, taille);
+    auto zone = [&](bool valeur) -> QRectF {
+      const QString& t = valeur ? val : ref;
+      const double taille = (valeur ? 1.3 : 1.4) * m_echelle;
+      if (t.isEmpty() || taille < 3) return {};
+      fo.setPixelSize(std::max(1, static_cast<int>(taille)));
+      const double l = QFontMetricsF(fo).horizontalAdvance(t);
+      const QPointF a = ecran(valeur ? p.val : p.ref);
+      const int al = valeur ? p.alVal : p.alRef;
+      const double x = al < 0 ? a.x() : al > 0 ? a.x() - l : a.x() - l / 2;
+      return QRectF(x, a.y() - taille / 2, l, taille);
+    };
+    m_zonesChamps.zones[s.uuid] = {zone(false), zone(true)};
   }
-  return {};
+  return m_zonesChamps;
 }
 
 std::optional<VueSchema::ChampVise> VueSchema::champSous(QPointF q) const {
   const Feuille* f = feuilleCourante();
   if (!f) return std::nullopt;
+  const ZonesChamps& z = zonesChamps();
   for (auto it = f->symboles.rbegin(); it != f->symboles.rend(); ++it)
-    for (const bool valeur : {true, false})
-      if (zoneChamp(it->uuid, valeur).adjusted(-2, -2, 2, 2).contains(q)) return ChampVise{it->uuid, valeur};
+    if (const auto zs = z.zones.find(it->uuid); zs != z.zones.end())
+      for (const bool valeur : {true, false})
+        if (const QRectF& r = valeur ? zs->second.second : zs->second.first; !r.isEmpty() && r.adjusted(-2, -2, 2, 2).contains(q)) return ChampVise{it->uuid, valeur};
   return std::nullopt;
 }
 
