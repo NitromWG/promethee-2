@@ -29,6 +29,9 @@
 namespace fs = std::filesystem;
 using namespace prom;
 
+int commandeAtelier(const std::vector<std::string>& a);  // commandes_atelier.cpp ; −1 : pas l'une d'elles
+void aideAtelier();
+
 namespace {
 
 void aide() {
@@ -50,6 +53,7 @@ void aide() {
       "  promethee pour-version <projet.prom> <sortie> [version]   écrit le projet pour une version précédente\n"
       "                                                     (la plus récente par défaut) et dit ce qui s’y perd\n\n"
       "Les fichiers .prom.json sont ceux du prototype web : un projet passe de l’un à l’autre.\n";
+  aideAtelier();
 }
 
 int afficherProblemes(const Projet& p, const std::vector<Probleme>& pb) {
@@ -256,6 +260,7 @@ int main(int argc, char** argv) {
       }
       return fabricationCmd(p.electronique[n - 1], a[2]);
     }
+    if (const int r = commandeAtelier(a); r >= 0) return r;
     aide();
     return a.empty() || a[0] == "aide" || a[0] == "--help" ? 0 : 64;
   } catch (const std::exception& e) {

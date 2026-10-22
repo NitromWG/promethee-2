@@ -71,6 +71,9 @@ ChangementConception differencier(const ConceptionElec& a, const ConceptionElec&
   propriete(a.schemaSeul != b.schemaSeul, "schemaSeul");
   propriete(a.verrouillee != b.verrouillee, "verrouillee");
   propriete(!(a.publications == b.publications), "publications");
+  propriete(!(a.variantesMontage == b.variantesMontage) || a.varianteActive != b.varianteActive, "variantes");
+  propriete(!(a.notes == b.notes), "notes");
+  propriete(!(a.jeuxSorties == b.jeuxSorties), "jeuxSorties");
   if (a.nomsReseaux != b.nomsReseaux) {
     ch.proprietes.insert("nomsReseaux");
     ch.connectivite = true;
@@ -104,7 +107,8 @@ ChangementConception differencier(const ConceptionElec& a, const ConceptionElec&
                                                        {x.formule != y.formule, "formule"},
                                                        {x.brochageVerifie != y.brochageVerifie, "brochageVerifie"},
                                                        {x.horsNomenclature != y.horsNomenclature, "horsNomenclature"},
-                                                       {x.horsPlacement != y.horsPlacement, "horsPlacement"}};
+                                                       {x.horsPlacement != y.horsPlacement, "horsPlacement"},
+                                                       {x.variantes != y.variantes, "variantes"}};
         for (const auto& [differe, nom] : champs)
           if (differe) ch.proprietes.insert(nom);
         if (x.reference != y.reference || x.symbole != y.symbole) {

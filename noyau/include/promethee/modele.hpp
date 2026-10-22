@@ -8,6 +8,8 @@
 
 #include "promethee/electrique.hpp"
 #include "promethee/electronique.hpp"
+#include "promethee/exigences.hpp"
+#include "promethee/systeme.hpp"
 #include <string>
 #include <vector>
 
@@ -223,6 +225,11 @@ struct Projet {
   // nom → description JSON (format « promethee-disposition », état des panneaux en base64) ; c'est un réglage de
   // travail, sans pas d'annulation
   std::map<std::string, std::string> dispositions;
+  // Exigences du projet et ordres de modification (lot L19, 19.6, 19.8, 19.9 ; exigences.hpp)
+  std::vector<Exigence> exigences;
+  std::vector<OrdreModification> ordresModification;
+  // Schéma de système (lot L12, 12.19) : cartes du projet reliées par des câbles, connecteur à connecteur
+  std::vector<LiaisonSysteme> liaisons;
   // Champs de premier niveau inconnus de cette version (fichier écrit par une version voisine) : gardés tels
   // quels et réécrits à l'enregistrement, pour ne rien perdre en silence.
   Json inconnus = Json::object();

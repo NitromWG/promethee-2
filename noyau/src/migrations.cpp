@@ -13,7 +13,7 @@
 namespace prom {
 
 namespace {
-const std::string VERSION_COURANTE = "0.32";
+const std::string VERSION_COURANTE = "0.33";
 
 std::vector<int> morceaux(const std::string& v) {
   std::vector<int> r;
@@ -276,6 +276,48 @@ std::vector<EtapeMigration> construire() {
                  if (nervures) pertes.push_back("nervures de " + pluriel(nervures, "pilier", "piliers") + " retirées.");
                  if (m6) pertes.push_back("vis M6 inconnue de la 0.31 : M5 ou la vis du projet à sa place.");
                }});
+  // ---------- 0.32 → 0.33 (lots L4 à L19) ----------
+  // La 0.32 garde ce qu'elle ne connaît pas, objet par objet, et le réécrit : la descente ne retire rien, elle dit
+  // ce que la 0.32 ignorera tant que le fichier n'est pas rouvert par la 0.33
+  e.push_back({"0.32", "0.33", "conception",
+               "format 5 ; articles du projet, modèles 3D exacts, façades, contour tiré d'une esquisse, dessins de carte, canaux répétés, variantes de "
+               "montage, notes attachées aux objets, jeux de sorties",
+               [](Json& o, std::vector<std::string>&) {
+                 o["format"] = ecad::FORMAT_ELECTRONIQUE;
+                 o["formatElectronique"] = ecad::FORMAT_ELECTRONIQUE;
+               },
+               [](Json& o, std::vector<std::string>& pertes) {
+                 o["format"] = 4;
+                 o["formatElectronique"] = 4;
+                 auto taille = [&](const char* k) {
+                   const Json* t = membre(o, k);
+                   return t && t->is_array() ? static_cast<int>(t->size()) : 0;
+                 };
+                 if (const int n = taille("articles")) pertes.push_back(pluriel(n, "article du projet", "articles du projet") + " : la 0.32 ne les montre pas (gardés dans le fichier).");
+                 if (const int n = taille("modeles3D")) pertes.push_back(pluriel(n, "modèle 3D exact", "modèles 3D exacts") + " : la 0.32 dessine la boîte générique (gardés).");
+                 if (const int n = taille("facades")) pertes.push_back(pluriel(n, "façade", "façades") + " du boîtier ignorées par la 0.32 (gardées).");
+                 if (o.contains("esquisseContour")) pertes.push_back("contour tiré d'une esquisse : la 0.32 garde le contour dessiné, sans son esquisse pilote.");
+                 if (const int n = taille("variantesMontage")) pertes.push_back(pluriel(n, "variante de montage", "variantes de montage") + " : la 0.32 ne connaît que la carte de base.");
+                 if (const int n = taille("notes")) pertes.push_back(pluriel(n, "note attachée", "notes attachées") + " aux objets : invisibles dans la 0.32 (gardées).");
+                 if (const int n = taille("jeuxSorties")) pertes.push_back(pluriel(n, "jeu de sorties", "jeux de sorties") + " : la 0.32 ne les lance pas (gardés).");
+                 int dessins = 0, repetees = 0;
+                 if (Json* ci = membre(o, "circuit"); ci && ci->is_object())
+                   if (Json* d = membre(*ci, "dessins"); d && d->is_array()) dessins = static_cast<int>(d->size());
+                 pourChaque(o, "feuilles", [&](Json& f) { repetees += f.contains("repetitions") || f.contains("modele") ? 1 : 0; });
+                 if (dessins) pertes.push_back(pluriel(dessins, "dessin de carte", "dessins de carte") + " (traits, arcs, polygones) absents des sorties de la 0.32.");
+                 if (repetees) pertes.push_back(pluriel(repetees, "feuille de canal répété", "feuilles de canaux répétés") + " : la 0.32 les montre comme des feuilles ordinaires.");
+               }});
+  e.push_back({"0.32", "0.33", "projet", "exigences, ordres de modification, schéma de système, impression 3D du boîtier", [](Json&, std::vector<std::string>&) {},
+               [](Json& o, std::vector<std::string>& pertes) {
+                 if (const Json* x = membre(o, "exigences"); x && x->is_array() && !x->empty())
+                   pertes.push_back(pluriel(static_cast<int>(x->size()), "exigence", "exigences") + " du projet : ignorées par la 0.32 (gardées).");
+                 if (const Json* x = membre(o, "ordresModification"); x && x->is_array() && !x->empty())
+                   pertes.push_back(pluriel(static_cast<int>(x->size()), "ordre de modification", "ordres de modification") + " : ignorés par la 0.32 (gardés).");
+                 if (const Json* x = membre(o, "liaisons"); x && x->is_array() && !x->empty())
+                   pertes.push_back(pluriel(static_cast<int>(x->size()), "liaison du schéma de système", "liaisons du schéma de système") + " : ignorées par la 0.32 (gardées).");
+                 if (Json* b = membre(o, "boitier"); b && b->is_object() && b->erase("impression"))
+                   pertes.push_back("réglages d'impression 3D du boîtier (matière, coques, prix) retirés : la 0.32 ne les connaît pas.");
+               }});
   return e;
 }
 }  // namespace
@@ -304,11 +346,11 @@ int comparerVersions(const std::string& a, const std::string& b) {
 }
 
 std::string versionConception(const Json& o) {
-  // Format 2 : la 0.30 ; 3 : la 0.31 ; 4 : la 0.32 ; au-delà, une version plus récente, lue comme la courante (ce
-  // qu'elle ne connaît pas est gardé)
+  // Format 2 : la 0.30 ; 3 : la 0.31 ; 4 : la 0.32 ; 5 : la 0.33 ; au-delà, une version plus récente, lue comme la
+  // courante (ce qu'elle ne connaît pas est gardé)
   if (o.is_object() && o.contains("format") && o["format"].is_number()) {
     const double f = o["format"].get<double>();
-    return f < 3 ? "0.30" : f < 4 ? "0.31" : VERSION_COURANTE;
+    return f < 3 ? "0.30" : f < 4 ? "0.31" : f < 5 ? "0.32" : VERSION_COURANTE;
   }
   if (o.is_object() && o.contains("formatElectronique")) return "0.29";
   return "0.28";

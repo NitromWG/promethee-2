@@ -119,6 +119,9 @@ struct Article {
   bool generique = false;
   std::string exigences;
   int version = 1;
+  // Équipe (lot L19, 19.3, 19.5) : état du cycle de vie (« brouillon », « pré-série », « production », « fin de
+  // série », « obsolète ») et numéro d'article de l'entreprise, relié aux références fabricant validées
+  std::string etatCycle, numeroInterne;
   friend bool operator==(const Article&, const Article&) = default;
 };
 
@@ -142,6 +145,15 @@ DefSymbole genererSymbole(const SpecSymbole& s);
 SpecSymbole specDepuisSymbole(const DefSymbole& d);           // pour modifier un composant créé
 std::vector<SpecBroche> lireListeBroches(const std::string& texte);  // une broche par ligne : « 1 VCC alim haut »
 std::string identifiantSymbole(const std::string& nom);       // « perso:ESP32-S3 »
+
+// Variante de montage (lot L12, 12.1, 12.7, STR-07) : ce qu'une variante change sur un composant. « Hérite » et un
+// champ vide gardent ce qu'écrit le composant ; l'empreinte de remplacement se pose sous le même repère.
+enum class MontageVariante : std::uint8_t { Herite, Monte, NonMonte };
+struct SurchargeVariante {
+  MontageVariante montage = MontageVariante::Herite;
+  std::string valeur, article, empreinte;
+  friend bool operator==(const SurchargeVariante&, const SurchargeVariante&) = default;
+};
 
 // Composant de la conception : son identité est l'UUID, jamais la référence.
 struct ComposantElec {
@@ -181,6 +193,7 @@ struct ComposantElec {
   std::string modeleComposant;
   int versionArticle = 0;
   std::string lcsc;
+  std::map<std::string, SurchargeVariante> variantes;  // nom de la variante → ce qu'elle change (12.1)
   friend bool operator==(const ComposantElec&, const ComposantElec&) = default;
 };
 

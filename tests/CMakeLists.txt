@@ -1,5 +1,5 @@
 find_package(Catch2 3 REQUIRED)
-add_executable(promethee_tests test_noyau.cpp test_reference.cpp test_geometrie.cpp test_fixations_ancrages.cpp test_kicad.cpp test_pieces.cpp test_electronique.cpp test_fichiers.cpp test_mecanique.cpp test_electronique_audit.cpp test_electronique_l0.cpp test_electronique_l1.cpp test_electronique_l2.cpp test_electronique_l3.cpp test_electronique_l4.cpp test_electronique_l5.cpp test_electronique_l6.cpp test_electronique_l7.cpp test_electronique_l8.cpp test_electronique_l9.cpp test_electronique_l10.cpp test_electronique_l11.cpp test_mesures.cpp test_structure.cpp test_moindres_carres.cpp test_dessin.cpp test_exports.cpp test_fonctions_meca.cpp test_electrique.cpp test_distribution.cpp test_calculateurs.cpp test_pv.cpp test_fabrication.cpp test_grafcet.cpp test_appareils.cpp)
+add_executable(promethee_tests test_noyau.cpp test_reference.cpp test_geometrie.cpp test_fixations_ancrages.cpp test_kicad.cpp test_pieces.cpp test_electronique.cpp test_fichiers.cpp test_mecanique.cpp test_electronique_audit.cpp test_electronique_l0.cpp test_electronique_l1.cpp test_electronique_l2.cpp test_electronique_l3.cpp test_electronique_l4.cpp test_electronique_l5.cpp test_electronique_l6.cpp test_electronique_l7.cpp test_electronique_l8.cpp test_electronique_l9.cpp test_electronique_l10.cpp test_electronique_l11.cpp test_electronique_l12.cpp test_electronique_l13.cpp test_electronique_l14.cpp test_electronique_l15.cpp test_electronique_l16.cpp test_electronique_l17.cpp test_electronique_l18.cpp test_electronique_l19.cpp test_mesures.cpp test_structure.cpp test_moindres_carres.cpp test_dessin.cpp test_exports.cpp test_fonctions_meca.cpp test_electrique.cpp test_distribution.cpp test_calculateurs.cpp test_pv.cpp test_fabrication.cpp test_grafcet.cpp test_appareils.cpp)
 target_link_libraries(promethee_tests PRIVATE Promethee::noyau Promethee::geometrie Catch2::Catch2WithMain)
 target_compile_definitions(promethee_tests PRIVATE PROMETHEE_DONNEES="${CMAKE_CURRENT_SOURCE_DIR}/donnees")
 if(WIN32)
@@ -10,6 +10,9 @@ catch_discover_tests(promethee_tests DISCOVERY_MODE PRE_TEST)
 add_test(NAME outil_exemple_puis_export
   COMMAND ${CMAKE_COMMAND} -DOUTIL=$<TARGET_FILE:promethee> -DDOSSIER=${CMAKE_CURRENT_BINARY_DIR}/sortie_outil
           -P ${CMAKE_CURRENT_SOURCE_DIR}/outil.cmake)
+add_test(NAME outil_conception_electronique
+  COMMAND ${CMAKE_COMMAND} -DOUTIL=$<TARGET_FILE:promethee> -DDOSSIER=${CMAKE_CURRENT_BINARY_DIR}/sortie_outil_atelier
+          -P ${CMAKE_CURRENT_SOURCE_DIR}/outil_atelier.cmake)
 # Lecture du source (ERG-17, ERG-18) : pointeur jamais déplacé, touches de l'atelier électronique par le registre
 add_test(NAME source_souris_et_pointeur COMMAND ${CMAKE_COMMAND} -DAPP=${PROJECT_SOURCE_DIR}/app -P ${CMAKE_CURRENT_SOURCE_DIR}/sources.cmake)
 # Aide de l'atelier électronique (2.11, 2.17, ERG-13) : chaque code de règle que le noyau rend a son explication

@@ -69,6 +69,8 @@ J articleVersJson(const Article& a) {
   }
   if (a.generique) o["generique"] = true;
   mettre("exigences", a.exigences);
+  mettre("etatCycle", a.etatCycle);
+  mettre("numeroInterne", a.numeroInterne);
   o["version"] = a.version;
   return o;
 }
@@ -121,6 +123,8 @@ Article articleDepuisJson(const J& o) {
     }
   a.generique = o.contains("generique") && o["generique"].is_boolean() && o["generique"].get<bool>();
   a.exigences = txt(o, "exigences");
+  a.etatCycle = txt(o, "etatCycle");
+  a.numeroInterne = txt(o, "numeroInterne");
   if (o.contains("version") && o["version"].is_number_integer()) a.version = std::max(1, o["version"].get<int>());
   return a;
 }

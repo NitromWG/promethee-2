@@ -384,6 +384,18 @@ J versJson(const ConceptionElec& c) {
     if (!x.lcsc.empty()) y["lcsc"] = x.lcsc;
     if (!x.modele3D.empty()) y["modele3D"] = x.modele3D;
     if (!x.modeleComposant.empty()) y["modeleComposant"] = x.modeleComposant;
+    if (!x.variantes.empty()) {
+      J va = J::object();
+      for (const auto& [nom, sv] : x.variantes) {
+        J z = J::object();
+        if (sv.montage != MontageVariante::Herite) z["montage"] = sv.montage == MontageVariante::Monte ? "monte" : "nonMonte";
+        if (!sv.valeur.empty()) z["valeur"] = sv.valeur;
+        if (!sv.article.empty()) z["article"] = sv.article;
+        if (!sv.empreinte.empty()) z["empreinte"] = sv.empreinte;
+        va[nom] = z;
+      }
+      y["variantes"] = va;
+    }
     rendreInconnues(c, "composant:" + x.uuid, y);
     comps.push_back(y);
   }
@@ -600,6 +612,45 @@ J versJson(const ConceptionElec& c) {
   }
   rendreInconnues(c, "circuit", ci);
   o["circuit"] = ci;
+  // Lots L12 et L13 : variantes de montage, notes attachées aux objets, jeux de sorties
+  if (!c.variantesMontage.empty()) {
+    J va = J::array();
+    for (const auto& v : c.variantesMontage) {
+      J y = {{"nom", v.nom}};
+      if (!v.description.empty()) y["description"] = v.description;
+      va.push_back(y);
+    }
+    o["variantesMontage"] = va;
+  }
+  if (!c.varianteActive.empty()) o["varianteActive"] = c.varianteActive;
+  if (!c.notes.empty()) {
+    static const char* genres[] = {"commentaire", "tache", "journal"};
+    J no = J::array();
+    for (const auto& n : c.notes) {
+      J y = {{"uuid", n.uuid}, {"genre", genres[static_cast<int>(n.genre)]}, {"texte", n.texte}};
+      if (!n.objet.empty()) y["objet"] = n.objet;
+      if (!n.parent.empty()) y["parent"] = n.parent;
+      if (!n.auteur.empty()) y["auteur"] = n.auteur;
+      if (!n.date.empty()) y["date"] = n.date;
+      if (!n.responsable.empty()) y["responsable"] = n.responsable;
+      if (!n.revision.empty()) y["revision"] = n.revision;
+      if (n.priorite) y["priorite"] = n.priorite;
+      if (n.close) y["close"] = true;
+      no.push_back(y);
+    }
+    o["notes"] = no;
+  }
+  if (!c.jeuxSorties.empty()) {
+    J js = J::array();
+    for (const auto& j : c.jeuxSorties) {
+      J y = {{"nom", j.nom}, {"dossier", j.dossier}, {"sorties", j.sorties}};
+      if (!j.variante.empty()) y["variante"] = j.variante;
+      if (j.zip) y["zip"] = true;
+      if (!j.controler) y["controler"] = false;
+      js.push_back(y);
+    }
+    o["jeuxSorties"] = js;
+  }
   rendreInconnues(c, "conception", o);
   return o;
 }
@@ -714,7 +765,8 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
   c.nom = txt(o, "nom", c.nom);
   garderInconnues(c, "conception", o,
                   {"uuid", "nom", "format", "formatElectronique", "pilotageBoitier", "schemaSeul", "verrouillee", "publications", "cartouche", "composants", "feuilles", "symboles", "nomsReseaux",
-                   "erc", "bibliothequeEmpreintes", "circuit", "synchroSurConfirmation", "variables", "articles", "modeles3D", "facades", "esquisseContour"});
+                   "erc", "bibliothequeEmpreintes", "circuit", "synchroSurConfirmation", "variables", "articles", "modeles3D", "facades", "esquisseContour",
+                   "variantesMontage", "varianteActive", "notes", "jeuxSorties"});
   for (const auto& x : tableau(o, "articles"))
     if (x.is_object())
       if (Article a = articleDepuisJson(x); !a.id.empty()) c.articles[a.id] = a;
@@ -766,6 +818,42 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
     c.facades.push_back(f);
   }
   if (o.is_object() && o.contains("esquisseContour") && o["esquisseContour"].is_object()) c.esquisseContour = o["esquisseContour"];
+  for (const auto& x : tableau(o, "variantesMontage")) {
+    if (!x.is_object() || txt(x, "nom").empty()) continue;
+    if (std::any_of(c.variantesMontage.begin(), c.variantesMontage.end(), [&](const VarianteMontage& v) { return v.nom == txt(x, "nom"); })) continue;
+    c.variantesMontage.push_back({txt(x, "nom"), txt(x, "description")});
+  }
+  c.varianteActive = txt(o, "varianteActive");
+  for (const auto& x : tableau(o, "notes")) {
+    if (!x.is_object()) continue;
+    NoteObjet n;
+    n.uuid = txt(x, "uuid");
+    if (n.uuid.empty()) n.uuid = nouvelUuid();
+    const std::string g = txt(x, "genre");
+    n.genre = g == "tache" ? NoteObjet::Genre::Tache : g == "journal" ? NoteObjet::Genre::Journal : NoteObjet::Genre::Commentaire;
+    n.objet = txt(x, "objet");
+    n.parent = txt(x, "parent");
+    n.auteur = txt(x, "auteur");
+    n.date = txt(x, "date");
+    n.texte = txt(x, "texte");
+    n.responsable = txt(x, "responsable");
+    n.revision = txt(x, "revision");
+    n.priorite = std::clamp(ent(x, "priorite"), 0, 2);
+    n.close = vrai(x, "close");
+    c.notes.push_back(n);
+  }
+  for (const auto& x : tableau(o, "jeuxSorties")) {
+    if (!x.is_object() || txt(x, "nom").empty()) continue;
+    JeuSorties j;
+    j.nom = txt(x, "nom");
+    j.dossier = txt(x, "dossier", j.dossier);
+    j.variante = txt(x, "variante");
+    for (const auto& y : tableau(x, "sorties"))
+      if (y.is_string()) j.sorties.push_back(y.get<std::string>());
+    j.zip = vrai(x, "zip");
+    j.controler = vrai(x, "controler", true);
+    c.jeuxSorties.push_back(j);
+  }
   // Format de la conception (ECH-10) : « format », « formatElectronique » dans les fichiers de la 0.29, rien jusqu'à
   // la 0.28. Plus récent que ce logiciel : lecture tolérante, et l'alerte dit ce qu'enregistrer peut perdre.
   const int format = o.is_object() && o.contains("format") && o["format"].is_number() ? ent(o, "format", 1) : ent(o, "formatElectronique", 1);
@@ -904,10 +992,21 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
     k.lcsc = txt(x, "lcsc");
     k.modele3D = txt(x, "modele3D");
     k.modeleComposant = txt(x, "modeleComposant");
+    if (const J& va = champ(x, "variantes"); va.is_object())
+      for (auto it = va.begin(); it != va.end(); ++it) {
+        if (!it.value().is_object() || it.key().empty()) continue;
+        SurchargeVariante sv;
+        const std::string m = txt(it.value(), "montage");
+        sv.montage = m == "monte" ? MontageVariante::Monte : m == "nonMonte" ? MontageVariante::NonMonte : MontageVariante::Herite;
+        sv.valeur = txt(it.value(), "valeur");
+        sv.article = txt(it.value(), "article");
+        sv.empreinte = txt(it.value(), "empreinte");
+        k.variantes[it.key()] = sv;
+      }
     garderInconnues(c, "composant:" + k.uuid, x,
                     {"uuid", "ref", "valeur", "symbole", "empreinte", "fabricant", "mpn", "fournisseur", "description", "fiche", "nePasMonter", "horsCarte", "hauteur", "provenanceHauteur",
                      "sourceHauteur", "genre", "horsSimulation", "formule", "parametres", "valeurLue", "brochageVerifie", "horsNomenclature", "horsPlacement", "champs", "article",
-                     "versionArticle", "lcsc", "modele3D", "modeleComposant"});
+                     "versionArticle", "lcsc", "modele3D", "modeleComposant", "variantes"});
     c.composants.push_back(k);
   }
   for (const auto& x : tableau(o, "feuilles")) {

@@ -289,7 +289,7 @@ TEST_CASE("1.22 : chaque étape de migration a sa descente, et les étapes s'enc
   // Rangées de la plus ancienne à la plus récente, sans trou : chaque version de départ est l'arrivée d'une autre
   for (std::size_t i = 1; i < etapes.size(); ++i) CHECK(prom::comparerVersions(etapes[i - 1].depuis, etapes[i].depuis) <= 0);
   CHECK(etapes.back().vers == prom::versionFichierCourante());
-  CHECK(prom::versionsAnterieures() == std::vector<std::string>{"0.31", "0.30", "0.29", "0.28"});
+  CHECK(prom::versionsAnterieures() == std::vector<std::string>{"0.32", "0.31", "0.30", "0.29", "0.28"});
   CHECK(prom::comparerVersions("0.29", "0.30") < 0);
   CHECK(prom::comparerVersions("0.30", "0.30.0") == 0);
   CHECK(prom::comparerVersions("0.100", "0.30") > 0);

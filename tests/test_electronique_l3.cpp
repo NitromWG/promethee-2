@@ -950,7 +950,7 @@ TEST_CASE("3.13 : format 4 ; un projet de la 0.31 monte, sa hauteur cochée devi
   ConceptionElec c = exempleElectronique();
   parRepere(c, "C1")->hauteur = 12.5;
   auto j = versJson(c);
-  CHECK(j["format"] == 4);
+  CHECK(j["format"] == FORMAT_ELECTRONIQUE);
   // Un fichier de la 0.31 : format 3 et la case « hauteurVerifiee »
   j["format"] = 3;
   j["formatElectronique"] = 3;

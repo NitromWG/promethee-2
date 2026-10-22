@@ -561,6 +561,38 @@ std::vector<DefSymbole> construire() {
     s.posValeur = ptMm(3.302, 1.27);
     v.push_back(s);
   }
+  // ----- Logique (lot L15) : portes pour la simulation logique et l'export Verilog, sans empreinte -----
+  {
+    const auto porte = [&](const char* id, const char* nom, const char* signe, int entrees, bool inverse, const char* mots) {
+      const std::string description = std::string(nom) + " : simulation logique à quatre états et export Verilog";
+      DefSymbole s = S(id, nom, "Logique", "U", "", description.c_str(), mots);
+      s.genre = GenreComposant::HorsNomenclature;
+      if (entrees == 1)
+        s.broches = {B("1", "A", T::Entree, -7.62, 0, 0, 3.81, false), B("2", "Y", T::Sortie, 7.62, 0, 2, 3.81, false)};
+      else
+        s.broches = {B("1", "A", T::Entree, -7.62, -2.54, 0, 3.81, false), B("2", "B", T::Entree, -7.62, 2.54, 0, 3.81, false), B("3", "Y", T::Sortie, 7.62, 0, 2, 3.81, false)};
+      s.traces = {Rect(-3.81, -3.81, 3.81, 3.81, true), Txt(0, 0, signe, 1.27)};
+      if (inverse) s.traces.push_back(Rond(4.445, 0, 0.635));
+      s.posReference = ptMm(0, -5.08);
+      s.posValeur = ptMm(0, 5.08);
+      v.push_back(s);
+    };
+    porte("Porte_ET", "Porte ET", "&", 2, false, "logique and et porte");
+    porte("Porte_OU", "Porte OU", "≥1", 2, false, "logique or ou porte");
+    porte("Porte_NON", "Inverseur", "1", 1, true, "logique not non inverseur porte");
+    porte("Porte_NON_ET", "Porte NON-ET", "&", 2, true, "logique nand non-et porte");
+    porte("Porte_NON_OU", "Porte NON-OU", "≥1", 2, true, "logique nor non-ou porte");
+    porte("Porte_OU_X", "Porte OU exclusif", "=1", 2, false, "logique xor ou exclusif porte");
+    DefSymbole d = S("Bascule_D", "Bascule D", "Logique", "U", "", "Bascule D sur front montant (1 D, 2 horloge, 3 Q, 4 Q barre) : simulation logique et export Verilog",
+                     "logique bascule d flip-flop registre");
+    d.genre = GenreComposant::HorsNomenclature;
+    d.broches = {B("1", "D", T::Entree, -7.62, -2.54, 0, 3.81), B("2", "CLK", T::Entree, -7.62, 2.54, 0, 3.81), B("3", "Q", T::Sortie, 7.62, -2.54, 2, 3.81),
+                 B("4", "~{Q}", T::Sortie, 7.62, 2.54, 2, 3.81)};
+    d.traces = {Rect(-3.81, -5.08, 3.81, 5.08, true)};
+    d.posReference = ptMm(0, -6.35);
+    d.posValeur = ptMm(0, 6.35);
+    v.push_back(d);
+  }
   {
     DefSymbole s = S("Drapeau_alim", "Drapeau d’alimentation", "Alimentations", "#FLG", "", "Déclare le réseau alimenté (vérification électrique)", "pwr_flag drapeau");
     s.drapeau = true;

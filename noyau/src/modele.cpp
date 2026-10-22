@@ -553,9 +553,23 @@ Projet normaliser(const Json& s, std::vector<std::string>* avertissements) {
   if (s.is_object() && s.contains("dispositions") && s["dispositions"].is_object())
     for (auto it = s["dispositions"].begin(); it != s["dispositions"].end(); ++it)
       if (it.value().is_string()) p.dispositions[it.key()] = it.value().get<std::string>();
+  // Exigences et ordres de modification (lot L19)
+  if (s.is_object() && s.contains("exigences") && s["exigences"].is_array())
+    for (const auto& x : s["exigences"])
+      if (x.is_object())
+        if (Exigence e = exigenceDepuisJson(x); !e.id.empty()) p.exigences.push_back(e);
+  if (s.is_object() && s.contains("ordresModification") && s["ordresModification"].is_array())
+    for (const auto& x : s["ordresModification"])
+      if (x.is_object())
+        if (OrdreModification m = ordreDepuisJson(x); !m.id.empty()) p.ordresModification.push_back(m);
+  if (s.is_object() && s.contains("liaisons") && s["liaisons"].is_array())
+    for (const auto& x : s["liaisons"])
+      if (x.is_object())
+        if (LiaisonSysteme l = liaisonDepuisJson(x); !l.carteA.empty() && !l.carteB.empty()) p.liaisons.push_back(l);
   // Champs inconnus : conservés pour la réécriture, et signalés.
   static const std::set<std::string> connus = {"format", "version", "nom", "sansCarte", "schemasElectriques", "assemblages", "electronique", "electrique",
-                                                "carte", "boitier", "kicad", "trous", "composants", "pieces", "geometries", "dispositions"};
+                                                "carte", "boitier", "kicad", "trous", "composants", "pieces", "geometries", "dispositions", "exigences",
+                                                "ordresModification", "liaisons"};
   if (s.is_object())
     for (auto it = s.begin(); it != s.end(); ++it)
       if (!connus.count(it.key())) {
@@ -701,6 +715,21 @@ Json versJson(const Projet& p, bool avecGeometries) {
             if (const auto t = geometrieDeposee(ref)) g[ref] = *t;
           }
     if (!g.empty()) j["geometries"] = g;
+  }
+  if (!p.exigences.empty()) {
+    Json e = Json::array();
+    for (const auto& x : p.exigences) e.push_back(exigenceVersJson(x));
+    j["exigences"] = e;
+  }
+  if (!p.ordresModification.empty()) {
+    Json o = Json::array();
+    for (const auto& x : p.ordresModification) o.push_back(ordreVersJson(x));
+    j["ordresModification"] = o;
+  }
+  if (!p.liaisons.empty()) {
+    Json l = Json::array();
+    for (const auto& x : p.liaisons) l.push_back(liaisonVersJson(x));
+    j["liaisons"] = l;
   }
   if (p.inconnus.is_object())
     for (auto it = p.inconnus.begin(); it != p.inconnus.end(); ++it)

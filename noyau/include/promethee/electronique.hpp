@@ -87,6 +87,32 @@ struct Facade {
   friend bool operator==(const Facade&, const Facade&) = default;
 };
 
+// Variante de montage déclarée (lot L12, 12.1) : nom et description ; ce qu'elle change est porté par les composants
+struct VarianteMontage {
+  std::string nom, description;
+  friend bool operator==(const VarianteMontage&, const VarianteMontage&) = default;
+};
+// Note attachée à un objet (lot L12, 12.4, 12.12, PRJ-07, PRJ-23) : commentaire de revue, tâche ou entrée du journal
+// de mise au point, épinglée sur un objet (UUID d'un composant, d'une piste…, « reseau:GND », vide : la carte) ;
+// « parent » range les réponses sous leur commentaire ; les mentions « @nom » se lisent dans le texte
+struct NoteObjet {
+  enum class Genre : std::uint8_t { Commentaire, Tache, Journal } genre = Genre::Commentaire;
+  std::string uuid, objet, parent, auteur, date, texte;
+  std::string responsable, revision;  // tâche : qui la porte ; révision où elle a été notée ou réglée
+  int priorite = 0;                   // tâche : 0 normale, 1 haute, 2 urgente
+  bool close = false;
+  friend bool operator==(const NoteObjet&, const NoteObjet&) = default;
+};
+// Jeu de sorties enregistré (lot L13, 13.2, 13.7, FAB-11) : sorties nommées lancées d'un coup, depuis l'interface ou
+// la ligne de commande ; le dossier accepte {projet}, {carte}, {revision}, {variante}, {date}
+struct JeuSorties {
+  std::string nom, dossier = "sorties/{carte}-{revision}", variante;
+  std::vector<std::string> sorties;  // « gerber », « percages », « placement », « nomenclature », « ipc2581 »…
+  bool zip = false;
+  bool controler = true;  // nomenclature, articles et empreintes contrôlés avant d'écrire (13.7)
+  friend bool operator==(const JeuSorties&, const JeuSorties&) = default;
+};
+
 struct ConceptionElec {
   std::string uuid, nom = "Carte électronique";
   std::vector<ComposantElec> composants;
@@ -122,6 +148,11 @@ struct ConceptionElec {
   // Synchronisation du circuit (3.6) : automatique pour les changements sans risque (par défaut), ou tout écart
   // passé par le panneau des écarts
   bool synchroSurConfirmation = false;
+  // Variantes de montage (lot L12) : déclarées ici, active dans les vues et les sorties ; vide : la carte de base
+  std::vector<VarianteMontage> variantesMontage;
+  std::string varianteActive;
+  std::vector<NoteObjet> notes;        // commentaires, tâches et journal attachés aux objets (12.12)
+  std::vector<JeuSorties> jeuxSorties; // jeux de sorties enregistrés (13.2)
   // Clés que ce logiciel ne connaît pas, relues puis réécrites telles quelles, objet par objet (ECH-11, A13) : un
   // projet ouvert puis enregistré par une version plus ancienne ne perd plus ce qu'une plus récente y a mis. Clé : le
   // genre et l'identité de l'objet (« composant:<uuid> », « circuit/regles »…), valeur : ses clés inconnues
@@ -580,7 +611,7 @@ std::vector<std::string> verifierPublication(const Publication& p, const std::st
 // ---------- Fichier ----------
 // Format propre à la conception électronique (clé « format » de chaque conception, ECH-10) : absent ou 1 jusqu'à la
 // 0.28, 2 depuis la 0.29. Une conception d'un format plus récent s'ouvre en lecture tolérante, avec une alerte.
-inline constexpr int FORMAT_ELECTRONIQUE = 4;  // 2 : la 0.30 ; 3 : la 0.31 (lot L2) ; 4 : la 0.32 (lot L3)
+inline constexpr int FORMAT_ELECTRONIQUE = 5;  // 2 : la 0.30 ; 3 : la 0.31 (lot L2) ; 4 : la 0.32 (lot L3) ; 5 : la 0.33 (lots L4 à L19)
 // Écriture dans un ordre stable : clés dans un ordre fixe, clés inconnues ensuite ; listes dont l'ordre n'a pas de
 // sens (composants, symboles posés, fils, étiquettes, textes, empreintes placées, pistes, vias, jonctions) triées par
 // identifiant ; feuilles, zones (départage des priorités égales), classes, affectations et publications dans leur ordre

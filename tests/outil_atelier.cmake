@@ -1,0 +1,26 @@
+# Essai de bout en bout des commandes de conception électronique de l'outil (lot L13, 13.1, 13.2, 13.10) :
+# codes de retour, rapport JSON, jeu de sorties avec variable, requêtes JSON-RPC sur l'entrée standard.
+file(REMOVE_RECURSE ${DOSSIER})
+file(MAKE_DIRECTORY ${DOSSIER})
+execute_process(COMMAND ${OUTIL} exemple-electronique ${DOSSIER}/ex.prom RESULT_VARIABLE r0 OUTPUT_QUIET)
+execute_process(COMMAND ${OUTIL} drc ${DOSSIER}/ex.prom --json RESULT_VARIABLE r1 OUTPUT_VARIABLE o1)
+if(NOT r0 EQUAL 0 OR NOT r1 EQUAL 0)
+  message(FATAL_ERROR "La carte d'exemple doit passer la DRC : ${r0} ${r1}\n${o1}")
+endif()
+# Une piste trop fine posée par l'interface JSON-RPC : la DRC rend 1 et la liste
+file(WRITE ${DOSSIER}/requetes.jsonl "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"piste.poser\",\"params\":{\"a\":[10,10],\"b\":[20,10],\"largeur\":0.05,\"reseau\":\"ESSAI\"}}\n")
+execute_process(COMMAND ${OUTIL} api ${DOSSIER}/ex.prom ${DOSSIER}/fine.prom INPUT_FILE ${DOSSIER}/requetes.jsonl RESULT_VARIABLE r2 OUTPUT_VARIABLE o2)
+execute_process(COMMAND ${OUTIL} drc ${DOSSIER}/fine.prom --json RESULT_VARIABLE r3 OUTPUT_VARIABLE o3)
+if(NOT r2 EQUAL 0 OR NOT r3 EQUAL 1 OR NOT o3 MATCHES "DRC-02" OR NOT o2 MATCHES "\"result\"")
+  message(FATAL_ERROR "Piste trop fine : la DRC devait rendre 1 et la liste (${r2} ${r3})\n${o2}\n${o3}")
+endif()
+# Jeu de sorties lancé en une commande, révision passée par -D
+execute_process(COMMAND ${OUTIL} sorties ${DOSSIER}/ex.prom jlcpcb -D REVISION=C RESULT_VARIABLE r4 OUTPUT_VARIABLE o4)
+if(NOT r4 EQUAL 0 OR NOT EXISTS ${DOSSIER}/sorties/Clignotant_555-C-jlcpcb.zip)
+  message(FATAL_ERROR "Jeu de sorties : ${r4}\n${o4}")
+endif()
+execute_process(COMMAND ${OUTIL} valider ${DOSSIER}/ex.prom --json RESULT_VARIABLE r5 OUTPUT_VARIABLE o5)
+execute_process(COMMAND ${OUTIL} comparer ${DOSSIER}/ex.prom ${DOSSIER}/fine.prom RESULT_VARIABLE r6 OUTPUT_VARIABLE o6)
+if(NOT r5 EQUAL 0 OR NOT r6 EQUAL 1 OR NOT o6 MATCHES "piste ajouté")
+  message(FATAL_ERROR "valider ou comparer : ${r5} ${r6}\n${o5}\n${o6}")
+endif()

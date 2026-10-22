@@ -22,7 +22,7 @@ add_library(promethee_noyau
   src/fabrication_ecad.cpp
   src/electronique_json.cpp
   src/commandes.cpp
-  src/lien_electronique.cpp src/publication.cpp src/routage.cpp src/routeur.cpp src/verification.cpp src/placement_circuit.cpp src/facade.cpp src/contour_esquisse.cpp src/modeles3d.cpp src/structure_schema.cpp src/dessins_circuit.cpp src/fabrication_avancee.cpp src/robustesse.cpp src/echanges_electronique.cpp src/simulation.cpp src/moteur_ngspice.cpp src/exemple_electronique.cpp
+  src/lien_electronique.cpp src/publication.cpp src/routage.cpp src/routeur.cpp src/verification.cpp src/placement_circuit.cpp src/facade.cpp src/contour_esquisse.cpp src/modeles3d.cpp src/structure_schema.cpp src/dessins_circuit.cpp src/fabrication_avancee.cpp src/robustesse.cpp src/echanges_electronique.cpp src/simulation.cpp src/moteur_ngspice.cpp src/exemple_electronique.cpp src/exigences.cpp src/compression.cpp src/variantes.cpp src/comparaison.cpp src/historique_local.cpp src/collaboration.cpp src/systeme_erc.cpp src/sorties.cpp src/revue_conception.cpp src/placement_auto.cpp src/api_commandes.cpp src/simulation_avancee.cpp src/logique.cpp src/usinage.cpp src/essais_production.cpp src/integrite.cpp src/equipe.cpp
   src/fichiers.cpp src/hachage.cpp src/structure.cpp src/bibliotheque.cpp src/police.cpp src/moindres_carres.cpp src/dxf.cpp src/dxf_dessin.cpp src/depot.cpp src/kicad_electronique.cpp
   src/electrique.cpp src/electrique_symboles.cpp src/electrique_catalogue.cpp src/electrique_rapports.cpp src/electrique_verif.cpp
   src/electrique_calculs.cpp src/electrique_json.cpp src/electrique_logement.cpp src/electrique_armoire.cpp src/electrique_qet.cpp src/exemple_electrique.cpp src/electrique_circuits.cpp

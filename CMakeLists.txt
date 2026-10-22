@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(Promethee VERSION 0.32.0 LANGUAGES CXX
+project(Promethee VERSION 0.33.0 LANGUAGES CXX
         DESCRIPTION "Plateforme libre d'ingénierie intégrée : carte et boîtier dans un seul modèle")
 
 # Windows : évite le plantage connu des programmes compilés avec MSVC 17.10+ face à une ancienne msvcp140.dll.
