@@ -32,6 +32,7 @@ class PanneauEcarts : public QWidget {
   // La conception a changé : la liste et la pastille se refont (au retour à la boucle d'événements)
   void majPlusTard();
   void maj();
+  void setEcarts(std::vector<prom::ecad::EcartSynchro> e);  // comptés ailleurs (fil du calcul d'une grande carte)
   const std::vector<prom::ecad::EcartSynchro>& ecarts() const { return m_ecarts; }
   // Applique les écarts cochés, ou tous, en une seule commande ; rend le nombre d'écarts appliqués
   int appliquer(bool tous);

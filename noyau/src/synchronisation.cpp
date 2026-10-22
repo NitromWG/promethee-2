@@ -652,7 +652,26 @@ bool appliquerSuites(ConceptionElec& c, const ChangementConception& ch) {
   static const std::set<std::string> proprietes{"empreinte", "horsCarte", "reference", "symbole"};
   bool lien = ch.entiere || ch.demandeConnectivite() || ch.circuit;
   for (const auto& p : ch.proprietes) lien |= proprietes.count(p) > 0;
-  for (const auto& [uuid, natures] : ch.objets) lien |= (natures & (ChangementConception::Ajout | ChangementConception::Retrait)) != 0;
+  bool ajoutRetrait = false;
+  for (const auto& [uuid, natures] : ch.objets) ajoutRetrait |= (natures & (ChangementConception::Ajout | ChangementConception::Retrait)) != 0;
+  lien |= ajoutRetrait;
+  // Cuivre ou empreintes seulement déplacés (glisser sur une grande carte, 9.2) : seul du cuivre écarté d'une empreinte
+  // mise hors carte ou dont le composant a quitté le schéma peut rendre un écart sans risque ; sans de telles
+  // empreintes, la comparaison complète est épargnée
+  if (lien && !ch.entiere && !ch.demandeConnectivite() && !ajoutRetrait && !ch.zones && !ch.regles && ch.proprietes.empty()) {
+    std::set<std::string> poses;
+    for (const auto& f : c.feuilles)
+      for (const auto& s : f.symboles) poses.insert(s.composant);
+    bool enAttente = false;
+    for (const auto& e : c.circuit.empreintes) {
+      const ComposantElec* x = c.composant(e.composant);
+      if (!x || x->horsCarte || !poses.count(x->uuid)) {
+        enAttente = true;
+        break;
+      }
+    }
+    if (!enAttente) lien = false;
+  }
   if (lien && !c.synchroSurConfirmation) {
     std::vector<EcartSynchro> surs;
     for (auto& x : ecartsSynchronisation(c))

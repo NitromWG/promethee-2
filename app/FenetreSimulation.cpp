@@ -27,6 +27,7 @@
 #include <QVBoxLayout>
 
 #include "AtelierElectronique.hpp"
+#include "FilDeFond.hpp"
 #include "promethee/valeurs.hpp"
 
 using namespace prom::ecad;
@@ -417,6 +418,7 @@ void FenetreSimulation::lancerNetlist(const QString& texte) {
   m_arret = std::make_shared<std::atomic<bool>>(false);
   QPointer<FenetreSimulation> moi(this);
   m_fil = std::thread([moi, arret = m_arret, t = texte.toStdString()] {
+    prioriteDeFond();
     auto r = std::make_shared<ResultatSimulation>(simuler(t, arret.get()));
     QMetaObject::invokeMethod(qApp, [moi, r] {
       if (!moi) return;

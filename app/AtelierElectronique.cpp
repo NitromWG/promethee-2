@@ -1,6 +1,7 @@
 // Prométhée : atelier électronique (schéma, circuit imprimé, 3D, fabrication) : construction, moteurs de calcul,
 // actions, bibliothèque et inspecteur. Le ruban (RubanElectronique.cpp), les exports (ExportsElectronique.cpp) et la
 // publication (PublicationElectronique.cpp) ont leurs fichiers (1.15, A1). Licence GPL-3.0-only.
+#include "FilDeFond.hpp"
 #include "AtelierElectronique.hpp"
 #include "ChienDeGarde.hpp"
 
@@ -9,6 +10,7 @@
 #include <future>
 #include <cctype>
 #include <map>
+#include <optional>
 #include <set>
 #include <utility>
 
@@ -68,6 +70,7 @@
 #include "DialogueRemplacer.hpp"
 #include "PanneauEcarts.hpp"
 #include "promethee/remplacement.hpp"
+#include "promethee/synchronisation.hpp"
 #include "PanneauVerifications.hpp"
 #include "CadreVue.hpp"
 #include "PeripheriquesEntree.hpp"
@@ -693,15 +696,21 @@ void AtelierElectronique::ouvrir(int conception, int mode, int feuille) {
 
 // ---------- Moteurs ----------
 // Résultat d'un calcul : niveau 0 schéma (connectivité, ERC), 1 geste (chevelu sur les zones données), 2 complet
+namespace {
+constexpr std::size_t GRANDE_CARTE = 200;  // empreintes : au-delà, le calcul d'un geste part en fond (9.4)
+}
+
 struct AtelierElectronique::Resultat {
   int niveau = 2;
   std::uint64_t generation = 0;
   VueCircuit::Calculs calculs;
   std::vector<Violation> erc;
+  // Écarts schéma ↔ circuit d'une grande carte, comptés sur le fil du calcul (9.2)
+  std::optional<std::vector<EcartSynchro>> ecarts;
 };
 
 namespace {
-AtelierElectronique::Resultat calculerConception(const ConceptionElec& c, int niveau, const Remplissages* zones) {
+AtelierElectronique::Resultat calculerConception(const ConceptionElec& c, int niveau, const Remplissages* zones, std::uint64_t generationDoc = ~std::uint64_t{0}) {
   AtelierElectronique::Resultat r;
   r.niveau = niveau;
   r.calculs.k = connectivite(c);
@@ -711,6 +720,14 @@ AtelierElectronique::Resultat calculerConception(const ConceptionElec& c, int ni
   }
   // L'ERC sur un autre fil pendant le cuivre (9.2) : elle ne lit que la conception et la connectivité
   auto erc = std::async(std::launch::async, [&c, &r] { return verifierERC(c, r.calculs.k, NiveauErc::Complet); });
+  if (niveau == 2 && c.circuit.empreintes.size() >= GRANDE_CARTE) {
+    r.ecarts = c.schemaSeul ? std::vector<EcartSynchro>{} : ecartsSynchronisation(c, r.calculs.k);
+    if (generationDoc != ~std::uint64_t{0}) {
+      r.calculs.textes = textesSerigraphie(c);
+      r.calculs.textesValides = true;
+      r.calculs.generationDoc = generationDoc;
+    }
+  }
   r.calculs.pastilles = pastilles(c, r.calculs.k);
   r.calculs.zones = niveau == 2 || !zones ? remplirZones(c, r.calculs.k) : *zones;
   if (niveau == 2) {
@@ -742,7 +759,8 @@ void AtelierElectronique::recalculerApresModification() {
   if (!c) return;
   // Pendant un glissement, écarts, tableaux et liste « À placer » attendent la fin du geste (9.4)
   if (!m_doc->enGeste()) {
-    if (m_ecarts) m_ecarts->majPlusTard();  // la pastille des écarts suit chaque modification
+    // La pastille des écarts suit chaque modification ; ceux d'une grande carte sont comptés avec le calcul en fond
+    if (m_ecarts && (mode() == Schema || c->circuit.empreintes.size() < GRANDE_CARTE)) m_ecarts->majPlusTard();
     majTableauChamps();
     if (m_tableauObjets && m_vues->visibleDansMosaique(m_tableauObjets)) m_tableauObjets->recharger();
     if (m_aPlacer && m_dockAPlacer && !m_dockAPlacer->isHidden()) m_aPlacer->refaire();
@@ -752,6 +770,7 @@ void AtelierElectronique::recalculerApresModification() {
   // seule l'ERC peut voir un brochage vérifié ou une empreinte (A12). Un calcul en fond part d'un état plus ancien :
   // il est alors relancé normalement.
   if (!ch.vide() && !ch.demandeConnectivite() && !ch.demandeCuivre() && !m_calculEnCours) {
+    if (m_ecarts && !(mode() == Schema || c->circuit.empreintes.size() < GRANDE_CARTE)) m_ecarts->majPlusTard();
     if (ch.demandeErc()) {
       m_erc = verifierERC(*c, m_calculs.k, NiveauErc::Complet);
       m_schema->setViolations(&m_erc);
@@ -772,7 +791,7 @@ void AtelierElectronique::recalculerApresModification() {
   if (m_doc->enGeste()) {
     // Pendant un glissement : chevelu et pastilles à jour, zones et DRC à la fin du geste. Sur une grande carte, ce
     // calcul part en fond (9.4) : la vue garde ses 60 images par seconde, le chevelu suit quand il arrive.
-    if (c->circuit.empreintes.size() >= 200) {
+    if (c->circuit.empreintes.size() >= GRANDE_CARTE) {
       if (!m_calculEnCours) lancerCalcul(1);
       return;
     }
@@ -800,8 +819,9 @@ void AtelierElectronique::lancerCalcul(int niveau) {
   const std::uint64_t generation = m_generation;
   QPointer<AtelierElectronique> moi(this);
   auto zones = niveau == 1 ? std::make_shared<Remplissages>(m_calculs.zones) : std::shared_ptr<Remplissages>();
-  m_fil = std::thread([copie = *c, generation, moi, niveau, zones] {
-    auto r = std::make_shared<Resultat>(calculerConception(copie, niveau, zones.get()));
+  m_fil = std::thread([copie = *c, generation, moi, niveau, zones, generationDoc = m_circuit->generationDoc()] {
+    prioriteDeFond();  // la saisie garde la main pendant la DRC (9.2)
+    auto r = std::make_shared<Resultat>(calculerConception(copie, niveau, zones.get(), generationDoc));
     r->generation = generation;
     QMetaObject::invokeMethod(qApp, [moi, r] {
       if (!moi) return;
@@ -831,6 +851,9 @@ void AtelierElectronique::appliquerResultat(Resultat&& r) {
     m_calculs.zones = std::move(r.calculs.zones);
     m_calculs.etat = std::move(r.calculs.etat);
   }
+  m_calculs.textes = std::move(r.calculs.textes);
+  m_calculs.textesValides = r.calculs.textesValides;
+  m_calculs.generationDoc = r.calculs.generationDoc;
   if (r.niveau == 2) {
     m_calculs.drc = std::move(r.calculs.drc);
     // La carte dans le boîtier qu'elle pilote (6.4) : hauteur sous le couvercle, collisions
@@ -846,6 +869,7 @@ void AtelierElectronique::appliquerResultat(Resultat&& r) {
     m_schema->setVerification(&m_ercVerifiee, false);
   }
   m_circuit->setCalculs(&m_calculs);
+  if (r.ecarts && m_ecarts) m_ecarts->setEcarts(std::move(*r.ecarts));
   majCouches();
   m_niveauCalcul = r.niveau;
   afficherEtat(r.niveau);

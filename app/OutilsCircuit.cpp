@@ -215,8 +215,9 @@ class VueCircuit::OutilSelection : public OutilBase {
     if (m_glisse) {
       m_glisse = false;
       m_vue.m_accroches.clear();
-      m_vue.finirGlissement();
+      // L'image du glissement reste jusqu'au calcul qui suit : la carte n'est repeinte entière qu'une fois (9.2)
       m_vue.m_doc->finGeste();
+      m_vue.garderGlissement();
     }
   }
   void doubleClic(const GesteVue& g) override {

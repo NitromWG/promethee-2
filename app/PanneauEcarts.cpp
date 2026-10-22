@@ -192,7 +192,12 @@ void PanneauEcarts::majPlusTard() {
 
 void PanneauEcarts::maj() {
   const ConceptionElec* c = m_atelier.conceptionCourante();
-  m_ecarts = c && !c->schemaSeul ? ecartsSynchronisation(*c) : std::vector<EcartSynchro>{};
+  setEcarts(c && !c->schemaSeul ? ecartsSynchronisation(*c) : std::vector<EcartSynchro>{});
+}
+
+void PanneauEcarts::setEcarts(std::vector<EcartSynchro> e) {
+  const ConceptionElec* c = m_atelier.conceptionCourante();
+  m_ecarts = std::move(e);
   {
     const QSignalBlocker b1(m_auto), b2(m_confirmation);
     m_auto->setChecked(c && !c->synchroSurConfirmation);

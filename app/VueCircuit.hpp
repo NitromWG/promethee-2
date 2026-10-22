@@ -48,6 +48,11 @@ class VueCircuit : public QWidget {
     prom::ecad::Remplissages zones;
     prom::ecad::EtatRoutage etat;
     std::vector<prom::ecad::Violation> drc;
+    // Textes de la carte tirés sur le fil du calcul (grande carte, 9.2) ; valables pour la génération du document
+    // relevée au lancement (generationDoc)
+    std::vector<prom::ecad::TraitSerigraphie> textes;
+    bool textesValides = false;
+    std::uint64_t generationDoc = ~std::uint64_t{0};
   };
   explicit VueCircuit(Document* doc, QWidget* parent = nullptr);
   ~VueCircuit() override;
@@ -57,6 +62,9 @@ class VueCircuit : public QWidget {
   // zone remplie de nouveau dans la fenêtre que la piste touche, puis les seuls objets glissés
   void commencerGlissement();
   void finirGlissement();
+  // Fin du geste sur une grande carte : l'image du glissement reste jusqu'au calcul qui suit (zones refaites) ou au
+  // premier autre changement ; la carte entière n'est repeinte qu'une fois, quand le cuivre refait arrive (9.2)
+  void garderGlissement();
   bool glissementRapide() const { return m_glissement; }
   double tempsTravail() const { return m_tempsTravail; }  // ms cumulées dans les mouvements et la peinture (essais)
   int zonesSuivies() const { return static_cast<int>(m_zonesLocales.size()); }
@@ -65,8 +73,13 @@ class VueCircuit : public QWidget {
   void setCalculs(const Calculs* c) {
     m_calc = c;
     ++m_generationCalculs;
+    if (c && c->textesValides && c->generationDoc == m_generationDoc) {
+      m_textes = c->textes;
+      m_cleTextes = {m_generationDoc, m_conception};
+    }
     update();
   }
+  std::uint64_t generationDoc() const { return m_generationDoc; }
   // Arme un outil (1.6). Pendant une piste, un autre outil la suspend avec son tracé : sa commande faite, ou Échap,
   // la piste reprend au dernier coude (ERG-21, 1.17) ; Sélection ou Router la reprennent aussitôt
   void setOutil(Outil o);
@@ -278,6 +291,12 @@ class VueCircuit : public QWidget {
   std::map<std::string, prom::ecad::Polygones> m_cuivreLocal;  // zone → cuivre de la fenêtre courante
   std::vector<prom::ecad::TraitSerigraphie> m_textesGlisse;    // textes des objets fixes, calculés au début du geste
   bool m_textesFiges = false;
+  bool m_glissementGarde = false;
+  std::map<std::string, prom::ecad::Pt> m_departMobiles;  // empreinte glissée (composant) → position au début du geste
+  // Textes de la carte (repères, valeurs), refaits seulement quand la conception change
+  std::vector<prom::ecad::TraitSerigraphie> m_textes;
+  std::pair<std::uint64_t, int> m_cleTextes{~std::uint64_t{0}, -1};
+  const std::vector<prom::ecad::TraitSerigraphie>& textesCourants(const prom::ecad::ConceptionElec& c);
   void peindreReperes(class QPainter& g, const prom::ecad::ConceptionElec& c);
   struct CleCache {
     std::uint64_t generation = ~std::uint64_t{0}, calculs = 0;
@@ -298,6 +317,8 @@ class VueCircuit : public QWidget {
   CleCache m_cleCache;
   QPixmap m_cacheBase;
   CleCache m_cleBase;
+  CleCache m_cleGarde;  // l'état de la vue quand l'image du glissement a été gardée
+  CleCache cleCourante() const;
   std::uint64_t m_generationDoc = 0, m_generationCalculs = 0;
   prom::ecad::Pt m_posArticle{};
   double m_rotationArticle = 0;
