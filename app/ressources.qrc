@@ -1,0 +1,12 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/marque">
+    <file alias="icone.png">ressources/icone.png</file>
+    <file alias="icone-petite.png">ressources/icone-petite.png</file>
+    <file alias="marque.png">ressources/marque.png</file>
+    <file alias="logo-complet.png">ressources/logo-complet.png</file>
+  </qresource>
+  <qresource prefix="/ruban">
+    <file alias="electronique.json">ressources/ruban_electronique.json</file>
+  </qresource>
+</RCC>

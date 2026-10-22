@@ -1,0 +1,6217 @@
+{
+ "origine": "Prototype web, jalon 0 (core.js)",
+ "cas": [
+  {
+   "nom": "exemple",
+   "source": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 18,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 18,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 62,
+    "Wi": 42,
+    "ri": 3,
+    "Lo": 66,
+    "Wo": 46,
+    "ro": 5,
+    "zf": 2,
+    "zpb": 7,
+    "zpt": 8.6,
+    "Rb": 3.65,
+    "rp": 1.25,
+    "rTete": 3.35,
+    "sb": 28,
+    "sa": 18,
+    "H": 18,
+    "zt": 20,
+    "ztop": 22,
+    "zLevre": 18,
+    "longVis": 6,
+    "lo": {
+     "hx": 30.75,
+     "hy": 20.75,
+     "r": 2.75
+    },
+    "li": {
+     "hx": 29.55,
+     "hy": 19.55,
+     "r": 1.55
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "x": -25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t2",
+      "x": 25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t3",
+      "x": 25.5,
+      "y": 15.5
+     },
+     {
+      "id": "t4",
+      "x": -25.5,
+      "y": 15.5
+     }
+    ],
+    "comps": [
+     {
+      "id": "c1",
+      "x": -26.925,
+      "y": 0,
+      "hx": 3.675,
+      "hy": 4.47,
+      "rot": 180,
+      "top": 11.86,
+      "face": -30.6,
+      "decoupe": {
+       "mur": "W",
+       "u": 0,
+       "zc": 10.23,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "c2",
+      "x": 16,
+      "y": 0,
+      "hx": 10,
+      "hy": 9,
+      "rot": 90,
+      "top": 11.8,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c3",
+      "x": -16.5,
+      "y": 0,
+      "hx": 3.25,
+      "hy": 3.5,
+      "rot": 0,
+      "top": 10.4,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c4",
+      "x": -3,
+      "y": -5,
+      "hx": 1.25,
+      "hy": 1.25,
+      "rot": 0,
+      "top": 9.53,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c5",
+      "x": -3,
+      "y": 6,
+      "hx": 3.15,
+      "hy": 3.15,
+      "rot": 0,
+      "top": 16.3,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c6",
+      "x": -14,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c7",
+      "x": -8.5,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -8.5,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c8",
+      "x": -14,
+      "y": -12,
+      "hx": 3,
+      "hy": 3,
+      "rot": 0,
+      "top": 21.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": -12,
+       "d": 4.2
+      }
+     },
+     {
+      "id": "c9",
+      "x": 2,
+      "y": -15,
+      "hx": 3,
+      "hy": 2.25,
+      "rot": 0,
+      "top": 14.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [],
+     "S": [],
+     "E": [],
+     "W": [
+      "c1"
+     ]
+    },
+    "piliersValides": [
+     "t1",
+     "t2",
+     "t3",
+     "t4"
+    ],
+    "percagesValides": [
+     "c6",
+     "c7",
+     "c8"
+    ]
+   },
+   "problemes": [],
+   "volumes": {
+    "corps": 14128.592885922219,
+    "couvercle": 6439.052816118677
+   },
+   "corrige": {
+    "corrections": [],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Station météo ESP32",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 60,
+      "W": 40,
+      "r": 2,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 1,
+      "paroi": 2,
+      "fond": 2,
+      "entretoise": 5,
+      "hauteur": 18,
+      "couvercle": 2,
+      "vis": "M3",
+      "hauteurAuto": true
+     },
+     "trous": [
+      {
+       "id": "t1",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t2",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t3",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t4",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4.5,
+       "oy": 4.5
+      }
+     ],
+     "composants": [
+      {
+       "id": "c1",
+       "ref": "J1",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "W",
+       "le_long": 0,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      },
+      {
+       "id": "c2",
+       "ref": "U1",
+       "type": "module",
+       "valeur": "ESP32-C3-WROOM-02",
+       "w": 18,
+       "d": 20,
+       "h": 3.2,
+       "x": 16,
+       "y": 0,
+       "rot": 90
+      },
+      {
+       "id": "c3",
+       "ref": "U2",
+       "type": "ic",
+       "valeur": "AMS1117-3.3",
+       "w": 6.5,
+       "d": 7,
+       "h": 1.8,
+       "x": -16.5,
+       "y": 0,
+       "rot": 0
+      },
+      {
+       "id": "c4",
+       "ref": "U3",
+       "type": "capteur",
+       "valeur": "BME280",
+       "w": 2.5,
+       "d": 2.5,
+       "h": 0.93,
+       "x": -3,
+       "y": -5,
+       "rot": 0
+      },
+      {
+       "id": "c5",
+       "ref": "C1",
+       "type": "condo",
+       "valeur": "100 µF 16 V",
+       "w": 6.3,
+       "d": 6.3,
+       "h": 7.7,
+       "x": -3,
+       "y": 6,
+       "rot": 0
+      },
+      {
+       "id": "c6",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Verte",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -14,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c7",
+       "ref": "D2",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -8.5,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c8",
+       "ref": "SW1",
+       "type": "bouton",
+       "valeur": "6 × 6 mm, tige de 13 mm",
+       "w": 6,
+       "d": 6,
+       "h": 13,
+       "x": -14,
+       "y": -12,
+       "rot": 0,
+       "trou_couvercle": 4.2
+      },
+      {
+       "id": "c9",
+       "ref": "J2",
+       "type": "jst",
+       "valeur": "Batterie, 2 broches",
+       "w": 6,
+       "d": 4.5,
+       "h": 6,
+       "x": 2,
+       "y": -15,
+       "rot": 0
+      }
+     ]
+    },
+    "H": 18,
+    "problemes": []
+   }
+  },
+  {
+   "nom": "murs",
+   "source": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 18,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     },
+     {
+      "id": "x1",
+      "ref": "J3",
+      "type": "usbc",
+      "bord": "E",
+      "le_long": 0,
+      "ecart": 0.4
+     },
+     {
+      "id": "x2",
+      "ref": "J4",
+      "type": "jack",
+      "bord": "N",
+      "le_long": 8,
+      "ecart": 0.4
+     },
+     {
+      "id": "x3",
+      "ref": "J5",
+      "type": "usbc",
+      "bord": "S",
+      "le_long": 15,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 0
+      }
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 18,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     },
+     {
+      "id": "x1",
+      "ref": "J3",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "E",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "x2",
+      "ref": "J4",
+      "type": "jack",
+      "valeur": "5,5 × 2,1 mm",
+      "w": 9,
+      "d": 14,
+      "h": 11,
+      "bord": "N",
+      "le_long": 8,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 8,
+       "h": 8,
+       "r": 4
+      },
+      "zc": 6.3
+     },
+     {
+      "id": "x3",
+      "ref": "J5",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "S",
+      "le_long": 15,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 0
+      },
+      "zc": 1.63
+     }
+    ]
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 62,
+    "Wi": 42,
+    "ri": 3,
+    "Lo": 66,
+    "Wo": 46,
+    "ro": 5,
+    "zf": 2,
+    "zpb": 7,
+    "zpt": 8.6,
+    "Rb": 3.65,
+    "rp": 1.25,
+    "rTete": 3.35,
+    "sb": 28,
+    "sa": 18,
+    "H": 20,
+    "zt": 22,
+    "ztop": 24,
+    "zLevre": 20,
+    "longVis": 6,
+    "lo": {
+     "hx": 30.75,
+     "hy": 20.75,
+     "r": 2.75
+    },
+    "li": {
+     "hx": 29.55,
+     "hy": 19.55,
+     "r": 1.55
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "x": -25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t2",
+      "x": 25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t3",
+      "x": 25.5,
+      "y": 15.5
+     },
+     {
+      "id": "t4",
+      "x": -25.5,
+      "y": 15.5
+     }
+    ],
+    "comps": [
+     {
+      "id": "c1",
+      "x": -26.925,
+      "y": 0,
+      "hx": 3.675,
+      "hy": 4.47,
+      "rot": 180,
+      "top": 11.86,
+      "face": -30.6,
+      "decoupe": {
+       "mur": "W",
+       "u": 0,
+       "zc": 10.23,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "c2",
+      "x": 16,
+      "y": 0,
+      "hx": 10,
+      "hy": 9,
+      "rot": 90,
+      "top": 11.8,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c3",
+      "x": -16.5,
+      "y": 0,
+      "hx": 3.25,
+      "hy": 3.5,
+      "rot": 0,
+      "top": 10.4,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c4",
+      "x": -3,
+      "y": -5,
+      "hx": 1.25,
+      "hy": 1.25,
+      "rot": 0,
+      "top": 9.53,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c5",
+      "x": -3,
+      "y": 6,
+      "hx": 3.15,
+      "hy": 3.15,
+      "rot": 0,
+      "top": 16.3,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c6",
+      "x": -14,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c7",
+      "x": -8.5,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -8.5,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c8",
+      "x": -14,
+      "y": -12,
+      "hx": 3,
+      "hy": 3,
+      "rot": 0,
+      "top": 21.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": -12,
+       "d": 4.2
+      }
+     },
+     {
+      "id": "c9",
+      "x": 2,
+      "y": -15,
+      "hx": 3,
+      "hy": 2.25,
+      "rot": 0,
+      "top": 14.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "x1",
+      "x": 26.925,
+      "y": 0,
+      "hx": 3.675,
+      "hy": 4.47,
+      "rot": 0,
+      "top": 11.86,
+      "face": 30.6,
+      "decoupe": {
+       "mur": "E",
+       "u": 0,
+       "zc": 10.23,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "x2",
+      "x": 8,
+      "y": 13.600000000000001,
+      "hx": 4.5,
+      "hy": 7,
+      "rot": 90,
+      "top": 19.6,
+      "face": 20.6,
+      "decoupe": {
+       "mur": "N",
+       "u": 8,
+       "zc": 14.899999999999999,
+       "w": 8,
+       "h": 8,
+       "r": 4
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "x3",
+      "x": 15,
+      "y": -16.925,
+      "hx": 4.47,
+      "hy": 3.675,
+      "rot": 270,
+      "top": 11.86,
+      "face": -20.6,
+      "decoupe": {
+       "mur": "S",
+       "u": 15,
+       "zc": 10.23,
+       "w": 12.5,
+       "h": 7,
+       "r": 0
+      },
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [
+      "x2"
+     ],
+     "S": [
+      "x3"
+     ],
+     "E": [
+      "x1"
+     ],
+     "W": [
+      "c1"
+     ]
+    },
+    "piliersValides": [
+     "t1",
+     "t2",
+     "t3",
+     "t4"
+    ],
+    "percagesValides": [
+     "c6",
+     "c7",
+     "c8"
+    ]
+   },
+   "problemes": [
+    {
+     "sev": "erreur",
+     "code": "chevauchement",
+     "msg": "U1 et J3 se chevauchent.",
+     "ids": [
+      "c2",
+      "x1"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "chevauchement",
+     "msg": "U1 et J4 se chevauchent.",
+     "ids": [
+      "c2",
+      "x2"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "alerte",
+     "code": "bouton_bas",
+     "msg": "SW1 n’atteint pas le couvercle : il manque 0,4 mm pour pouvoir l’appuyer.",
+     "ids": [
+      "c8"
+     ],
+     "fix": null
+    }
+   ],
+   "volumes": {
+    "corps": 14522.872766701505,
+    "couvercle": 6439.052816118498
+   },
+   "corrige": {
+    "corrections": [],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Station météo ESP32",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 60,
+      "W": 40,
+      "r": 2,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 1,
+      "paroi": 2,
+      "fond": 2,
+      "entretoise": 5,
+      "hauteur": 18,
+      "couvercle": 2,
+      "vis": "M3",
+      "hauteurAuto": true
+     },
+     "trous": [
+      {
+       "id": "t1",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t2",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t3",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t4",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4.5,
+       "oy": 4.5
+      }
+     ],
+     "composants": [
+      {
+       "id": "c1",
+       "ref": "J1",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "W",
+       "le_long": 0,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      },
+      {
+       "id": "c2",
+       "ref": "U1",
+       "type": "module",
+       "valeur": "ESP32-C3-WROOM-02",
+       "w": 18,
+       "d": 20,
+       "h": 3.2,
+       "x": 16,
+       "y": 0,
+       "rot": 90
+      },
+      {
+       "id": "c3",
+       "ref": "U2",
+       "type": "ic",
+       "valeur": "AMS1117-3.3",
+       "w": 6.5,
+       "d": 7,
+       "h": 1.8,
+       "x": -16.5,
+       "y": 0,
+       "rot": 0
+      },
+      {
+       "id": "c4",
+       "ref": "U3",
+       "type": "capteur",
+       "valeur": "BME280",
+       "w": 2.5,
+       "d": 2.5,
+       "h": 0.93,
+       "x": -3,
+       "y": -5,
+       "rot": 0
+      },
+      {
+       "id": "c5",
+       "ref": "C1",
+       "type": "condo",
+       "valeur": "100 µF 16 V",
+       "w": 6.3,
+       "d": 6.3,
+       "h": 7.7,
+       "x": -3,
+       "y": 6,
+       "rot": 0
+      },
+      {
+       "id": "c6",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Verte",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -14,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c7",
+       "ref": "D2",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -8.5,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c8",
+       "ref": "SW1",
+       "type": "bouton",
+       "valeur": "6 × 6 mm, tige de 13 mm",
+       "w": 6,
+       "d": 6,
+       "h": 13,
+       "x": -14,
+       "y": -12,
+       "rot": 0,
+       "trou_couvercle": 4.2
+      },
+      {
+       "id": "c9",
+       "ref": "J2",
+       "type": "jst",
+       "valeur": "Batterie, 2 broches",
+       "w": 6,
+       "d": 4.5,
+       "h": 6,
+       "x": 2,
+       "y": -15,
+       "rot": 0
+      },
+      {
+       "id": "x1",
+       "ref": "J3",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "E",
+       "le_long": 0,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      },
+      {
+       "id": "x2",
+       "ref": "J4",
+       "type": "jack",
+       "valeur": "5,5 × 2,1 mm",
+       "w": 9,
+       "d": 14,
+       "h": 11,
+       "bord": "N",
+       "le_long": 8,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 8,
+        "h": 8,
+        "r": 4
+       },
+       "zc": 6.3
+      },
+      {
+       "id": "x3",
+       "ref": "J5",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "S",
+       "le_long": 15,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 0
+       },
+       "zc": 1.63
+      }
+     ]
+    },
+    "H": 20,
+    "problemes": [
+     "chevauchement",
+     "chevauchement",
+     "bouton_bas"
+    ]
+   }
+  },
+  {
+   "nom": "rayon_nul",
+   "source": {
+    "carte": {
+     "L": 80,
+     "W": 50,
+     "r": 0,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 0.5,
+     "paroi": 1.6,
+     "fond": 1.6,
+     "entretoise": 4,
+     "hauteur": 15,
+     "couvercle": 1.6,
+     "vis": "M2.5"
+    },
+    "trous": [
+     {
+      "coin": "SW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "coin": "SE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "coin": "NE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "coin": "NW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "x": 0,
+      "y": 0
+     },
+     {
+      "x": 10,
+      "y": 12
+     }
+    ],
+    "composants": [
+     {
+      "type": "led",
+      "x": -20,
+      "y": 10
+     },
+     {
+      "type": "bouton",
+      "x": 20,
+      "y": -10
+     },
+     {
+      "type": "usbc",
+      "bord": "E",
+      "le_long": -5
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Projet sans nom",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 80,
+     "W": 50,
+     "r": 0,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 0.5,
+     "paroi": 1.6,
+     "fond": 1.6,
+     "entretoise": 4,
+     "hauteur": 15,
+     "couvercle": 1.6,
+     "vis": "M2.5",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "tld1i68",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "t4z9yqp",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "thvj88b",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tpbbeog",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "t9n973s",
+      "ref": "T5",
+      "x": 0,
+      "y": 0
+     },
+     {
+      "id": "tmtb5zw",
+      "ref": "T6",
+      "x": 10,
+      "y": 12
+     }
+    ],
+    "composants": [
+     {
+      "id": "ckyr8c7",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -20,
+      "y": 10,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "cv403bl",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": 20,
+      "y": -10,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c86yquj",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "E",
+      "le_long": -5,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     }
+    ]
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 81,
+    "Wi": 51,
+    "ri": 0.5,
+    "Lo": 84.2,
+    "Wo": 54.2,
+    "ro": 2.1,
+    "zf": 1.6,
+    "zpb": 5.6,
+    "zpt": 7.199999999999999,
+    "Rb": 3.4,
+    "rp": 1,
+    "rTete": 2.85,
+    "sb": 40,
+    "sa": 25,
+    "H": 17,
+    "zt": 18.6,
+    "ztop": 20.200000000000003,
+    "zLevre": 16.6,
+    "longVis": 6,
+    "lo": {
+     "hx": 40.25,
+     "hy": 25.25,
+     "r": 0.3
+    },
+    "li": {
+     "hx": 39.05,
+     "hy": 24.05,
+     "r": 0.3
+    },
+    "trous": [
+     {
+      "id": "tld1i68",
+      "x": -36,
+      "y": -21
+     },
+     {
+      "id": "t4z9yqp",
+      "x": 36,
+      "y": -21
+     },
+     {
+      "id": "thvj88b",
+      "x": 36,
+      "y": 21
+     },
+     {
+      "id": "tpbbeog",
+      "x": -36,
+      "y": 21
+     },
+     {
+      "id": "t9n973s",
+      "x": 0,
+      "y": 0
+     },
+     {
+      "id": "tmtb5zw",
+      "x": 10,
+      "y": 12
+     }
+    ],
+    "comps": [
+     {
+      "id": "ckyr8c7",
+      "x": -20,
+      "y": 10,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 12.5,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -20,
+       "y": 10,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "cv403bl",
+      "x": 20,
+      "y": -10,
+      "hx": 3,
+      "hy": 3,
+      "rot": 0,
+      "top": 20.2,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": 20,
+       "y": -10,
+       "d": 4.2
+      }
+     },
+     {
+      "id": "c86yquj",
+      "x": 36.425000000000004,
+      "y": -5,
+      "hx": 3.675,
+      "hy": 4.47,
+      "rot": 0,
+      "top": 10.459999999999999,
+      "face": 40.1,
+      "decoupe": {
+       "mur": "E",
+       "u": -5,
+       "zc": 8.829999999999998,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [],
+     "S": [],
+     "E": [
+      "c86yquj"
+     ],
+     "W": []
+    },
+    "piliersValides": [
+     "tld1i68",
+     "t4z9yqp",
+     "thvj88b",
+     "tpbbeog",
+     "t9n973s",
+     "tmtb5zw"
+    ],
+    "percagesValides": [
+     "ckyr8c7",
+     "cv403bl"
+    ]
+   },
+   "problemes": [
+    {
+     "sev": "alerte",
+     "code": "vis_longue",
+     "msg": "Les vis M2.5 × 6 toucheront le fond : entretoises de 4 mm trop courtes.",
+     "ids": [],
+     "fix": "Entretoises de 5 mm"
+    }
+   ],
+   "volumes": {
+    "corps": 15251.682735982105,
+    "couvercle": 7876.355868258819
+   },
+   "corrige": {
+    "corrections": [
+     "Entretoises de 5 mm"
+    ],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Projet sans nom",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 80,
+      "W": 50,
+      "r": 0,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 0.5,
+      "paroi": 1.6,
+      "fond": 1.6,
+      "entretoise": 5,
+      "hauteur": 15,
+      "couvercle": 1.6,
+      "vis": "M2.5",
+      "hauteurAuto": true
+     },
+     "trous": [
+      {
+       "id": "tld1i68",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "t4z9yqp",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "thvj88b",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "tpbbeog",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "t9n973s",
+       "ref": "T5",
+       "x": 0,
+       "y": 0
+      },
+      {
+       "id": "tmtb5zw",
+       "ref": "T6",
+       "x": 10,
+       "y": 12
+      }
+     ],
+     "composants": [
+      {
+       "id": "ckyr8c7",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -20,
+       "y": 10,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "cv403bl",
+       "ref": "SW1",
+       "type": "bouton",
+       "valeur": "6 × 6 mm, tige de 13 mm",
+       "w": 6,
+       "d": 6,
+       "h": 13,
+       "x": 20,
+       "y": -10,
+       "rot": 0,
+       "trou_couvercle": 4.2
+      },
+      {
+       "id": "c86yquj",
+       "ref": "J1",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "E",
+       "le_long": -5,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      }
+     ]
+    },
+    "H": 18,
+    "problemes": []
+   }
+  },
+  {
+   "nom": "encombre",
+   "source": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Nouveau projet",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 50,
+     "W": 30,
+     "r": 1.5,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 12,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t7ddrvr",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tay9myr",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "t5a9lzn",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tby1eui",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "t8edo3y",
+      "ref": "T5",
+      "x": 0,
+      "y": 0
+     }
+    ],
+    "composants": [
+     {
+      "id": "ct3qj98",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "S",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c5rzys0",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": 0,
+      "y": 0,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "cc9025v",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": 5,
+      "y": 0,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "cij4w64",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": 1.5,
+      "y": 5,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "cy0f7sv",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": -11.5,
+      "y": 3,
+      "rot": 0
+     },
+     {
+      "id": "cst8l3y",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": 1.5,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "cnekqql",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 10,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4x4j5z",
+      "ref": "U2",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": 7,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c7a8ova",
+      "ref": "U3",
+      "type": "ic",
+      "valeur": "Régulateur 3,3 V",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": 8,
+      "y": -6,
+      "rot": 0
+     },
+     {
+      "id": "clg91q9",
+      "ref": "J3",
+      "type": "jack",
+      "valeur": "5,5 × 2,1 mm",
+      "w": 9,
+      "d": 14,
+      "h": 11,
+      "bord": "S",
+      "le_long": -11,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 8,
+       "h": 8,
+       "r": 4
+      },
+      "zc": 6.3
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Nouveau projet",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 50,
+     "W": 30,
+     "r": 1.5,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 12,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t7ddrvr",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tay9myr",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "t5a9lzn",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tby1eui",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "t8edo3y",
+      "ref": "T5",
+      "x": 0,
+      "y": 0
+     }
+    ],
+    "composants": [
+     {
+      "id": "ct3qj98",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "S",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c5rzys0",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": 0,
+      "y": 0,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "cc9025v",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": 5,
+      "y": 0,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "cij4w64",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": 1.5,
+      "y": 5,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "cy0f7sv",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": -11.5,
+      "y": 3,
+      "rot": 0
+     },
+     {
+      "id": "cst8l3y",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": 1.5,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "cnekqql",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 10,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4x4j5z",
+      "ref": "U2",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": 7,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c7a8ova",
+      "ref": "U3",
+      "type": "ic",
+      "valeur": "Régulateur 3,3 V",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": 8,
+      "y": -6,
+      "rot": 0
+     },
+     {
+      "id": "clg91q9",
+      "ref": "J3",
+      "type": "jack",
+      "valeur": "5,5 × 2,1 mm",
+      "w": 9,
+      "d": 14,
+      "h": 11,
+      "bord": "S",
+      "le_long": -11,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 8,
+       "h": 8,
+       "r": 4
+      },
+      "zc": 6.3
+     }
+    ]
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 52,
+    "Wi": 32,
+    "ri": 2.5,
+    "Lo": 56,
+    "Wo": 36,
+    "ro": 4.5,
+    "zf": 2,
+    "zpb": 7,
+    "zpt": 8.6,
+    "Rb": 3.65,
+    "rp": 1.25,
+    "rTete": 3.35,
+    "sb": 23.5,
+    "sa": 13.5,
+    "H": 20,
+    "zt": 22,
+    "ztop": 24,
+    "zLevre": 20,
+    "longVis": 6,
+    "lo": {
+     "hx": 25.75,
+     "hy": 15.75,
+     "r": 2.25
+    },
+    "li": {
+     "hx": 24.55,
+     "hy": 14.55,
+     "r": 1.05
+    },
+    "trous": [
+     {
+      "id": "t7ddrvr",
+      "x": -21,
+      "y": -11
+     },
+     {
+      "id": "tay9myr",
+      "x": 21,
+      "y": -11
+     },
+     {
+      "id": "t5a9lzn",
+      "x": 21,
+      "y": 11
+     },
+     {
+      "id": "tby1eui",
+      "x": -21,
+      "y": 11
+     },
+     {
+      "id": "t8edo3y",
+      "x": 0,
+      "y": 0
+     }
+    ],
+    "comps": [
+     {
+      "id": "ct3qj98",
+      "x": 0,
+      "y": -11.925,
+      "hx": 4.47,
+      "hy": 3.675,
+      "rot": 270,
+      "top": 11.86,
+      "face": -15.6,
+      "decoupe": {
+       "mur": "S",
+       "u": 0,
+       "zc": 10.23,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "c5rzys0",
+      "x": 0,
+      "y": 0,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": 0,
+       "y": 0,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "cc9025v",
+      "x": 5,
+      "y": 0,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": 5,
+       "y": 0,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "cij4w64",
+      "x": 1.5,
+      "y": 5,
+      "hx": 3,
+      "hy": 3,
+      "rot": 0,
+      "top": 21.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": 1.5,
+       "y": 5,
+       "d": 4.2
+      }
+     },
+     {
+      "id": "cy0f7sv",
+      "x": -11.5,
+      "y": 3,
+      "hx": 9,
+      "hy": 10,
+      "rot": 0,
+      "top": 11.8,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "cst8l3y",
+      "x": 1.5,
+      "y": -5,
+      "hx": 3.15,
+      "hy": 3.15,
+      "rot": 0,
+      "top": 16.3,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "cnekqql",
+      "x": 10,
+      "y": 0,
+      "hx": 3,
+      "hy": 2.25,
+      "rot": 0,
+      "top": 14.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c4x4j5z",
+      "x": 7,
+      "y": 6,
+      "hx": 1.25,
+      "hy": 1.25,
+      "rot": 0,
+      "top": 9.53,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c7a8ova",
+      "x": 8,
+      "y": -6,
+      "hx": 3.25,
+      "hy": 3.5,
+      "rot": 0,
+      "top": 10.4,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "clg91q9",
+      "x": -11,
+      "y": -8.6,
+      "hx": 4.5,
+      "hy": 7,
+      "rot": 270,
+      "top": 19.6,
+      "face": -15.6,
+      "decoupe": {
+       "mur": "S",
+       "u": -11,
+       "zc": 14.899999999999999,
+       "w": 8,
+       "h": 8,
+       "r": 4
+      },
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [],
+     "S": [
+      "ct3qj98",
+      "clg91q9"
+     ],
+     "E": [],
+     "W": []
+    },
+    "piliersValides": [
+     "t7ddrvr",
+     "tay9myr",
+     "t5a9lzn",
+     "tby1eui",
+     "t8edo3y"
+    ],
+    "percagesValides": [
+     "c5rzys0",
+     "cc9025v",
+     "cij4w64"
+    ]
+   },
+   "problemes": [
+    {
+     "sev": "erreur",
+     "code": "chevauchement",
+     "msg": "U1 et J3 se chevauchent.",
+     "ids": [
+      "cy0f7sv",
+      "clg91q9"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "U1 empiète sur la tête de vis du trou T4.",
+     "ids": [
+      "cy0f7sv",
+      "tby1eui"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "D1 empiète sur la tête de vis du trou T5.",
+     "ids": [
+      "c5rzys0",
+      "t8edo3y"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "SW1 empiète sur la tête de vis du trou T5.",
+     "ids": [
+      "cij4w64",
+      "t8edo3y"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "U1 empiète sur la tête de vis du trou T5.",
+     "ids": [
+      "cy0f7sv",
+      "t8edo3y"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "C1 empiète sur la tête de vis du trou T5.",
+     "ids": [
+      "cst8l3y",
+      "t8edo3y"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "alerte",
+     "code": "bouton_bas",
+     "msg": "SW1 n’atteint pas le couvercle : il manque 0,4 mm pour pouvoir l’appuyer.",
+     "ids": [
+      "cij4w64"
+     ],
+     "fix": null
+    }
+   ],
+   "volumes": {
+    "corps": 11452.930992173844,
+    "couvercle": 4313.274535903211
+   },
+   "corrige": {
+    "corrections": [],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Nouveau projet",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 50,
+      "W": 30,
+      "r": 1.5,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 1,
+      "paroi": 2,
+      "fond": 2,
+      "entretoise": 5,
+      "hauteur": 12,
+      "couvercle": 2,
+      "vis": "M3",
+      "hauteurAuto": true
+     },
+     "trous": [
+      {
+       "id": "t7ddrvr",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "tay9myr",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "t5a9lzn",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "tby1eui",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "t8edo3y",
+       "ref": "T5",
+       "x": 0,
+       "y": 0
+      }
+     ],
+     "composants": [
+      {
+       "id": "ct3qj98",
+       "ref": "J1",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "S",
+       "le_long": 0,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      },
+      {
+       "id": "c5rzys0",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": 0,
+       "y": 0,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "cc9025v",
+       "ref": "D2",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": 5,
+       "y": 0,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "cij4w64",
+       "ref": "SW1",
+       "type": "bouton",
+       "valeur": "6 × 6 mm, tige de 13 mm",
+       "w": 6,
+       "d": 6,
+       "h": 13,
+       "x": 1.5,
+       "y": 5,
+       "rot": 0,
+       "trou_couvercle": 4.2
+      },
+      {
+       "id": "cy0f7sv",
+       "ref": "U1",
+       "type": "module",
+       "valeur": "ESP32-C3-WROOM-02",
+       "w": 18,
+       "d": 20,
+       "h": 3.2,
+       "x": -11.5,
+       "y": 3,
+       "rot": 0
+      },
+      {
+       "id": "cst8l3y",
+       "ref": "C1",
+       "type": "condo",
+       "valeur": "100 µF 16 V",
+       "w": 6.3,
+       "d": 6.3,
+       "h": 7.7,
+       "x": 1.5,
+       "y": -5,
+       "rot": 0
+      },
+      {
+       "id": "cnekqql",
+       "ref": "J2",
+       "type": "jst",
+       "valeur": "2 broches",
+       "w": 6,
+       "d": 4.5,
+       "h": 6,
+       "x": 10,
+       "y": 0,
+       "rot": 0
+      },
+      {
+       "id": "c4x4j5z",
+       "ref": "U2",
+       "type": "capteur",
+       "valeur": "BME280",
+       "w": 2.5,
+       "d": 2.5,
+       "h": 0.93,
+       "x": 7,
+       "y": 6,
+       "rot": 0
+      },
+      {
+       "id": "c7a8ova",
+       "ref": "U3",
+       "type": "ic",
+       "valeur": "Régulateur 3,3 V",
+       "w": 6.5,
+       "d": 7,
+       "h": 1.8,
+       "x": 8,
+       "y": -6,
+       "rot": 0
+      },
+      {
+       "id": "clg91q9",
+       "ref": "J3",
+       "type": "jack",
+       "valeur": "5,5 × 2,1 mm",
+       "w": 9,
+       "d": 14,
+       "h": 11,
+       "bord": "S",
+       "le_long": -11,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 8,
+        "h": 8,
+        "r": 4
+       },
+       "zc": 6.3
+      }
+     ]
+    },
+    "H": 20,
+    "problemes": [
+     "chevauchement",
+     "tete_vis",
+     "tete_vis",
+     "tete_vis",
+     "tete_vis",
+     "tete_vis",
+     "bouton_bas"
+    ]
+   }
+  },
+  {
+   "nom": "manuel_erreurs",
+   "source": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 10,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": false
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 1.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 3,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 10,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": false
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 1.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 3,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 62,
+    "Wi": 42,
+    "ri": 3,
+    "Lo": 66,
+    "Wo": 46,
+    "ro": 5,
+    "zf": 2,
+    "zpb": 7,
+    "zpt": 8.6,
+    "Rb": 3.65,
+    "rp": 1.25,
+    "rTete": 3.35,
+    "sb": 28,
+    "sa": 18,
+    "H": 10,
+    "zt": 12,
+    "ztop": 14,
+    "zLevre": 10,
+    "longVis": 6,
+    "lo": {
+     "hx": 30.75,
+     "hy": 20.75,
+     "r": 2.75
+    },
+    "li": {
+     "hx": 29.55,
+     "hy": 19.55,
+     "r": 1.55
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "x": -28.5,
+      "y": -15.5
+     },
+     {
+      "id": "t2",
+      "x": 25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t3",
+      "x": 25.5,
+      "y": 15.5
+     },
+     {
+      "id": "t4",
+      "x": -25.5,
+      "y": 15.5
+     }
+    ],
+    "comps": [
+     {
+      "id": "c1",
+      "x": -24.325,
+      "y": 0,
+      "hx": 3.675,
+      "hy": 4.47,
+      "rot": 180,
+      "top": 11.86,
+      "face": -28,
+      "decoupe": {
+       "mur": "W",
+       "u": 0,
+       "zc": 10.23,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "c2",
+      "x": 16,
+      "y": 0,
+      "hx": 10,
+      "hy": 9,
+      "rot": 90,
+      "top": 11.8,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c3",
+      "x": -16.5,
+      "y": 0,
+      "hx": 3.25,
+      "hy": 3.5,
+      "rot": 0,
+      "top": 10.4,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c4",
+      "x": -3,
+      "y": -5,
+      "hx": 1.25,
+      "hy": 1.25,
+      "rot": 0,
+      "top": 9.53,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c5",
+      "x": -3,
+      "y": 6,
+      "hx": 3.15,
+      "hy": 3.15,
+      "rot": 0,
+      "top": 16.3,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c6",
+      "x": -14,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c7",
+      "x": -8.5,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -8.5,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c8",
+      "x": -14,
+      "y": -12,
+      "hx": 3,
+      "hy": 3,
+      "rot": 0,
+      "top": 21.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": -12,
+       "d": 4.2
+      }
+     },
+     {
+      "id": "c9",
+      "x": 2,
+      "y": -15,
+      "hx": 3,
+      "hy": 2.25,
+      "rot": 0,
+      "top": 14.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [],
+     "S": [],
+     "E": [],
+     "W": []
+    },
+    "piliersValides": [
+     "t2",
+     "t3",
+     "t4"
+    ],
+    "percagesValides": [
+     "c6",
+     "c7",
+     "c8"
+    ]
+   },
+   "problemes": [
+    {
+     "sev": "erreur",
+     "code": "connecteur_loin",
+     "msg": "J1 est à 3 mm de la paroi : la fiche n’entrera pas.",
+     "ids": [
+      "c1"
+     ],
+     "fix": "Rapprocher de la paroi"
+    },
+    {
+     "sev": "erreur",
+     "code": "decoupe_haut",
+     "msg": "La découpe de J1 dépasse le haut de la paroi.",
+     "ids": [
+      "c1"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "erreur",
+     "code": "trou_bord",
+     "msg": "Le trou T1 est à 1,5 mm du bord de la carte (2,6 mm au minimum).",
+     "ids": [
+      "t1"
+     ],
+     "fix": "Éloigner du bord"
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "J1 touche le couvercle : il manque 0,4 mm.",
+     "ids": [
+      "c1"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "U1 touche le couvercle : il manque 0,3 mm.",
+     "ids": [
+      "c2"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "C1 touche le couvercle : il manque 4,8 mm.",
+     "ids": [
+      "c5"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "D1 touche le couvercle : il manque 2,4 mm.",
+     "ids": [
+      "c6"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "D2 touche le couvercle : il manque 2,4 mm.",
+     "ids": [
+      "c7"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "alerte",
+     "code": "bouton_haut",
+     "msg": "SW1 dépasse du couvercle de 7,6 mm.",
+     "ids": [
+      "c8"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "J2 touche le couvercle : il manque 3,1 mm.",
+     "ids": [
+      "c9"
+     ],
+     "fix": "Ajuster la hauteur"
+    }
+   ],
+   "volumes": {
+    "corps": 10765.694745823239,
+    "couvercle": 6439.052816118429
+   },
+   "corrige": {
+    "corrections": [
+     "Rapprocher de la paroi",
+     "Ajuster la hauteur",
+     "Éloigner du bord"
+    ],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Station météo ESP32",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 60,
+      "W": 40,
+      "r": 2,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 1,
+      "paroi": 2,
+      "fond": 2,
+      "entretoise": 5,
+      "hauteur": 18,
+      "couvercle": 2,
+      "vis": "M3",
+      "hauteurAuto": false
+     },
+     "trous": [
+      {
+       "id": "t1",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 3,
+       "oy": 6
+      },
+      {
+       "id": "t2",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t3",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t4",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4.5,
+       "oy": 4.5
+      }
+     ],
+     "composants": [
+      {
+       "id": "c1",
+       "ref": "J1",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "W",
+       "le_long": 0,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      },
+      {
+       "id": "c2",
+       "ref": "U1",
+       "type": "module",
+       "valeur": "ESP32-C3-WROOM-02",
+       "w": 18,
+       "d": 20,
+       "h": 3.2,
+       "x": 16,
+       "y": 0,
+       "rot": 90
+      },
+      {
+       "id": "c3",
+       "ref": "U2",
+       "type": "ic",
+       "valeur": "AMS1117-3.3",
+       "w": 6.5,
+       "d": 7,
+       "h": 1.8,
+       "x": -16.5,
+       "y": 0,
+       "rot": 0
+      },
+      {
+       "id": "c4",
+       "ref": "U3",
+       "type": "capteur",
+       "valeur": "BME280",
+       "w": 2.5,
+       "d": 2.5,
+       "h": 0.93,
+       "x": -3,
+       "y": -5,
+       "rot": 0
+      },
+      {
+       "id": "c5",
+       "ref": "C1",
+       "type": "condo",
+       "valeur": "100 µF 16 V",
+       "w": 6.3,
+       "d": 6.3,
+       "h": 7.7,
+       "x": -3,
+       "y": 6,
+       "rot": 0
+      },
+      {
+       "id": "c6",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Verte",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -14,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c7",
+       "ref": "D2",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -8.5,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c8",
+       "ref": "SW1",
+       "type": "bouton",
+       "valeur": "6 × 6 mm, tige de 13 mm",
+       "w": 6,
+       "d": 6,
+       "h": 13,
+       "x": -14,
+       "y": -12,
+       "rot": 0,
+       "trou_couvercle": 4.2
+      },
+      {
+       "id": "c9",
+       "ref": "J2",
+       "type": "jst",
+       "valeur": "Batterie, 2 broches",
+       "w": 6,
+       "d": 4.5,
+       "h": 6,
+       "x": 2,
+       "y": -15,
+       "rot": 0
+      }
+     ]
+    },
+    "H": 18,
+    "problemes": []
+   }
+  },
+  {
+   "nom": "manuel_trop_haut",
+   "source": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 30,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": false
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 30,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": false
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 62,
+    "Wi": 42,
+    "ri": 3,
+    "Lo": 66,
+    "Wo": 46,
+    "ro": 5,
+    "zf": 2,
+    "zpb": 7,
+    "zpt": 8.6,
+    "Rb": 3.65,
+    "rp": 1.25,
+    "rTete": 3.35,
+    "sb": 28,
+    "sa": 18,
+    "H": 30,
+    "zt": 32,
+    "ztop": 34,
+    "zLevre": 30,
+    "longVis": 6,
+    "lo": {
+     "hx": 30.75,
+     "hy": 20.75,
+     "r": 2.75
+    },
+    "li": {
+     "hx": 29.55,
+     "hy": 19.55,
+     "r": 1.55
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "x": -25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t2",
+      "x": 25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t3",
+      "x": 25.5,
+      "y": 15.5
+     },
+     {
+      "id": "t4",
+      "x": -25.5,
+      "y": 15.5
+     }
+    ],
+    "comps": [
+     {
+      "id": "c1",
+      "x": -26.925,
+      "y": 0,
+      "hx": 3.675,
+      "hy": 4.47,
+      "rot": 180,
+      "top": 11.86,
+      "face": -30.6,
+      "decoupe": {
+       "mur": "W",
+       "u": 0,
+       "zc": 10.23,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "c2",
+      "x": 16,
+      "y": 0,
+      "hx": 10,
+      "hy": 9,
+      "rot": 90,
+      "top": 11.8,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c3",
+      "x": -16.5,
+      "y": 0,
+      "hx": 3.25,
+      "hy": 3.5,
+      "rot": 0,
+      "top": 10.4,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c4",
+      "x": -3,
+      "y": -5,
+      "hx": 1.25,
+      "hy": 1.25,
+      "rot": 0,
+      "top": 9.53,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c5",
+      "x": -3,
+      "y": 6,
+      "hx": 3.15,
+      "hy": 3.15,
+      "rot": 0,
+      "top": 16.3,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c6",
+      "x": -14,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c7",
+      "x": -8.5,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -8.5,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c8",
+      "x": -14,
+      "y": -12,
+      "hx": 3,
+      "hy": 3,
+      "rot": 0,
+      "top": 21.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": -12,
+       "d": 4.2
+      }
+     },
+     {
+      "id": "c9",
+      "x": 2,
+      "y": -15,
+      "hx": 3,
+      "hy": 2.25,
+      "rot": 0,
+      "top": 14.6,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [],
+     "S": [],
+     "E": [],
+     "W": [
+      "c1"
+     ]
+    },
+    "piliersValides": [
+     "t1",
+     "t2",
+     "t3",
+     "t4"
+    ],
+    "percagesValides": [
+     "c6",
+     "c7",
+     "c8"
+    ]
+   },
+   "problemes": [
+    {
+     "sev": "alerte",
+     "code": "bouton_bas",
+     "msg": "SW1 n’atteint pas le couvercle : il manque 10,4 mm pour pouvoir l’appuyer.",
+     "ids": [
+      "c8"
+     ],
+     "fix": "Ajuster la hauteur"
+    }
+   ],
+   "volumes": {
+    "corps": 19147.671020493202,
+    "couvercle": 6439.052816118493
+   },
+   "corrige": {
+    "corrections": [
+     "Ajuster la hauteur"
+    ],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Station météo ESP32",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 60,
+      "W": 40,
+      "r": 2,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 1,
+      "paroi": 2,
+      "fond": 2,
+      "entretoise": 5,
+      "hauteur": 18,
+      "couvercle": 2,
+      "vis": "M3",
+      "hauteurAuto": false
+     },
+     "trous": [
+      {
+       "id": "t1",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t2",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t3",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t4",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4.5,
+       "oy": 4.5
+      }
+     ],
+     "composants": [
+      {
+       "id": "c1",
+       "ref": "J1",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "W",
+       "le_long": 0,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      },
+      {
+       "id": "c2",
+       "ref": "U1",
+       "type": "module",
+       "valeur": "ESP32-C3-WROOM-02",
+       "w": 18,
+       "d": 20,
+       "h": 3.2,
+       "x": 16,
+       "y": 0,
+       "rot": 90
+      },
+      {
+       "id": "c3",
+       "ref": "U2",
+       "type": "ic",
+       "valeur": "AMS1117-3.3",
+       "w": 6.5,
+       "d": 7,
+       "h": 1.8,
+       "x": -16.5,
+       "y": 0,
+       "rot": 0
+      },
+      {
+       "id": "c4",
+       "ref": "U3",
+       "type": "capteur",
+       "valeur": "BME280",
+       "w": 2.5,
+       "d": 2.5,
+       "h": 0.93,
+       "x": -3,
+       "y": -5,
+       "rot": 0
+      },
+      {
+       "id": "c5",
+       "ref": "C1",
+       "type": "condo",
+       "valeur": "100 µF 16 V",
+       "w": 6.3,
+       "d": 6.3,
+       "h": 7.7,
+       "x": -3,
+       "y": 6,
+       "rot": 0
+      },
+      {
+       "id": "c6",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Verte",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -14,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c7",
+       "ref": "D2",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -8.5,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c8",
+       "ref": "SW1",
+       "type": "bouton",
+       "valeur": "6 × 6 mm, tige de 13 mm",
+       "w": 6,
+       "d": 6,
+       "h": 13,
+       "x": -14,
+       "y": -12,
+       "rot": 0,
+       "trou_couvercle": 4.2
+      },
+      {
+       "id": "c9",
+       "ref": "J2",
+       "type": "jst",
+       "valeur": "Batterie, 2 broches",
+       "w": 6,
+       "d": 4.5,
+       "h": 6,
+       "x": 2,
+       "y": -15,
+       "rot": 0
+      }
+     ]
+    },
+    "H": 18,
+    "problemes": []
+   }
+  },
+  {
+   "nom": "parois_fines",
+   "source": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 1,
+     "fond": 0.9,
+     "entretoise": 1.5,
+     "hauteur": 18,
+     "couvercle": 1,
+     "vis": "M2",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Station météo ESP32",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 60,
+     "W": 40,
+     "r": 2,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 1,
+     "fond": 0.9,
+     "entretoise": 1.5,
+     "hauteur": 18,
+     "couvercle": 1,
+     "vis": "M2",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t2",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t3",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4.5,
+      "oy": 4.5
+     },
+     {
+      "id": "t4",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4.5,
+      "oy": 4.5
+     }
+    ],
+    "composants": [
+     {
+      "id": "c1",
+      "ref": "J1",
+      "type": "usbc",
+      "valeur": "USB-C 16 broches",
+      "w": 8.94,
+      "d": 7.35,
+      "h": 3.26,
+      "bord": "W",
+      "le_long": 0,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "zc": 1.63
+     },
+     {
+      "id": "c2",
+      "ref": "U1",
+      "type": "module",
+      "valeur": "ESP32-C3-WROOM-02",
+      "w": 18,
+      "d": 20,
+      "h": 3.2,
+      "x": 16,
+      "y": 0,
+      "rot": 90
+     },
+     {
+      "id": "c3",
+      "ref": "U2",
+      "type": "ic",
+      "valeur": "AMS1117-3.3",
+      "w": 6.5,
+      "d": 7,
+      "h": 1.8,
+      "x": -16.5,
+      "y": 0,
+      "rot": 0
+     },
+     {
+      "id": "c4",
+      "ref": "U3",
+      "type": "capteur",
+      "valeur": "BME280",
+      "w": 2.5,
+      "d": 2.5,
+      "h": 0.93,
+      "x": -3,
+      "y": -5,
+      "rot": 0
+     },
+     {
+      "id": "c5",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 7.7,
+      "x": -3,
+      "y": 6,
+      "rot": 0
+     },
+     {
+      "id": "c6",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Verte",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -14,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c7",
+      "ref": "D2",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": -8.5,
+      "y": 13,
+      "rot": 0,
+      "trou_couvercle": 3.4
+     },
+     {
+      "id": "c8",
+      "ref": "SW1",
+      "type": "bouton",
+      "valeur": "6 × 6 mm, tige de 13 mm",
+      "w": 6,
+      "d": 6,
+      "h": 13,
+      "x": -14,
+      "y": -12,
+      "rot": 0,
+      "trou_couvercle": 4.2
+     },
+     {
+      "id": "c9",
+      "ref": "J2",
+      "type": "jst",
+      "valeur": "Batterie, 2 broches",
+      "w": 6,
+      "d": 4.5,
+      "h": 6,
+      "x": 2,
+      "y": -15,
+      "rot": 0
+     }
+    ]
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 62,
+    "Wi": 42,
+    "ri": 3,
+    "Lo": 64,
+    "Wo": 44,
+    "ro": 4,
+    "zf": 0.9,
+    "zpb": 2.4,
+    "zpt": 4,
+    "Rb": 3.2,
+    "rp": 0.8,
+    "rTete": 2.5,
+    "sb": 28,
+    "sa": 18,
+    "H": 15.5,
+    "zt": 16.4,
+    "ztop": 17.4,
+    "zLevre": 14.399999999999999,
+    "longVis": 5,
+    "lo": {
+     "hx": 30.75,
+     "hy": 20.75,
+     "r": 2.75
+    },
+    "li": {
+     "hx": 29.55,
+     "hy": 19.55,
+     "r": 1.55
+    },
+    "trous": [
+     {
+      "id": "t1",
+      "x": -25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t2",
+      "x": 25.5,
+      "y": -15.5
+     },
+     {
+      "id": "t3",
+      "x": 25.5,
+      "y": 15.5
+     },
+     {
+      "id": "t4",
+      "x": -25.5,
+      "y": 15.5
+     }
+    ],
+    "comps": [
+     {
+      "id": "c1",
+      "x": -26.925,
+      "y": 0,
+      "hx": 3.675,
+      "hy": 4.47,
+      "rot": 180,
+      "top": 7.26,
+      "face": -30.6,
+      "decoupe": {
+       "mur": "W",
+       "u": 0,
+       "zc": 5.63,
+       "w": 12.5,
+       "h": 7,
+       "r": 2
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "c2",
+      "x": 16,
+      "y": 0,
+      "hx": 10,
+      "hy": 9,
+      "rot": 90,
+      "top": 7.2,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c3",
+      "x": -16.5,
+      "y": 0,
+      "hx": 3.25,
+      "hy": 3.5,
+      "rot": 0,
+      "top": 5.8,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c4",
+      "x": -3,
+      "y": -5,
+      "hx": 1.25,
+      "hy": 1.25,
+      "rot": 0,
+      "top": 4.93,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c5",
+      "x": -3,
+      "y": 6,
+      "hx": 3.15,
+      "hy": 3.15,
+      "rot": 0,
+      "top": 11.7,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     },
+     {
+      "id": "c6",
+      "x": -14,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 9.3,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c7",
+      "x": -8.5,
+      "y": 13,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 9.3,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -8.5,
+       "y": 13,
+       "d": 3.4
+      }
+     },
+     {
+      "id": "c8",
+      "x": -14,
+      "y": -12,
+      "hx": 3,
+      "hy": 3,
+      "rot": 0,
+      "top": 17,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": -14,
+       "y": -12,
+       "d": 4.2
+      }
+     },
+     {
+      "id": "c9",
+      "x": 2,
+      "y": -15,
+      "hx": 3,
+      "hy": 2.25,
+      "rot": 0,
+      "top": 10,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [],
+     "S": [],
+     "E": [],
+     "W": [
+      "c1"
+     ]
+    },
+    "piliersValides": [
+     "t1",
+     "t2",
+     "t3",
+     "t4"
+    ],
+    "percagesValides": [
+     "c6",
+     "c7",
+     "c8"
+    ]
+   },
+   "problemes": [
+    {
+     "sev": "alerte",
+     "code": "paroi",
+     "msg": "Parois de 1 mm : trop fines pour une impression solide (1,2 mm conseillé).",
+     "ids": [],
+     "fix": null
+    },
+    {
+     "sev": "alerte",
+     "code": "fond",
+     "msg": "Fond de 0,9 mm : trop fin pour une impression solide (1 mm conseillé).",
+     "ids": [],
+     "fix": null
+    },
+    {
+     "sev": "alerte",
+     "code": "couvercle",
+     "msg": "Couvercle de 1 mm : trop fin pour une impression solide (1,2 mm conseillé).",
+     "ids": [],
+     "fix": null
+    },
+    {
+     "sev": "alerte",
+     "code": "entretoise",
+     "msg": "Entretoises de 1,5 mm : les pattes des composants traversants risquent de toucher le fond (2 mm conseillé).",
+     "ids": [],
+     "fix": "Passer à 2 mm"
+    },
+    {
+     "sev": "alerte",
+     "code": "vis_longue",
+     "msg": "Les vis M2 × 5 toucheront le fond : entretoises de 1,5 mm trop courtes.",
+     "ids": [],
+     "fix": "Entretoises de 4 mm"
+    }
+   ],
+   "volumes": {
+    "corps": 5811.832952970316,
+    "couvercle": 3244.264845367786
+   },
+   "corrige": {
+    "corrections": [
+     "Passer à 2 mm",
+     "Entretoises de 4 mm"
+    ],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Station météo ESP32",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 60,
+      "W": 40,
+      "r": 2,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 1,
+      "paroi": 1,
+      "fond": 0.9,
+      "entretoise": 4,
+      "hauteur": 18,
+      "couvercle": 1,
+      "vis": "M2",
+      "hauteurAuto": true
+     },
+     "trous": [
+      {
+       "id": "t1",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t2",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t3",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4.5,
+       "oy": 4.5
+      },
+      {
+       "id": "t4",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4.5,
+       "oy": 4.5
+      }
+     ],
+     "composants": [
+      {
+       "id": "c1",
+       "ref": "J1",
+       "type": "usbc",
+       "valeur": "USB-C 16 broches",
+       "w": 8.94,
+       "d": 7.35,
+       "h": 3.26,
+       "bord": "W",
+       "le_long": 0,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 12.5,
+        "h": 7,
+        "r": 2
+       },
+       "zc": 1.63
+      },
+      {
+       "id": "c2",
+       "ref": "U1",
+       "type": "module",
+       "valeur": "ESP32-C3-WROOM-02",
+       "w": 18,
+       "d": 20,
+       "h": 3.2,
+       "x": 16,
+       "y": 0,
+       "rot": 90
+      },
+      {
+       "id": "c3",
+       "ref": "U2",
+       "type": "ic",
+       "valeur": "AMS1117-3.3",
+       "w": 6.5,
+       "d": 7,
+       "h": 1.8,
+       "x": -16.5,
+       "y": 0,
+       "rot": 0
+      },
+      {
+       "id": "c4",
+       "ref": "U3",
+       "type": "capteur",
+       "valeur": "BME280",
+       "w": 2.5,
+       "d": 2.5,
+       "h": 0.93,
+       "x": -3,
+       "y": -5,
+       "rot": 0
+      },
+      {
+       "id": "c5",
+       "ref": "C1",
+       "type": "condo",
+       "valeur": "100 µF 16 V",
+       "w": 6.3,
+       "d": 6.3,
+       "h": 7.7,
+       "x": -3,
+       "y": 6,
+       "rot": 0
+      },
+      {
+       "id": "c6",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Verte",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -14,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c7",
+       "ref": "D2",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": -8.5,
+       "y": 13,
+       "rot": 0,
+       "trou_couvercle": 3.4
+      },
+      {
+       "id": "c8",
+       "ref": "SW1",
+       "type": "bouton",
+       "valeur": "6 × 6 mm, tige de 13 mm",
+       "w": 6,
+       "d": 6,
+       "h": 13,
+       "x": -14,
+       "y": -12,
+       "rot": 0,
+       "trou_couvercle": 4.2
+      },
+      {
+       "id": "c9",
+       "ref": "J2",
+       "type": "jst",
+       "valeur": "Batterie, 2 broches",
+       "w": 6,
+       "d": 4.5,
+       "h": 6,
+       "x": 2,
+       "y": -15,
+       "rot": 0
+      }
+     ]
+    },
+    "H": 18,
+    "problemes": [
+     "paroi",
+     "fond",
+     "couvercle"
+    ]
+   }
+  },
+  {
+   "nom": "vide",
+   "source": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Nouveau projet",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 50,
+     "W": 30,
+     "r": 1.5,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 12,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "tvz388b",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tajmomo",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tdjur9n",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tecnua2",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4,
+      "oy": 4
+     }
+    ],
+    "composants": []
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Nouveau projet",
+    "carte": {
+     "x0": 0,
+     "y0": 0,
+     "L": 50,
+     "W": 30,
+     "r": 1.5,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 1,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 12,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": true
+    },
+    "trous": [
+     {
+      "id": "tvz388b",
+      "ref": "T1",
+      "coin": "SW",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tajmomo",
+      "ref": "T2",
+      "coin": "SE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tdjur9n",
+      "ref": "T3",
+      "coin": "NE",
+      "ox": 4,
+      "oy": 4
+     },
+     {
+      "id": "tecnua2",
+      "ref": "T4",
+      "coin": "NW",
+      "ox": 4,
+      "oy": 4
+     }
+    ],
+    "composants": []
+   },
+   "derive": {
+    "cx": 0,
+    "cy": 0,
+    "Li": 52,
+    "Wi": 32,
+    "ri": 2.5,
+    "Lo": 56,
+    "Wo": 36,
+    "ro": 4.5,
+    "zf": 2,
+    "zpb": 7,
+    "zpt": 8.6,
+    "Rb": 3.65,
+    "rp": 1.25,
+    "rTete": 3.35,
+    "sb": 23.5,
+    "sa": 13.5,
+    "H": 8,
+    "zt": 10,
+    "ztop": 12,
+    "zLevre": 8,
+    "longVis": 6,
+    "lo": {
+     "hx": 25.75,
+     "hy": 15.75,
+     "r": 2.25
+    },
+    "li": {
+     "hx": 24.55,
+     "hy": 14.55,
+     "r": 1.05
+    },
+    "trous": [
+     {
+      "id": "tvz388b",
+      "x": -21,
+      "y": -11
+     },
+     {
+      "id": "tajmomo",
+      "x": 21,
+      "y": -11
+     },
+     {
+      "id": "tdjur9n",
+      "x": 21,
+      "y": 11
+     },
+     {
+      "id": "tecnua2",
+      "x": -21,
+      "y": 11
+     }
+    ],
+    "comps": [],
+    "decoupesValides": {
+     "N": [],
+     "S": [],
+     "E": [],
+     "W": []
+    },
+    "piliersValides": [
+     "tvz388b",
+     "tajmomo",
+     "tdjur9n",
+     "tecnua2"
+    ],
+    "percagesValides": []
+   },
+   "problemes": [],
+   "volumes": {
+    "corps": 7455.7780873592055,
+    "couvercle": 4377.288767062144
+   },
+   "corrige": {
+    "corrections": [],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Nouveau projet",
+     "carte": {
+      "x0": 0,
+      "y0": 0,
+      "L": 50,
+      "W": 30,
+      "r": 1.5,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 1,
+      "paroi": 2,
+      "fond": 2,
+      "entretoise": 5,
+      "hauteur": 12,
+      "couvercle": 2,
+      "vis": "M3",
+      "hauteurAuto": true
+     },
+     "trous": [
+      {
+       "id": "tvz388b",
+       "ref": "T1",
+       "coin": "SW",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "tajmomo",
+       "ref": "T2",
+       "coin": "SE",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "tdjur9n",
+       "ref": "T3",
+       "coin": "NE",
+       "ox": 4,
+       "oy": 4
+      },
+      {
+       "id": "tecnua2",
+       "ref": "T4",
+       "coin": "NW",
+       "ox": 4,
+       "oy": 4
+      }
+     ],
+     "composants": []
+    },
+    "H": 8,
+    "problemes": []
+   }
+  },
+  {
+   "nom": "bizarre",
+   "source": {
+    "nom": "  Été  ",
+    "carte": {
+     "L": "75,5",
+     "W": 5,
+     "r": 99,
+     "t": 1.7,
+     "x0": 3,
+     "y0": -2
+    },
+    "boitier": {
+     "jeu": "0.8",
+     "vis": "M9",
+     "hauteurAuto": false,
+     "hauteur": 2
+    },
+    "trous": [
+     {
+      "coin": "NE",
+      "ox": 3,
+      "oy": 3
+     },
+     null,
+     {
+      "x": "a",
+      "y": 2
+     },
+     {
+      "id": "dbl",
+      "coin": "XX"
+     },
+     {
+      "id": "dbl",
+      "x": 1,
+      "y": 1
+     }
+    ],
+    "composants": [
+     {
+      "type": "inconnu"
+     },
+     {
+      "type": "led",
+      "rot": 45,
+      "x": 1,
+      "y": 1,
+      "trou_couvercle": 99
+     },
+     {
+      "type": "jack",
+      "bord": "Z",
+      "decoupe": {
+       "w": 200,
+       "h": 0,
+       "r": 50
+      }
+     },
+     {
+      "type": "condo",
+      "ref": "   ",
+      "h": 0
+     }
+    ]
+   },
+   "projet": {
+    "format": "promethee-projet",
+    "version": 1,
+    "nom": "Été",
+    "carte": {
+     "x0": 3,
+     "y0": -2,
+     "L": 75,
+     "W": 10,
+     "r": 4.5,
+     "t": 1.6
+    },
+    "boitier": {
+     "jeu": 0.8,
+     "paroi": 2,
+     "fond": 2,
+     "entretoise": 5,
+     "hauteur": 7.6,
+     "couvercle": 2,
+     "vis": "M3",
+     "hauteurAuto": false
+    },
+    "trous": [
+     {
+      "id": "tx59wfh",
+      "ref": "T1",
+      "coin": "NE",
+      "ox": 3,
+      "oy": 3
+     },
+     {
+      "id": "t7bm7a4",
+      "ref": "T2",
+      "x": 3,
+      "y": 2
+     },
+     {
+      "id": "dbl",
+      "ref": "T3",
+      "x": 3,
+      "y": -2
+     },
+     {
+      "id": "tijhsrn",
+      "ref": "T4",
+      "x": 1,
+      "y": 1
+     }
+    ],
+    "composants": [
+     {
+      "id": "caxdess",
+      "ref": "D1",
+      "type": "led",
+      "valeur": "Rouge",
+      "w": 3.2,
+      "d": 3.2,
+      "h": 5.3,
+      "x": 1,
+      "y": 1,
+      "rot": 0,
+      "trou_couvercle": 30
+     },
+     {
+      "id": "cohw4gj",
+      "ref": "J1",
+      "type": "jack",
+      "valeur": "5,5 × 2,1 mm",
+      "w": 9,
+      "d": 14,
+      "h": 11,
+      "bord": "W",
+      "le_long": -2,
+      "ecart": 0.4,
+      "decoupe": {
+       "w": 100,
+       "h": 1,
+       "r": 0.5
+      },
+      "zc": 6.3
+     },
+     {
+      "id": "crzr99i",
+      "ref": "C1",
+      "type": "condo",
+      "valeur": "100 µF 16 V",
+      "w": 6.3,
+      "d": 6.3,
+      "h": 0.2,
+      "x": 3,
+      "y": -2,
+      "rot": 0
+     }
+    ]
+   },
+   "derive": {
+    "cx": 3,
+    "cy": -2,
+    "Li": 76.6,
+    "Wi": 11.6,
+    "ri": 5.3,
+    "Lo": 80.6,
+    "Wo": 15.6,
+    "ro": 7.3,
+    "zf": 2,
+    "zpb": 7,
+    "zpt": 8.6,
+    "Rb": 3.65,
+    "rp": 1.25,
+    "rTete": 3.35,
+    "sb": 33,
+    "sa": 0.5,
+    "H": 7.6,
+    "zt": 9.6,
+    "ztop": 11.6,
+    "zLevre": 7.6,
+    "longVis": 6,
+    "lo": {
+     "hx": 38.05,
+     "hy": 5.55,
+     "r": 5.05
+    },
+    "li": {
+     "hx": 36.849999999999994,
+     "hy": 4.35,
+     "r": 3.8499999999999996
+    },
+    "trous": [
+     {
+      "id": "tx59wfh",
+      "x": 37.5,
+      "y": 0
+     },
+     {
+      "id": "t7bm7a4",
+      "x": 3,
+      "y": 2
+     },
+     {
+      "id": "dbl",
+      "x": 3,
+      "y": -2
+     },
+     {
+      "id": "tijhsrn",
+      "x": 1,
+      "y": 1
+     }
+    ],
+    "comps": [
+     {
+      "id": "caxdess",
+      "x": 1,
+      "y": 1,
+      "hx": 1.6,
+      "hy": 1.6,
+      "rot": 0,
+      "top": 13.899999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": {
+       "x": 1,
+       "y": 1,
+       "d": 30
+      }
+     },
+     {
+      "id": "cohw4gj",
+      "x": -27.9,
+      "y": -2,
+      "hx": 7,
+      "hy": 4.5,
+      "rot": 180,
+      "top": 19.6,
+      "face": -34.9,
+      "decoupe": {
+       "mur": "W",
+       "u": -2,
+       "zc": 14.899999999999999,
+       "w": 100,
+       "h": 1,
+       "r": 0.5
+      },
+      "trouCouvercle": null
+     },
+     {
+      "id": "crzr99i",
+      "x": 3,
+      "y": -2,
+      "hx": 3.15,
+      "hy": 3.15,
+      "rot": 0,
+      "top": 8.799999999999999,
+      "face": null,
+      "decoupe": null,
+      "trouCouvercle": null
+     }
+    ],
+    "decoupesValides": {
+     "N": [],
+     "S": [],
+     "E": [],
+     "W": []
+    },
+    "piliersValides": [
+     "dbl"
+    ],
+    "percagesValides": []
+   },
+   "problemes": [
+    {
+     "sev": "erreur",
+     "code": "decoupe_angle",
+     "msg": "La découpe de J1 tombe dans l’angle du boîtier. Rapproche le connecteur du milieu du bord.",
+     "ids": [
+      "cohw4gj"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "decoupe_haut",
+     "msg": "La découpe de J1 dépasse le haut de la paroi.",
+     "ids": [
+      "cohw4gj"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "erreur",
+     "code": "chevauchement",
+     "msg": "D1 et C1 se chevauchent.",
+     "ids": [
+      "caxdess",
+      "crzr99i"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "D1 empiète sur la tête de vis du trou T2.",
+     "ids": [
+      "caxdess",
+      "t7bm7a4"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "C1 empiète sur la tête de vis du trou T2.",
+     "ids": [
+      "crzr99i",
+      "t7bm7a4"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "D1 empiète sur la tête de vis du trou T3.",
+     "ids": [
+      "caxdess",
+      "dbl"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "C1 empiète sur la tête de vis du trou T3.",
+     "ids": [
+      "crzr99i",
+      "dbl"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "D1 empiète sur la tête de vis du trou T4.",
+     "ids": [
+      "caxdess",
+      "tijhsrn"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "tete_vis",
+     "msg": "C1 empiète sur la tête de vis du trou T4.",
+     "ids": [
+      "crzr99i",
+      "tijhsrn"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "trou_bord",
+     "msg": "Le trou T1 est à 2,4 mm du bord de la carte (2,6 mm au minimum).",
+     "ids": [
+      "tx59wfh"
+     ],
+     "fix": "Éloigner du bord"
+    },
+    {
+     "sev": "erreur",
+     "code": "trou_bord",
+     "msg": "Le trou T2 est à 1 mm du bord de la carte (2,6 mm au minimum).",
+     "ids": [
+      "t7bm7a4"
+     ],
+     "fix": "Éloigner du bord"
+    },
+    {
+     "sev": "erreur",
+     "code": "trou_bord",
+     "msg": "Le trou T4 est à 2 mm du bord de la carte (2,6 mm au minimum).",
+     "ids": [
+      "tijhsrn"
+     ],
+     "fix": "Éloigner du bord"
+    },
+    {
+     "sev": "erreur",
+     "code": "piliers",
+     "msg": "Les piliers des trous T2 et T3 se touchent.",
+     "ids": [
+      "t7bm7a4",
+      "dbl"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "piliers",
+     "msg": "Les piliers des trous T2 et T4 se touchent.",
+     "ids": [
+      "t7bm7a4",
+      "tijhsrn"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "piliers",
+     "msg": "Les piliers des trous T3 et T4 se touchent.",
+     "ids": [
+      "dbl",
+      "tijhsrn"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "D1 touche le couvercle : il manque 4,8 mm.",
+     "ids": [
+      "caxdess"
+     ],
+     "fix": "Ajuster la hauteur"
+    },
+    {
+     "sev": "erreur",
+     "code": "trou_couvercle",
+     "msg": "Le perçage de D1 dans le couvercle tombe sur la lèvre.",
+     "ids": [
+      "caxdess"
+     ],
+     "fix": null
+    },
+    {
+     "sev": "erreur",
+     "code": "hauteur",
+     "msg": "J1 touche le couvercle : il manque 10,5 mm.",
+     "ids": [
+      "cohw4gj"
+     ],
+     "fix": "Ajuster la hauteur"
+    }
+   ],
+   "volumes": {
+    "corps": 5246.234303272882,
+    "couvercle": 2811.8636277969104
+   },
+   "corrige": {
+    "corrections": [
+     "Ajuster la hauteur",
+     "Éloigner du bord",
+     "Éloigner du bord",
+     "Éloigner du bord"
+    ],
+    "projet": {
+     "format": "promethee-projet",
+     "version": 1,
+     "nom": "Été",
+     "carte": {
+      "x0": 3,
+      "y0": -2,
+      "L": 75,
+      "W": 10,
+      "r": 4.5,
+      "t": 1.6
+     },
+     "boitier": {
+      "jeu": 0.8,
+      "paroi": 2,
+      "fond": 2,
+      "entretoise": 5,
+      "hauteur": 20,
+      "couvercle": 2,
+      "vis": "M3",
+      "hauteurAuto": false
+     },
+     "trous": [
+      {
+       "id": "tx59wfh",
+       "ref": "T1",
+       "coin": "NE",
+       "ox": 3.75,
+       "oy": 3.75
+      },
+      {
+       "id": "t7bm7a4",
+       "ref": "T2",
+       "x": 3,
+       "y": -0.25
+      },
+      {
+       "id": "dbl",
+       "ref": "T3",
+       "x": 3,
+       "y": -2
+      },
+      {
+       "id": "tijhsrn",
+       "ref": "T4",
+       "x": 1,
+       "y": -0.25
+      }
+     ],
+     "composants": [
+      {
+       "id": "caxdess",
+       "ref": "D1",
+       "type": "led",
+       "valeur": "Rouge",
+       "w": 3.2,
+       "d": 3.2,
+       "h": 5.3,
+       "x": 1,
+       "y": 1,
+       "rot": 0,
+       "trou_couvercle": 30
+      },
+      {
+       "id": "cohw4gj",
+       "ref": "J1",
+       "type": "jack",
+       "valeur": "5,5 × 2,1 mm",
+       "w": 9,
+       "d": 14,
+       "h": 11,
+       "bord": "W",
+       "le_long": -2,
+       "ecart": 0.4,
+       "decoupe": {
+        "w": 100,
+        "h": 1,
+        "r": 0.5
+       },
+       "zc": 6.3
+      },
+      {
+       "id": "crzr99i",
+       "ref": "C1",
+       "type": "condo",
+       "valeur": "100 µF 16 V",
+       "w": 6.3,
+       "d": 6.3,
+       "h": 0.2,
+       "x": 3,
+       "y": -2,
+       "rot": 0
+      }
+     ]
+    },
+    "H": 20,
+    "problemes": [
+     "decoupe_angle",
+     "chevauchement",
+     "tete_vis",
+     "tete_vis",
+     "tete_vis",
+     "tete_vis",
+     "tete_vis",
+     "tete_vis",
+     "piliers",
+     "piliers",
+     "piliers",
+     "trou_couvercle"
+    ]
+   }
+  }
+ ]
+}

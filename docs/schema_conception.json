@@ -1,0 +1,482 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitromwg.github.io/promethee/schemas/schema_conception.json",
+  "title": "Conception électronique de Prométhée, format 3 (fichiers de la 0.31)",
+  "description": "Une carte électronique dans le fichier de projet (.prom) : schéma, composants, définitions de symboles et d'empreintes figées, circuit imprimé. Coordonnées et longueurs en nanomètres entiers. Chaque objet peut porter des clés qu'il ne connaît pas (écrites par une version plus récente) : elles sont gardées et réécrites telles quelles (ECH-11). La racine décrit le fichier de la 0.31 ; $defs/conception décrit la structure commune aux versions 0.28 à 0.31, que les schémas de docs/schemas restreignent.",
+  "allOf": [{ "$ref": "#/$defs/conception" }],
+  "required": ["format", "formatElectronique"],
+  "properties": {
+    "format": { "const": 3, "description": "Format de la conception (ECH-10) : 2 pour la 0.30, 3 pour la 0.31." },
+    "formatElectronique": { "const": 3, "description": "Même format, sous le nom que lit la 0.29 : sans lui, elle prendrait la carte pour une carte de la 0.28." }
+  },
+  "$defs": {
+    "nm": { "type": "integer", "description": "Longueur ou coordonnée en nanomètres." },
+    "point": { "type": "array", "prefixItems": [{ "$ref": "#/$defs/nm" }, { "$ref": "#/$defs/nm" }], "minItems": 2, "maxItems": 2 },
+    "points": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+    "pointIdentifie": {
+      "description": "Point d'une jonction ou d'une marque de non-connexion : [x, y] ou [x, y, uuid] (0.30).",
+      "type": "array",
+      "prefixItems": [{ "$ref": "#/$defs/nm" }, { "$ref": "#/$defs/nm" }, { "type": "string" }],
+      "minItems": 2,
+      "maxItems": 3
+    },
+    "couche": {
+      "type": "string",
+      "enum": ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu", "F.Mask", "B.Mask", "F.Paste", "B.Paste", "F.SilkS", "B.SilkS", "Edge.Cuts", "F.CrtYd", "B.CrtYd", "F.Fab", "B.Fab"]
+    },
+    "chaines": { "type": "object", "additionalProperties": { "type": "string" } },
+    "conception": {
+      "type": "object",
+      "required": ["uuid", "nom", "cartouche", "composants", "feuilles", "symboles", "circuit"],
+      "properties": {
+        "uuid": { "type": "string" },
+        "nom": { "type": "string" },
+        "format": { "type": "integer", "minimum": 2 },
+        "formatElectronique": { "type": "integer", "minimum": 2 },
+        "pilotageBoitier": { "type": "boolean" },
+        "schemaSeul": { "type": "boolean", "description": "Schéma sans circuit imprimé (0.30)." },
+        "erc": {
+          "type": "object",
+          "description": "Réglages de l'ERC et de la DRC propres au projet (0.31) : gravité réglée par code, matrice des liaisons, alertes exclues avec leur raison.",
+          "properties": {
+            "gravites": { "type": "object", "additionalProperties": { "enum": ["erreur", "avertissement", "ignorer"] } },
+            "matrice": { "$ref": "#/$defs/chaines" },
+            "exclusions": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["code"],
+                "properties": {
+                  "code": { "type": "string" },
+                  "objets": { "type": "array", "items": { "type": "string" } },
+                  "raison": { "type": "string" },
+                  "auteur": { "type": "string" },
+                  "date": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "verrouillee": { "type": "boolean" },
+        "publications": { "type": "array", "items": { "$ref": "#/$defs/publication" } },
+        "cartouche": { "$ref": "#/$defs/cartouche" },
+        "composants": { "type": "array", "items": { "$ref": "#/$defs/composant" } },
+        "feuilles": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/feuille" } },
+        "symboles": { "type": "array", "items": { "$ref": "#/$defs/defSymbole" } },
+        "nomsReseaux": { "$ref": "#/$defs/chaines" },
+        "bibliothequeEmpreintes": { "type": "array", "items": { "$ref": "#/$defs/defEmpreinte" } },
+        "circuit": { "$ref": "#/$defs/circuit" }
+      }
+    },
+    "publication": {
+      "type": "object",
+      "required": ["id", "revision", "date", "auteur", "empreinte", "dossier"],
+      "properties": {
+        "id": { "type": "string" },
+        "revision": { "type": "string" },
+        "date": { "type": "string" },
+        "auteur": { "type": "string" },
+        "empreinte": { "type": "string", "description": "SHA-256 de la conception publiée." },
+        "dossier": { "type": "string" },
+        "derogation": { "type": "string" },
+        "violations": { "type": "array", "items": { "type": "string" } },
+        "fichiers": { "$ref": "#/$defs/chaines" }
+      }
+    },
+    "cartouche": {
+      "type": "object",
+      "required": ["titre", "societe", "auteur", "revision", "date", "commentaire"],
+      "properties": {
+        "titre": { "type": "string" },
+        "societe": { "type": "string" },
+        "auteur": { "type": "string" },
+        "revision": { "type": "string" },
+        "date": { "type": "string" },
+        "commentaire": { "type": "string" }
+      }
+    },
+    "composant": {
+      "type": "object",
+      "required": ["uuid", "ref", "valeur", "symbole", "empreinte"],
+      "properties": {
+        "uuid": { "type": "string" },
+        "ref": { "type": "string" },
+        "valeur": { "type": "string" },
+        "symbole": { "type": "string" },
+        "empreinte": { "type": "string" },
+        "fabricant": { "type": "string" },
+        "mpn": { "type": "string" },
+        "fournisseur": { "type": "string" },
+        "description": { "type": "string" },
+        "fiche": { "type": "string" },
+        "nePasMonter": { "type": "boolean" },
+        "horsCarte": { "type": "boolean" },
+        "hauteur": { "type": "number", "exclusiveMinimum": 0, "description": "Hauteur saisie du corps, en millimètres." },
+        "hauteurVerifiee": { "type": "boolean" },
+        "brochageVerifie": { "type": "string", "description": "Empreinte dont le brochage a été vérifié (0.29)." },
+        "horsNomenclature": { "type": "boolean", "description": "0.29" },
+        "horsPlacement": { "type": "boolean", "description": "0.29" },
+        "champs": { "$ref": "#/$defs/chaines" }
+      }
+    },
+    "feuille": {
+      "type": "object",
+      "required": ["uuid", "nom", "format", "symboles", "fils", "jonctions", "nonConnexions", "etiquettes", "textes"],
+      "properties": {
+        "uuid": { "type": "string" },
+        "nom": { "type": "string" },
+        "format": { "type": "string", "description": "Format du papier : A4, A3…" },
+        "symboles": { "type": "array", "items": { "$ref": "#/$defs/symbolePlace" } },
+        "fils": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "a", "b"],
+            "properties": { "uuid": { "type": "string" }, "a": { "$ref": "#/$defs/point" }, "b": { "$ref": "#/$defs/point" } }
+          }
+        },
+        "jonctions": { "type": "array", "items": { "$ref": "#/$defs/pointIdentifie" } },
+        "nonConnexions": { "type": "array", "items": { "$ref": "#/$defs/pointIdentifie" } },
+        "etiquettes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "texte", "p", "rot", "globale"],
+            "properties": {
+              "uuid": { "type": "string" },
+              "texte": { "type": "string" },
+              "p": { "$ref": "#/$defs/point" },
+              "rot": { "type": "integer" },
+              "globale": { "type": "boolean" }
+            }
+          }
+        },
+        "textes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "texte", "p", "taille"],
+            "properties": {
+              "uuid": { "type": "string" },
+              "texte": { "type": "string" },
+              "p": { "$ref": "#/$defs/point" },
+              "taille": { "$ref": "#/$defs/nm" },
+              "rot": { "type": "integer", "minimum": 0, "maximum": 3 }
+            }
+          }
+        }
+      }
+    },
+    "symbolePlace": {
+      "type": "object",
+      "required": ["uuid", "symbole", "p", "rot"],
+      "properties": {
+        "uuid": { "type": "string" },
+        "symbole": { "type": "string" },
+        "composant": { "type": "string" },
+        "alim": { "type": "string" },
+        "p": { "$ref": "#/$defs/point" },
+        "rot": { "type": "integer", "minimum": 0, "maximum": 3, "description": "Quarts de tour." },
+        "miroir": { "type": "boolean" },
+        "unite": { "type": "integer", "minimum": 1 },
+        "numeros": { "$ref": "#/$defs/chaines" }
+      }
+    },
+    "defSymbole": {
+      "type": "object",
+      "required": ["id", "nom", "description", "categorie", "prefixe", "empreinte", "version", "posRef", "posVal", "broches", "traces"],
+      "properties": {
+        "id": { "type": "string" },
+        "nom": { "type": "string" },
+        "description": { "type": "string" },
+        "categorie": { "type": "string" },
+        "prefixe": { "type": "string" },
+        "empreinte": { "type": "string" },
+        "version": { "type": "integer" },
+        "posRef": { "$ref": "#/$defs/point" },
+        "posVal": { "$ref": "#/$defs/point" },
+        "motsCles": { "type": "string" },
+        "fabricant": { "type": "string" },
+        "mpn": { "type": "string" },
+        "fiche": { "type": "string" },
+        "alimentation": { "type": "boolean" },
+        "drapeau": { "type": "boolean" },
+        "mecanique": { "type": "boolean" },
+        "unites": { "type": "integer", "minimum": 1 },
+        "proprietes": { "$ref": "#/$defs/chaines" },
+        "broches": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["numero", "nom", "type", "p", "dir", "l", "nomVisible", "numeroVisible"],
+            "properties": {
+              "numero": { "type": "string" },
+              "nom": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["entree", "sortie", "bidirectionnelle", "trois-etats", "passive", "alim-entree", "alim-sortie", "collecteur-ouvert", "non-connectee", "non-specifiee"]
+              },
+              "p": { "$ref": "#/$defs/point" },
+              "dir": { "type": "integer", "minimum": 0, "maximum": 3 },
+              "l": { "$ref": "#/$defs/nm" },
+              "nomVisible": { "type": "boolean" },
+              "numeroVisible": { "type": "boolean" },
+              "unite": { "type": "integer", "minimum": 0 }
+            }
+          }
+        },
+        "traces": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["forme", "points"],
+            "properties": {
+              "forme": { "type": "integer", "minimum": 0, "maximum": 4 },
+              "points": { "$ref": "#/$defs/points" },
+              "rayon": { "$ref": "#/$defs/nm" },
+              "debut": { "type": "number" },
+              "fin": { "type": "number" },
+              "rempli": { "type": "boolean" },
+              "ferme": { "type": "boolean" },
+              "fond": { "type": "boolean" },
+              "texte": { "type": "string" },
+              "taille": { "$ref": "#/$defs/nm" },
+              "unite": { "type": "integer", "minimum": 0 }
+            }
+          }
+        }
+      }
+    },
+    "defEmpreinte": {
+      "type": "object",
+      "required": ["id", "description", "famille", "version", "pastilles", "traits", "encombrement", "corps"],
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "famille": { "type": "string" },
+        "version": { "type": "integer" },
+        "pastilles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["numero", "type", "forme", "p", "l", "h"],
+            "properties": {
+              "numero": { "type": "string" },
+              "type": { "type": "integer", "minimum": 0, "maximum": 2, "description": "0 CMS, 1 traversante, 2 non métallisée." },
+              "forme": { "type": "integer", "minimum": 0, "maximum": 3, "description": "0 ronde, 1 rectangle, 2 ovale, 3 rectangle arrondi." },
+              "p": { "$ref": "#/$defs/point" },
+              "l": { "$ref": "#/$defs/nm" },
+              "h": { "$ref": "#/$defs/nm" },
+              "rot": { "type": "number" },
+              "percage": { "$ref": "#/$defs/nm" },
+              "arrondi": { "type": "number", "minimum": 0, "maximum": 0.5 },
+              "couches": { "type": "array", "items": { "$ref": "#/$defs/couche" }, "description": "Couches explicites (0.29)." }
+            }
+          }
+        },
+        "traits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["couche", "a", "b", "ep"],
+            "properties": {
+              "couche": { "$ref": "#/$defs/couche" },
+              "a": { "$ref": "#/$defs/point" },
+              "b": { "$ref": "#/$defs/point" },
+              "ep": { "$ref": "#/$defs/nm" },
+              "rayon": { "$ref": "#/$defs/nm" }
+            }
+          }
+        },
+        "encombrement": { "type": "array", "items": { "$ref": "#/$defs/nm" }, "minItems": 4, "maxItems": 4 },
+        "corps": {
+          "type": "object",
+          "required": ["l", "p", "h", "rond", "couleur"],
+          "properties": {
+            "l": { "$ref": "#/$defs/nm" },
+            "p": { "$ref": "#/$defs/nm" },
+            "h": { "$ref": "#/$defs/nm" },
+            "rond": { "type": "boolean" },
+            "couleur": { "type": "string" }
+          }
+        }
+      }
+    },
+    "circuit": {
+      "type": "object",
+      "required": ["contour", "empilage", "regles", "serigraphie", "fabrication", "empreintes", "pistes", "vias", "zones", "textes"],
+      "properties": {
+        "contour": {
+          "type": "object",
+          "required": ["origine", "largeur", "hauteur", "rayon", "libre"],
+          "properties": {
+            "origine": { "$ref": "#/$defs/point" },
+            "largeur": { "$ref": "#/$defs/nm" },
+            "hauteur": { "$ref": "#/$defs/nm" },
+            "rayon": { "$ref": "#/$defs/nm" },
+            "libre": { "$ref": "#/$defs/points" },
+            "decoupes": { "type": "array", "items": { "$ref": "#/$defs/points" } }
+          }
+        },
+        "empilage": {
+          "type": "object",
+          "required": ["couches", "epaisseur", "cuivre", "materiau", "finition", "vernis", "serigraphie"],
+          "properties": {
+            "couches": { "type": "integer", "enum": [1, 2, 4] },
+            "epaisseur": { "type": "number" },
+            "cuivre": { "type": "number" },
+            "materiau": { "type": "string" },
+            "finition": { "type": "string" },
+            "vernis": { "type": "string" },
+            "serigraphie": { "type": "string" }
+          }
+        },
+        "regles": { "$ref": "#/$defs/regles" },
+        "serigraphie": {
+          "type": "object",
+          "required": ["reperes", "valeurs", "hauteur"],
+          "properties": { "reperes": { "type": "boolean" }, "valeurs": { "type": "boolean" }, "hauteur": { "$ref": "#/$defs/nm" } }
+        },
+        "fabrication": {
+          "type": "object",
+          "required": ["margeVernis", "viasCouvertes", "tauxPate", "seuilPate"],
+          "properties": {
+            "margeVernis": { "$ref": "#/$defs/nm" },
+            "viasCouvertes": { "type": "boolean" },
+            "tauxPate": { "type": "number" },
+            "seuilPate": { "type": "number" }
+          }
+        },
+        "affichage": {
+          "type": "object",
+          "properties": { "unite": { "enum": ["mm", "mil", "in"] }, "grille": { "$ref": "#/$defs/nm" }, "opacite": { "type": "number" } }
+        },
+        "empreintes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["composant", "empreinte", "p", "rot"],
+            "properties": {
+              "composant": { "type": "string" },
+              "empreinte": { "type": "string" },
+              "p": { "$ref": "#/$defs/point" },
+              "rot": { "type": "number" },
+              "dessous": { "type": "boolean" },
+              "verrou": { "type": "boolean" }
+            }
+          }
+        },
+        "pistes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "reseau", "couche", "a", "b", "largeur"],
+            "properties": {
+              "uuid": { "type": "string" },
+              "reseau": { "type": "string" },
+              "couche": { "$ref": "#/$defs/couche" },
+              "a": { "$ref": "#/$defs/point" },
+              "b": { "$ref": "#/$defs/point" },
+              "largeur": { "$ref": "#/$defs/nm" }
+            }
+          }
+        },
+        "vias": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "reseau", "p", "diametre", "percage"],
+            "properties": {
+              "uuid": { "type": "string" },
+              "reseau": { "type": "string" },
+              "p": { "$ref": "#/$defs/point" },
+              "diametre": { "$ref": "#/$defs/nm" },
+              "percage": { "$ref": "#/$defs/nm" }
+            }
+          }
+        },
+        "zones": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "reseau", "couche", "contour", "priorite", "isolement", "epaisseurMin", "thermique", "largeurRayon", "ecartThermique"],
+            "properties": {
+              "uuid": { "type": "string" },
+              "reseau": { "type": "string" },
+              "couche": { "$ref": "#/$defs/couche" },
+              "contour": { "$ref": "#/$defs/points" },
+              "priorite": { "type": "integer" },
+              "isolement": { "$ref": "#/$defs/nm" },
+              "epaisseurMin": { "$ref": "#/$defs/nm" },
+              "thermique": { "type": "boolean" },
+              "largeurRayon": { "$ref": "#/$defs/nm" },
+              "ecartThermique": { "$ref": "#/$defs/nm" }
+            }
+          }
+        },
+        "textes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["uuid", "texte", "couche", "p", "hauteur", "rot"],
+            "properties": {
+              "uuid": { "type": "string" },
+              "texte": { "type": "string" },
+              "couche": { "$ref": "#/$defs/couche" },
+              "p": { "$ref": "#/$defs/point" },
+              "hauteur": { "$ref": "#/$defs/nm" },
+              "rot": { "type": "number", "description": "Degrés ; depuis la 0.29, dans le sens de rotation des empreintes (X3)." }
+            }
+          }
+        }
+      }
+    },
+    "regles": {
+      "type": "object",
+      "required": ["isolement", "largeur", "largeurMin", "viaDiametre", "viaPercage", "anneauMin", "percageMin", "bord", "ecartTrous", "cuivreTrou", "rayonsMin", "profil", "classes", "affectations"],
+      "properties": {
+        "isolement": { "$ref": "#/$defs/nm" },
+        "largeur": { "$ref": "#/$defs/nm" },
+        "largeurMin": { "$ref": "#/$defs/nm" },
+        "viaDiametre": { "$ref": "#/$defs/nm" },
+        "viaPercage": { "$ref": "#/$defs/nm" },
+        "anneauMin": { "$ref": "#/$defs/nm" },
+        "percageMin": { "$ref": "#/$defs/nm" },
+        "bord": { "$ref": "#/$defs/nm" },
+        "ecartTrous": { "$ref": "#/$defs/nm" },
+        "cuivreTrou": { "$ref": "#/$defs/nm" },
+        "rayonsMin": { "type": "integer", "minimum": 0, "maximum": 4 },
+        "profil": { "type": "string" },
+        "classes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nom", "isolement", "largeur", "viaDiametre", "viaPercage"],
+            "properties": {
+              "nom": { "type": "string" },
+              "isolement": { "$ref": "#/$defs/nm" },
+              "largeur": { "$ref": "#/$defs/nm" },
+              "viaDiametre": { "$ref": "#/$defs/nm" },
+              "viaPercage": { "$ref": "#/$defs/nm" },
+              "courant": { "type": "number" },
+              "echauffement": { "type": "number" }
+            }
+          }
+        },
+        "affectations": { "$ref": "#/$defs/chaines", "description": "Motif de nom de réseau → classe, essayés dans l'ordre du fichier (0.29)." },
+        "capacitesPerso": {
+          "type": "object",
+          "description": "Profil de fabricant personnalisé (0.29).",
+          "required": ["isolement", "largeurMin", "percageMin", "anneauMin", "bord"],
+          "properties": {
+            "isolement": { "$ref": "#/$defs/nm" },
+            "largeurMin": { "$ref": "#/$defs/nm" },
+            "percageMin": { "$ref": "#/$defs/nm" },
+            "anneauMin": { "$ref": "#/$defs/nm" },
+            "bord": { "$ref": "#/$defs/nm" }
+          }
+        }
+      }
+    }
+  }
+}

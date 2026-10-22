@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prométhée, jalon 0</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&display=swap" rel="stylesheet">
+<style>
+:root {
+  --papier: #E9EDEA; --surface: #FBFCFB; --surface-2: #F1F4F2; --encre: #18211D; --encre-2: #56645D; --encre-3: #7D8A84; --filet: #CCD5D0;
+  --cuivre: #B4652B; --cuivre-texte: #FFFFFF; --cuivre-doux: rgba(180,101,43,.13);
+  --masque: #2E6A50; --masque-bord: #1E4C38; --serigraphie: #F4F1E6;
+  --erreur: #C2402E; --alerte: #A87410; --ok: #2F7D53;
+  --plan: #E2E7E4; --grille: rgba(24,33,29,.055); --grille-forte: rgba(24,33,29,.11);
+  --pla-paroi: #C9CFCB; --pla-fond: #D8DDD9; --trait: #7F8B85; --ombre: rgba(20,30,25,.14); --cote-carte: #2A6249;
+  --police: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: light;
+  box-sizing: border-box;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --papier: #111714; --surface: #18201C; --surface-2: #1E2722; --encre: #E4EBE7; --encre-2: #9DADA5; --encre-3: #72827A; --filet: #2B3732;
+    --cuivre: #D98A4F; --cuivre-texte: #1C1007; --cuivre-doux: rgba(217,138,79,.17);
+    --masque: #2C6E51; --masque-bord: #1A4532; --serigraphie: #EEEBDF;
+    --erreur: #E26B56; --alerte: #D6A13B; --ok: #4FAE7B;
+    --plan: #141B17; --grille: rgba(228,235,231,.045); --grille-forte: rgba(228,235,231,.09);
+    --pla-paroi: #3A4440; --pla-fond: #2A322E; --trait: #6E7B74; --ombre: rgba(0,0,0,.45); --cote-carte: #79C49C;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --papier: #111714; --surface: #18201C; --surface-2: #1E2722; --encre: #E4EBE7; --encre-2: #9DADA5; --encre-3: #72827A; --filet: #2B3732;
+  --cuivre: #D98A4F; --cuivre-texte: #1C1007; --cuivre-doux: rgba(217,138,79,.17);
+  --masque: #2C6E51; --masque-bord: #1A4532; --serigraphie: #EEEBDF;
+  --erreur: #E26B56; --alerte: #D6A13B; --ok: #4FAE7B;
+  --plan: #141B17; --grille: rgba(228,235,231,.045); --grille-forte: rgba(228,235,231,.09);
+  --pla-paroi: #3A4440; --pla-fond: #2A322E; --trait: #6E7B74; --ombre: rgba(0,0,0,.45); --cote-carte: #79C49C;
+  color-scheme: dark;
+}
+*, *::before, *::after { box-sizing: border-box; }
+html { height: 100%; scroll-padding-top: env(safe-area-inset-top, 0px); }
+body {
+  height: 100%; margin: 0; background: var(--papier); color: var(--encre);
+  font-family: var(--police); font-size: 14px; line-height: 1.45; font-stretch: 94%;
+  font-variant-numeric: tabular-nums; -webkit-font-smoothing: antialiased; overflow: hidden;
+}
+button, input, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+[hidden] { display: none !important; }
+:focus-visible { outline: 2px solid var(--cuivre); outline-offset: 2px; }
+
+.app {
+  height: 100%; position: relative; display: grid;
+  grid-template-columns: minmax(0, 1fr) 344px; grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas: "barre barre" "espace panneau";
+  padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px);
+}
+
+/* Barre du haut */
+.barre {
+  grid-area: barre; display: flex; align-items: center; gap: 16px;
+  padding: 10px 14px; background: var(--surface); border-bottom: 1px solid var(--filet); min-width: 0;
+}
+.marque { display: flex; align-items: baseline; gap: 12px; min-width: 0; flex: 1; }
+.marque .nom {
+  font-size: 21px; font-weight: 780; font-stretch: 125%; letter-spacing: -0.01em; line-height: 1;
+  font-variation-settings: "wdth" 125;
+}
+.marque .jalon { color: var(--encre-2); font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.actions { display: flex; align-items: center; gap: 6px; }
+.sep { width: 1px; height: 22px; background: var(--filet); margin: 0 4px; }
+.btn, .ico {
+  height: 34px; border-radius: 6px; border: 1px solid var(--filet); background: var(--surface);
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; white-space: nowrap;
+}
+.btn { padding: 0 12px; font-weight: 560; }
+.ico { width: 34px; padding: 0; }
+.btn:hover, .ico:hover { background: var(--surface-2); }
+.btn:disabled, .ico:disabled { opacity: .42; cursor: default; background: var(--surface); }
+.btn.primaire { background: var(--cuivre); border-color: var(--cuivre); color: var(--cuivre-texte); }
+.btn.primaire:hover { filter: brightness(1.06); }
+.btn svg, .ico svg { width: 18px; height: 18px; flex: none; }
+
+.menu-wrap { position: relative; }
+.menu {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 50; min-width: 250px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--filet); border-radius: 8px; box-shadow: 0 10px 30px var(--ombre);
+  max-height: 70vh; overflow: auto;
+}
+.menu button {
+  display: flex; width: 100%; text-align: left; align-items: baseline; justify-content: space-between; gap: 14px;
+  padding: 8px 10px; border: 0; border-radius: 5px; background: none;
+}
+.menu button:hover, .menu button:focus-visible { background: var(--surface-2); outline: none; }
+.menu button small { color: var(--encre-3); font-size: 12px; }
+.menu hr { border: 0; border-top: 1px solid var(--filet); margin: 5px 4px; }
+.menu .telephone { display: none; }
+
+.bascule { display: none; }
+
+/* Espace de travail */
+.espace { grid-area: espace; display: grid; grid-template-columns: 1fr 1fr; min-height: 0; min-width: 0; }
+.vue { position: relative; min-width: 0; min-height: 0; background: var(--plan); overflow: hidden; }
+.vue + .vue { border-left: 1px solid var(--filet); }
+.vue canvas, #c3d { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+#c3d canvas { touch-action: none; display: block; }
+.vue-entete {
+  position: absolute; top: 10px; left: 12px; right: 12px; display: flex; align-items: flex-start; justify-content: space-between;
+  gap: 8px; pointer-events: none; z-index: 2;
+}
+.vue-entete > * { pointer-events: auto; }
+.vue-titre { display: flex; align-items: center; gap: 8px; font-weight: 640; font-size: 13px; }
+.pastille { width: 10px; height: 10px; border-radius: 2px; background: var(--masque); }
+.vue-boitier .pastille { background: var(--pla-paroi); border: 1px solid var(--trait); }
+.etat {
+  border: 0; border-radius: 999px; padding: 2px 9px; font-size: 12px; font-weight: 600; margin-left: 4px;
+  background: var(--surface); color: var(--encre-2); box-shadow: 0 0 0 1px var(--filet) inset; white-space: nowrap;
+}
+.etat[data-niveau="erreur"] { color: var(--erreur); box-shadow: 0 0 0 1px var(--erreur) inset; }
+.etat[data-niveau="alerte"] { color: var(--alerte); box-shadow: 0 0 0 1px var(--alerte) inset; }
+.etat[data-niveau="ok"] { color: var(--ok); }
+.outils { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.outil {
+  height: 30px; padding: 0 10px; border-radius: 6px; border: 1px solid var(--filet);
+  background: var(--surface); background: color-mix(in srgb, var(--surface) 88%, transparent); font-size: 12.5px; font-weight: 560;
+}
+.outil[aria-pressed="true"] { background: var(--cuivre-doux); border-color: var(--cuivre); color: var(--encre); }
+.seg { display: inline-flex; border: 1px solid var(--filet); border-radius: 6px; overflow: hidden; background: var(--surface); background: color-mix(in srgb, var(--surface) 88%, transparent); }
+.seg button { height: 28px; padding: 0 9px; border: 0; background: none; font-size: 12.5px; font-weight: 560; color: var(--encre-2); }
+.seg button + button { border-left: 1px solid var(--filet); }
+.seg button[aria-pressed="true"] { background: var(--cuivre-doux); color: var(--encre); }
+.vue-pied { position: absolute; left: 12px; bottom: 10px; font-size: 12px; color: var(--encre-2); pointer-events: none; z-index: 2; }
+.astuce {
+  position: absolute; left: 12px; right: 12px; bottom: 12px; z-index: 3; max-width: 430px;
+  background: var(--surface); border: 1px solid var(--filet); border-left: 3px solid var(--cuivre); border-radius: 6px;
+  padding: 10px 12px; box-shadow: 0 8px 24px var(--ombre); font-size: 13px; display: flex; gap: 12px; align-items: flex-start;
+}
+.astuce p { margin: 0; flex: 1; }
+.astuce .btn { height: 30px; }
+.sans-webgl { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; color: var(--encre-2); }
+
+/* Panneau */
+.panneau {
+  grid-area: panneau; min-height: 0; display: flex; flex-direction: column; background: var(--surface);
+  border-left: 1px solid var(--filet);
+}
+.poignee { display: none; }
+.onglets { display: flex; border-bottom: 1px solid var(--filet); padding: 0 8px; flex: none; }
+.onglets button {
+  flex: 1; height: 44px; border: 0; background: none; font-weight: 600; font-size: 13.5px; color: var(--encre-2);
+  border-bottom: 2px solid transparent; margin-bottom: -1px; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.onglets button[aria-selected="true"] { color: var(--encre); border-bottom-color: var(--cuivre); }
+.badge { min-width: 19px; height: 19px; padding: 0 5px; border-radius: 999px; font-size: 11.5px; font-weight: 700; display: inline-grid; place-items: center; background: var(--surface-2); color: var(--encre-2); }
+.badge[data-niveau="erreur"] { background: var(--erreur); color: #fff; }
+.badge[data-niveau="alerte"] { background: var(--alerte); color: #fff; }
+.contenu { flex: 1; overflow: auto; overscroll-behavior: contain; padding: 4px 16px 24px; }
+
+.tete { padding: 14px 0 6px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.tete h2 { margin: 0; font-size: 22px; font-weight: 720; font-stretch: 110%; font-variation-settings: "wdth" 110; letter-spacing: -0.01em; line-height: 1.1; }
+.tete p { margin: 2px 0 0; color: var(--encre-2); font-size: 13px; }
+.groupe { padding: 12px 0 4px; border-top: 1px solid var(--filet); margin-top: 10px; }
+.groupe:first-of-type { border-top: 0; margin-top: 0; }
+.groupe h3 { margin: 0 0 8px; font-size: 13px; font-weight: 650; color: var(--encre); }
+.ligne { display: grid; grid-template-columns: minmax(0, 1fr) 132px; align-items: center; gap: 10px; min-height: 38px; }
+.ligne label { color: var(--encre-2); font-size: 13px; }
+.ligne.texte { grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.7fr); }
+.champ { position: relative; display: flex; align-items: center; }
+.champ input, .champ select {
+  width: 100%; height: 32px; border: 1px solid var(--filet); border-radius: 6px; background: var(--surface);
+  padding: 0 34px 0 9px; text-align: right; font-variant-numeric: tabular-nums;
+}
+.champ select { padding: 0 8px; text-align: left; }
+.champ input.texte { text-align: left; padding-right: 9px; }
+.champ input:focus { border-color: var(--cuivre); outline: none; box-shadow: 0 0 0 3px var(--cuivre-doux); }
+.champ input[aria-invalid="true"] { border-color: var(--erreur); }
+.unite { position: absolute; right: 9px; color: var(--encre-3); font-size: 12px; pointer-events: none; }
+.lecture { color: var(--encre-2); font-size: 13px; margin: 4px 0 8px; }
+.lecture strong { color: var(--encre); font-weight: 600; }
+.lien { font-size: 12px; color: var(--encre-3); margin: -2px 0 6px; }
+.interrupteur { display: flex; align-items: center; justify-content: flex-end; gap: 8px; font-size: 12.5px; color: var(--encre-2); }
+.interrupteur input { width: 16px; height: 16px; accent-color: var(--cuivre); margin: 0; }
+.rangee { display: flex; gap: 8px; flex-wrap: wrap; padding: 6px 0 2px; }
+.rangee .btn { height: 32px; }
+.btn.danger { color: var(--erreur); }
+
+.verifs { list-style: none; margin: 10px 0 0; padding: 0; }
+.verifs li { display: grid; grid-template-columns: 18px 1fr; gap: 10px; padding: 11px 0; border-top: 1px solid var(--filet); }
+.verifs li:first-child { border-top: 0; }
+.verifs .sym { width: 16px; height: 16px; border-radius: 50%; margin-top: 2px; display: grid; place-items: center; color: #fff; font-size: 11px; font-weight: 800; background: var(--erreur); }
+.verifs li[data-sev="alerte"] .sym { background: var(--alerte); border-radius: 3px; }
+.verifs p { margin: 0; }
+.verifs .rangee { padding-top: 7px; }
+.verifs .rangee .btn { height: 28px; font-size: 12.5px; padding: 0 10px; }
+.vide { color: var(--encre-2); padding: 18px 0; }
+.vide strong { display: block; color: var(--ok); font-size: 15px; margin-bottom: 4px; }
+
+.nomen { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 13px; }
+.nomen th { text-align: left; font-weight: 600; color: var(--encre-2); font-size: 12px; padding: 6px 6px 6px 0; border-bottom: 1px solid var(--filet); }
+.nomen td { padding: 7px 6px 7px 0; border-bottom: 1px solid var(--filet); vertical-align: top; }
+.nomen td.q { text-align: right; padding-right: 0; }
+.nomen td:first-child, .nomen th:first-child { width: 56px; }
+.nomen tr.g td { font-weight: 650; padding-top: 14px; color: var(--encre); border-bottom: 0; font-size: 12.5px; }
+.nomen .src { color: var(--encre-3); font-size: 12px; display: block; }
+.note { color: var(--encre-3); font-size: 12px; margin-top: 12px; }
+
+/* Fenêtre et toast */
+.modale { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 18px; background: rgba(10,16,13,.42); }
+.boite {
+  width: min(520px, 100%); max-height: 86%; overflow: auto; background: var(--surface); border-radius: 10px;
+  box-shadow: 0 24px 60px rgba(0,0,0,.3); padding: 20px 22px 18px;
+}
+.boite h2 { margin: 0 0 10px; font-size: 19px; font-weight: 720; font-stretch: 108%; font-variation-settings: "wdth" 108; }
+.boite p { margin: 0 0 10px; color: var(--encre-2); max-width: 64ch; }
+.boite .rangee { justify-content: flex-end; padding-top: 12px; }
+.toast {
+  position: absolute; left: 50%; bottom: 22px; transform: translate(-50%, 20px); z-index: 90; opacity: 0; pointer-events: none;
+  background: var(--encre); color: var(--surface); padding: 9px 14px; border-radius: 8px; font-size: 13px; max-width: min(460px, 90%);
+  transition: opacity .18s, transform .18s; box-shadow: 0 10px 30px var(--ombre);
+}
+.toast.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* Tablette : vues empilées */
+@media (max-width: 1099px) and (min-width: 720px) {
+  .app { grid-template-columns: minmax(0, 1fr) 320px; }
+  .espace { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; }
+  .vue + .vue { border-left: 0; border-top: 1px solid var(--filet); }
+  .marque .jalon { display: none; }
+}
+/* Téléphone : bascule de vues et panneau en tiroir */
+@media (max-width: 719px) {
+  body { font-size: 15px; }
+  .app { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); grid-template-areas: "barre" "bascule" "espace"; }
+  .barre { padding: 8px 10px; gap: 8px; }
+  .marque .nom { font-size: 19px; }
+  .marque .jalon { display: none; }
+  .actions { gap: 4px; }
+  .btn .libelle { display: none; }
+  .btn.ajout, .btn.primaire { width: 36px; padding: 0; }
+  .ico, .btn { height: 36px; }
+  .ico { width: 36px; }
+  .sep { display: none; }
+  .bascule { grid-area: bascule; display: flex; padding: 6px 10px; background: var(--surface); border-bottom: 1px solid var(--filet); }
+  .bascule .seg { width: 100%; background: var(--surface-2); }
+  .bascule .seg button { flex: 1; height: 32px; font-size: 13.5px; }
+  .espace { grid-template-columns: 1fr; grid-template-rows: 1fr 1fr; padding-bottom: 54px; }
+  .espace[data-vue="carte"] { grid-template-rows: 1fr; }
+  .espace[data-vue="carte"] .vue-boitier, .espace[data-vue="boitier"] .vue-carte { display: none; }
+  .espace[data-vue="boitier"] { grid-template-rows: 1fr; }
+  .vue + .vue { border-left: 0; border-top: 1px solid var(--filet); }
+  .outil, .seg button { height: 32px; }
+  .outil { padding: 0 9px; font-size: 12.5px; }
+  .seg button { padding: 0 8px; font-size: 12.5px; }
+  .nom-vue, .vue-titre .pastille, .option-2d { display: none; }
+  .etat { margin-left: 0; font-size: 12.5px; padding: 4px 10px; }
+  .menu .telephone { display: flex; }
+  .vue-entete { left: 10px; right: 10px; top: 8px; }
+  .astuce { bottom: 10px; }
+  .panneau {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 54px; z-index: 20; border-left: 0;
+    border-top: 1px solid var(--filet); border-radius: 14px 14px 0 0; box-shadow: 0 -8px 28px var(--ombre);
+    transition: height .24s ease;
+  }
+  .panneau[data-ouvert="true"] { height: 66%; }
+  .poignee { display: block; position: absolute; top: 5px; left: 50%; width: 36px; height: 4px; margin-left: -18px; border-radius: 4px; background: var(--filet); }
+  .onglets { padding-top: 6px; }
+  .onglets button { height: 44px; font-size: 14px; }
+  .ligne { grid-template-columns: minmax(0, 1fr) 140px; min-height: 44px; }
+  .champ input, .champ select { height: 38px; font-size: 16px; }
+  .toast { bottom: 70px; }
+  .menu { position: fixed; top: auto; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); min-width: 0; max-height: 72%; }
+  .menu button { padding: 12px 12px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .panneau, .toast { transition: none; }
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="barre">
+    <div class="marque"><span class="nom">Prométhée</span><span class="jalon">Jalon 0 : la carte et le boîtier forment un seul modèle</span></div>
+    <div class="actions">
+      <button class="ico" id="b-annuler" aria-label="Annuler" title="Annuler (Ctrl+Z)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg></button>
+      <button class="ico" id="b-retablir" aria-label="Rétablir" title="Rétablir (Ctrl+Maj+Z)" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m15 14 5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 0 0 0 11H13"/></svg></button>
+      <span class="sep"></span>
+      <div class="menu-wrap">
+        <button class="btn ajout" id="b-ajouter" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-ajouter" title="Ajouter un élément"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg><span class="libelle">Ajouter</span></button>
+        <div class="menu" id="menu-ajouter" role="menu" hidden></div>
+      </div>
+      <button class="btn primaire" id="b-dossier" title="Télécharger le dossier de fabrication" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11"/><path d="m7 10 5 5 5-5"/><path d="M5 19h14"/></svg><span class="libelle">Dossier de fabrication</span></button>
+      <div class="menu-wrap">
+        <button class="ico" id="b-plus" aria-label="Plus d’actions" aria-haspopup="menu" aria-expanded="false" aria-controls="menu-plus"><svg viewBox="0 0 24 24" fill="currentColor"><circle cx="5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="19" cy="12" r="1.8"/></svg></button>
+        <div class="menu" id="menu-plus" role="menu" hidden>
+          <button role="menuitem" data-action="nouveau">Nouveau projet</button>
+          <button role="menuitem" data-action="exemple">Recharger l’exemple</button>
+          <hr>
+          <button role="menuitem" data-action="ouvrir">Ouvrir un projet <small>.json</small></button>
+          <button role="menuitem" data-action="enregistrer" data-export>Enregistrer le projet <small>.json</small></button>
+          <button role="menuitem" data-action="csv" data-export>Exporter la nomenclature <small>.csv</small></button>
+          <hr>
+          <button role="menuitemcheckbox" class="telephone" data-action="cotes" aria-checked="true">Afficher les cotes <small data-etat>oui</small></button>
+          <button role="menuitemcheckbox" class="telephone" data-action="magnet" aria-checked="true">Magnétisme 0,5 mm <small data-etat>oui</small></button>
+          <hr class="telephone">
+          <button role="menuitem" data-action="aide">Comment ça marche</button>
+        </div>
+      </div>
+    </div>
+  </header>
+  <nav class="bascule" aria-label="Vues affichées">
+    <div class="seg" id="seg-vues">
+      <button data-vue="carte" aria-pressed="false">Carte</button>
+      <button data-vue="deux" aria-pressed="true">Les deux</button>
+      <button data-vue="boitier" aria-pressed="false">Boîtier</button>
+    </div>
+  </nav>
+  <main class="espace" id="espace" data-vue="deux">
+    <section class="vue vue-carte" aria-label="Carte, vue de dessus">
+      <canvas id="c2d" role="application" aria-label="Vue de dessus de la carte dans le boîtier. Glisser un élément pour le déplacer."></canvas>
+      <div class="vue-entete">
+        <div class="vue-titre"><span class="pastille"></span><span class="nom-vue">Carte</span><button class="etat" id="etat" type="button"></button></div>
+        <div class="outils">
+          <button class="outil option-2d" id="o-cotes" aria-pressed="true">Cotes</button>
+          <button class="outil option-2d" id="o-magnet" aria-pressed="true" title="Aligner sur une grille de 0,5 mm">Magnétisme</button>
+          <button class="outil" id="o-cadre2d">Recadrer</button>
+        </div>
+      </div>
+      <div class="vue-pied" id="pied2d"></div>
+      <div class="astuce" id="astuce" hidden>
+        <p>La carte et le boîtier sont un seul modèle. Glisse un trou ou le connecteur USB-C, ou tire une paroi dans la vue 3D : tout suit.</p>
+        <button class="btn" id="b-astuce">Compris</button>
+      </div>
+    </section>
+    <section class="vue vue-boitier" aria-label="Boîtier en 3D">
+      <div id="c3d"></div>
+      <div class="vue-entete">
+        <div class="vue-titre"><span class="pastille"></span><span class="nom-vue">Boîtier</span></div>
+        <div class="outils">
+          <div class="seg" id="seg-couvercle" role="group" aria-label="Couvercle">
+            <button data-mode="masque" aria-pressed="false" title="Boîtier sans couvercle">Ouvert</button>
+            <button data-mode="pose" aria-pressed="false" title="Couvercle posé">Fermé</button>
+            <button data-mode="souleve" aria-pressed="true" title="Couvercle soulevé">Éclaté</button>
+          </div>
+          <button class="outil" id="o-transp" aria-pressed="false">Transparence</button>
+          <button class="outil" id="o-cadre3d">Recadrer</button>
+        </div>
+      </div>
+      <div class="sans-webgl" id="sans-webgl" hidden><p>La vue 3D a besoin de WebGL, indisponible dans ce navigateur. La vue Carte, les vérifications et les exports fonctionnent normalement.</p></div>
+    </section>
+  </main>
+  <aside class="panneau" id="panneau" data-ouvert="false" aria-label="Détails">
+    <div class="poignee" aria-hidden="true"></div>
+    <div class="onglets" role="tablist">
+      <button role="tab" id="t-proprietes" aria-controls="p-proprietes" aria-selected="true" data-onglet="proprietes">Propriétés</button>
+      <button role="tab" id="t-verifs" aria-controls="p-verifs" aria-selected="false" data-onglet="verifs">Vérifications <span class="badge" id="badge"></span></button>
+      <button role="tab" id="t-nomenclature" aria-controls="p-nomenclature" aria-selected="false" data-onglet="nomenclature">Nomenclature</button>
+    </div>
+    <div class="contenu" id="contenu">
+      <div id="p-proprietes" role="tabpanel" aria-labelledby="t-proprietes"></div>
+      <div id="p-verifs" role="tabpanel" aria-labelledby="t-verifs" hidden></div>
+      <div id="p-nomenclature" role="tabpanel" aria-labelledby="t-nomenclature" hidden></div>
+    </div>
+  </aside>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+</div>
+<div class="modale" id="modale" hidden><div class="boite" role="dialog" aria-modal="true" aria-labelledby="modale-titre" id="boite"></div></div>
+<input type="file" id="fichier" accept=".json,application/json" hidden>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+/*__CORE__*/
+/*__UI__*/
+</script>
+</body>
+</html>

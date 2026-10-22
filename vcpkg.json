@@ -1,0 +1,12 @@
+{
+  "name": "promethee",
+  "version-semver": "0.1.0",
+  "description": "Plateforme libre d'ingénierie intégrée : carte et boîtier dans un seul modèle",
+  "license": "GPL-3.0-only",
+  "dependencies": [
+    "nlohmann-json",
+    "catch2",
+    "opencascade"
+  ],
+  "builtin-baseline": "9e593bb18ea69cc5095e012465dcd675a822ed0d"
+}

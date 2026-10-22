@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project title="Armoire de commande" version="0.80">
+  <diagram title="Puissance" folio="1">
+    <elements>
+      <element type="embed://import/10_electric/disjoncteur.elmt" x="100" y="100">
+        <elementInformations>
+          <elementInformation name="label" show="1">Q1</elementInformation>
+          <elementInformation name="designation" show="1">Disjoncteur 16 A</elementInformation>
+        </elementInformations>
+      </element>
+      <element type="embed://import/10_electric/contacteur.elmt" x="200" y="100">
+        <elementInformations>
+          <elementInformation name="label" show="1">KM1</elementInformation>
+        </elementInformations>
+      </element>
+    </elements>
+    <conductors>
+      <conductor x="0" y="0"/>
+      <conductor x="0" y="0"/>
+    </conductors>
+  </diagram>
+  <diagram title="Commande" folio="2">
+    <elements>
+      <element type="embed://import/10_electric/bouton.elmt" x="100" y="100">
+        <elementInformations>
+          <elementInformation name="label" show="1">S1</elementInformation>
+          <elementInformation name="designation" show="1">Bouton marche</elementInformation>
+        </elementInformations>
+      </element>
+    </elements>
+    <conductors><conductor x="0" y="0"/></conductors>
+  </diagram>
+</project>
