@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitromwg.github.io/promethee/schemas/schemas/projet-0.29.schema.json",
+  "title": "Projet Prométhée écrit pour la 0.29",
+  "description": "Ce que la 0.29 écrit, et ce que « Enregistrer pour une version précédente… » de la 0.30 écrit pour elle : ni dispositions des panneaux, ni clé « format » des cartes (seulement « formatElectronique »), ni schéma seul, ni identifiant des jonctions et des marques de non-connexion.",
+  "allOf": [{ "$ref": "../schema_projet.json#/$defs/projet" }],
+  "not": { "required": ["dispositions"] },
+  "properties": {
+    "version": { "const": 3 },
+    "electronique": { "items": { "$ref": "#/$defs/conception" } }
+  },
+  "$defs": {
+    "conception": {
+      "allOf": [{ "$ref": "../schema_conception.json#/$defs/conception" }],
+      "required": ["formatElectronique"],
+      "properties": {
+        "formatElectronique": { "const": 2 },
+        "feuilles": {
+          "items": {
+            "properties": {
+              "jonctions": { "items": { "maxItems": 2 } },
+              "nonConnexions": { "items": { "maxItems": 2 } }
+            }
+          }
+        }
+      },
+      "not": { "anyOf": [{ "required": ["format"] }, { "required": ["schemaSeul"] }] }
+    }
+  }
+}

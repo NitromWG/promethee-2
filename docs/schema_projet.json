@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitromwg.github.io/promethee/schemas/schema_projet.json",
+  "title": "Fichier de projet Prométhée (.prom), écrit par la 0.32",
+  "description": "Le projet entier : carte et boîtier mécaniques, pièces, assemblages, conceptions électroniques (schema_conception.json), projets électriques, dispositions des panneaux. Les clés inconnues de premier niveau sont gardées et réécrites (ECH-11). La racine décrit le fichier de la 0.32 ; $defs/projet décrit la structure commune aux versions 0.28 à 0.32, que les schémas de docs/schemas restreignent.",
+  "allOf": [{ "$ref": "#/$defs/projet" }],
+  "properties": {
+    "version": { "const": 3 },
+    "electronique": { "items": { "$ref": "schema_conception.json" } },
+    "dispositions": {
+      "type": "object",
+      "description": "Dispositions des panneaux de l'atelier électronique gardées avec le projet (0.30) : nom → description JSON au format « promethee-disposition ».",
+      "additionalProperties": { "type": "string" }
+    }
+  },
+  "$defs": {
+    "nombre": { "type": "number" },
+    "projet": {
+      "type": "object",
+      "required": ["format", "version", "nom", "carte", "boitier", "trous", "composants"],
+      "properties": {
+        "format": { "const": "promethee-projet" },
+        "version": { "type": "integer", "minimum": 1, "description": "Format du projet (3 depuis la 0.6)." },
+        "nom": { "type": "string" },
+        "sansCarte": { "type": "boolean" },
+        "schemasElectriques": {
+          "type": "array",
+          "items": { "type": "object", "required": ["fichier", "titre"], "properties": { "fichier": { "type": "string" }, "titre": { "type": "string" } } }
+        },
+        "assemblages": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["nom", "composants", "contraintes"],
+            "properties": {
+              "nom": { "type": "string" },
+              "composants": { "type": "array", "items": { "type": "object" } },
+              "contraintes": { "type": "array", "items": { "type": "object" } },
+              "repere": { "type": "integer" }
+            }
+          }
+        },
+        "electronique": {
+          "type": "array",
+          "items": { "$ref": "schema_conception.json#/$defs/conception" }
+        },
+        "electrique": { "type": "array", "items": { "type": "object" } },
+        "carte": {
+          "type": "object",
+          "required": ["x0", "y0", "L", "W", "r", "t"],
+          "properties": {
+            "x0": { "$ref": "#/$defs/nombre" },
+            "y0": { "$ref": "#/$defs/nombre" },
+            "L": { "$ref": "#/$defs/nombre" },
+            "W": { "$ref": "#/$defs/nombre" },
+            "r": { "$ref": "#/$defs/nombre" },
+            "t": { "$ref": "#/$defs/nombre" },
+            "contours": { "type": "array", "items": { "type": "object", "required": ["elements"], "properties": { "elements": { "type": "array" } } } }
+          }
+        },
+        "boitier": {
+          "type": "object",
+          "required": ["jeu", "paroi", "fond", "entretoise", "hauteur", "couvercle", "vis", "hauteurAuto"],
+          "properties": {
+            "jeu": { "$ref": "#/$defs/nombre" },
+            "paroi": { "$ref": "#/$defs/nombre" },
+            "fond": { "$ref": "#/$defs/nombre" },
+            "entretoise": { "$ref": "#/$defs/nombre" },
+            "hauteur": { "$ref": "#/$defs/nombre" },
+            "couvercle": { "$ref": "#/$defs/nombre" },
+            "vis": { "type": "string" },
+            "hauteurAuto": { "type": "boolean" },
+            "margeDebord": { "$ref": "#/$defs/nombre" }
+          }
+        },
+        "kicad": {
+          "type": "object",
+          "required": ["fichier", "dx", "dy"],
+          "properties": { "fichier": { "type": "string" }, "dx": { "$ref": "#/$defs/nombre" }, "dy": { "$ref": "#/$defs/nombre" } }
+        },
+        "trous": {
+          "type": "array",
+          "items": { "type": "object", "required": ["id", "ref"], "properties": { "id": { "type": "string" }, "ref": { "type": "string" } } }
+        },
+        "composants": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["id", "ref", "type", "w", "d", "h"],
+            "properties": {
+              "id": { "type": "string" },
+              "ref": { "type": "string" },
+              "type": { "type": "string" },
+              "w": { "$ref": "#/$defs/nombre" },
+              "d": { "$ref": "#/$defs/nombre" },
+              "h": { "$ref": "#/$defs/nombre" }
+            }
+          }
+        },
+        "pieces": { "type": "array", "items": { "type": "object" } },
+        "geometries": { "type": "object", "additionalProperties": { "type": "string" } }
+      }
+    }
+  }
+}

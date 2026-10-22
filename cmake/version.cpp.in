@@ -1,0 +1,22 @@
+// Fichier généré par cmake/version.cmake : ne pas modifier. Licence GPL-3.0-only.
+#include "promethee/version.hpp"
+
+namespace prom {
+
+const InfosVersion& infosVersion() {
+  static const InfosVersion infos{"@VERSION@", "@REVISION@", "@DATE_REVISION@", "@IDENTIFIANT@", @NUMERO_BUILD@};
+  return infos;
+}
+
+std::string versionCourte() { return "@VERSION_MAJEURE@.@VERSION_MINEURE@"; }
+
+std::string ligneVersion() {
+  const InfosVersion& v = infosVersion();
+  std::string s = std::string("Prométhée ") + v.version + " (révision " + v.revision;
+  const std::string date = v.dateRevision;
+  if (date.size() >= 10) s += ", " + date.substr(0, 10);
+  if (v.numeroBuild > 0) s += ", build " + std::to_string(v.numeroBuild);
+  return s + ")";
+}
+
+}  // namespace prom

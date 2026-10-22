@@ -1,0 +1,110 @@
+PROMÉTHÉE @VERSION@ POUR WINDOWS (64 BITS)
+Identifiant de build : @IDENTIFIANT@ (révision des sources @REVISION@, @DATE@)
+
+Plateforme libre d'ingénierie intégrée : pièces mécaniques, assemblages, mise en plan,
+schéma et circuit imprimé, schémas électriques et armoires dans un seul logiciel.
+
+
+1. LANCER
+
+Décompresser l'archive dans un dossier, puis lancer Promethee.exe. Pas d'installation, pas de
+droits d'administrateur. La version et l'identifiant de build figurent dans Aide › À propos et
+dans les propriétés du fichier Promethee.exe (onglet Détails).
+
+Systèmes pris en charge : Windows 10 (version 1903 ou plus récente) et Windows 11, 64 bits.
+Carte graphique : OpenGL 2.1 au minimum, 3.3 ou plus conseillé, pour les vues 3D.
+
+
+2. BIBLIOTHÈQUES D'EXÉCUTION VISUAL C++
+
+Le dossier contient les bibliothèques d'exécution Visual C++ (msvcp140*.dll, vcruntime140*.dll,
+concrt140.dll…) du compilateur qui a produit ce programme : déploiement local, prévu par Microsoft
+pour ses fichiers redistribuables. Le programme ne dépend donc d'aucun logiciel déjà installé.
+Ces copies ne sont pas mises à jour par Windows Update. Pour profiter de ces mises à jour, installer
+le redistribuable officiel (https://aka.ms/vs/17/release/vc_redist.x64.exe), puis supprimer ces
+fichiers du dossier : Prométhée utilisera alors la version installée.
+
+
+3. SI LA VUE 3D NE S'AFFICHE PAS
+
+Mettre à jour le pilote de la carte graphique. En dernier recours, copier opengl32sw.dll sous le nom
+opengl32.dll dans ce dossier force le rendu logiciel (plus lent, indépendant de la carte graphique) ;
+supprimer cette copie pour revenir au rendu matériel.
+
+
+4. JOURNAL ET SIGNALEMENT DES DÉFAUTS
+
+À chaque lancement, Prométhée écrit un journal dans le dossier temporaire de l'utilisateur :
+%TEMP%\promethee-journal.txt (celui du lancement précédent est gardé dans
+promethee-journal-precedent.txt, utile après un plantage). Il contient la version, le système, les
+étapes du démarrage, les messages techniques et les erreurs. Il ne contient pas le contenu des
+projets ; les noms de fichiers y sont réduits à leur seul nom, sans le chemin des dossiers.
+Un plantage affiche le code d'erreur et le module en cause, recopiés dans le journal.
+
+Signaler un défaut : https://github.com/NitromWG/promethee/issues, en joignant le journal et, si
+possible, le projet concerné et l'identifiant de build ci-dessus.
+
+
+5. ENREGISTREMENT, SAUVEGARDES ET RÉCUPÉRATION
+
+Chaque enregistrement est atomique : le projet est écrit à côté, vérifié sur le disque, puis mis à la
+place de l'ancien. Une coupure, un disque plein ou un plantage pendant l'écriture laisse le fichier
+précédent intact.
+Toutes les deux minutes, les projets modifiés sont copiés dans le dossier de récupération
+(%LOCALAPPDATA%\Prométhée\recuperation). Après un arrêt brutal, Prométhée propose de les rouvrir au
+lancement suivant.
+Un projet d'un ancien format est copié en « .formatN.bak » avant d'être réécrit au format courant.
+Un projet d'un format plus récent ne s'ouvre pas et n'est jamais écrasé.
+Si le fichier a été modifié ailleurs (autre fenêtre, autre programme, synchronisation) depuis son
+ouverture, Prométhée le signale avant d'enregistrer. Un même fichier ouvert dans deux fenêtres est
+signalé à l'ouverture.
+
+
+6. RÉSEAU ET DONNÉES PERSONNELLES
+
+Prométhée ne se connecte à aucun réseau : pas de télémétrie, pas de mise à jour automatique, pas
+d'envoi de rapport de plantage, pas de service en ligne. Les bibliothèques réseau de Qt ne sont pas
+livrées. Les réglages (thème, fichiers récents) restent dans le registre de l'utilisateur.
+
+
+7. PÉRIMÈTRE ET LIMITES CONNUES
+
+Prométhée produit de la géométrie, des plans, des circuits et des fichiers de fabrication, et
+vérifie des règles. Il ne remplace pas la validation d'un ingénieur ni celle du fabricant : faire
+contrôler pièces et cartes avant toute fabrication (visualiseur Gerber indépendant, contrôle DFM du
+fabricant, essais).
+
+Mécanique : esquisses contraintes, extrusion, enlèvement, révolution, perçage, congé, chanfrein,
+coque (épaisseur commune, ou propre à certaines faces), dépouille, balayage, lissage, motifs,
+symétrie ; assemblages avec
+contraintes et liaisons cinématiques (pilotées, sans dynamique) ; interférences et jeux
+géométriques ; mise en plan. Propriétés physiques : exactes sur un solide valide, marquées
+« approchées » sinon ; une pièce sans matière choisie utilise une densité provisoire, signalée.
+Ne fait pas : calcul par éléments finis, thermique, fatigue, analyse de tolérances (la détection
+d'interférence est nominale), tôlerie.
+
+Électronique : schéma, circuit imprimé 2 ou 4 couches, vérification électrique (ERC), règles de
+conception (DRC), routage manuel et routage automatique simple (une aide : les liaisons qu'il ne
+place pas restent listées au chevelu), zones de cuivre, Gerber X2, Excellon, placement,
+nomenclature, publication verrouillée. La largeur des pistes de puissance se calcule à partir du
+courant saisi par classe de réseau (IPC-2221) : sans courant saisi, rien n'est déduit du nom.
+Ne fait pas : simulation SPICE, intégrité du signal, impédance contrôlée, paires différentielles,
+accord de longueurs, calcul thermique de la carte.
+Les hauteurs des composants importés de KiCad sont estimées d'après le nom de leur empreinte :
+le contrôle du boîtier est alors indiqué « incomplet ».
+
+Formats lus : projet Prométhée, STEP, IGES, BREP, STL, carte KiCad (.kicad_pcb : contour, trous,
+empreintes). Formats écrits : STEP, IGES, BREP, STL, 3MF, OBJ, PLY (maillages : approximation de la
+forme exacte), DXF, SVG, PDF, CSV, carte KiCad, Gerber X2, Excellon.
+
+
+8. LICENCES, SOURCE ET INTÉGRITÉ
+
+Prométhée est un logiciel libre sous licence GPL-3.0 (fichier LICENSE). Le dossier « source »
+contient les sources exactes de cette version et de quoi la recompiler : voir SOURCE.txt.
+Composants tiers et licences : TIERS.md et dossier « licences » ; inventaire SPDX dans « sbom » ;
+versions exactes dans VERSIONS.txt. Somme SHA-256 de chaque fichier : SHA256SUMS.txt.
+
+Si Promethee.exe n'est pas signé (onglet « Signatures numériques » absent de ses propriétés),
+Windows SmartScreen peut afficher « Éditeur inconnu ». Comparer alors la somme SHA-256 de l'archive
+téléchargée (PowerShell : Get-FileHash <archive>.zip) avec celle publiée à côté du téléchargement.

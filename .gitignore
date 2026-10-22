@@ -1,0 +1,13 @@
+build/
+build-*/
+node_modules/
+*.user
+.vscode/
+.idea/
+vcpkg_installed/
+vcpkg-cache/
+# Paquet Windows produit par outils/paquet-windows.ps1 (à la racine seulement : outils/paquet/ porte ses modèles)
+/paquet/
+capture-*.png
+sorties/
+__pycache__/

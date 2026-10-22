@@ -1,0 +1,250 @@
+name: Compilation et tests
+
+on:
+  push:
+    paths-ignore: ['**.md']
+  pull_request:
+    paths-ignore: ['**.md']
+  workflow_dispatch:
+
+# Un nouvel envoi annule la compilation en cours de la même branche.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    name: Linux (Ubuntu 24.04, OpenCascade 7.6)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Dépendances
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends cmake ninja-build g++ libtbb-dev catch2 nlohmann-json3-dev \
+            libfontconfig-dev libx11-dev qt6-base-dev libgl-dev libglu1-mesa-dev xvfb xauth libgl1-mesa-dri gerbv python3 python3-pip \
+            libocct-modeling-algorithms-dev libocct-modeling-data-dev libocct-data-exchange-dev libocct-foundation-dev libocct-visualization-dev
+          # Troisième lecteur indépendant du dossier de fabrication (audit Q4) ; sans lui, l'essai le saute et le dit
+          sudo python3 -m pip install --break-system-packages --quiet gerbonara || echo "gerbonara indisponible : troisième lecteur sauté"
+          # Lecteur JSON Schema indépendant des formats de fichier (1.22, ECH-10)
+          sudo python3 -m pip install --break-system-packages --quiet jsonschema
+      - name: Configuration
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+      - name: Compilation
+        run: cmake --build build
+      - name: Tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Détail des tests en échec (visible sur la page du run, sans connexion)
+        if: failure()
+        shell: bash
+        run: |
+          exe=build/tests/Release/promethee_tests.exe; [ -f "$exe" ] || exe=build/tests/promethee_tests
+          "$exe" -r compact > resultats.txt 2>&1 || true
+          grep -E "failed|FAILED|error" resultats.txt | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+          { echo '### Tests en échec'; echo '```'; grep -E -B2 -A8 "failed|FAILED" resultats.txt | head -200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Compatibilité avec la 0.31 (projet écrit pour elle et relu par elle - mêmes réseaux, pertes dites, schémas JSON)
+        run: |
+          git fetch --no-tags --depth 1 origin 7a6dcabfc3699f7e736d1540d2ac3d46bc731a39
+          git worktree add --detach ../promethee-0.31 FETCH_HEAD
+          cmake -S ../promethee-0.31 -B ../promethee-0.31/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPROMETHEE_TESTS=OFF -DPROMETHEE_APP=OFF
+          cmake --build ../promethee-0.31/build --target promethee
+          python3 outils/compatibilite.py version build/outils/promethee ../promethee-0.31/build/outils/promethee 0.31 docs tests/donnees compatibilite
+      - name: Essais de l'interface (clics réels dans la vue 3D, sous un écran virtuel)
+        run: |
+          sudo apt-get install -y --no-install-recommends xvfb
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-interface
+      - name: Scénarios de documents et d'onglets (créer, enregistrer, rouvrir, fermer, assemblage, import)
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-onglets
+      - name: Mesures de l'atelier électronique (cartes de 300, 1 000 et 2 000 composants, temps dans le résumé)
+        run: build/tests/mesures_electronique --resume "$GITHUB_STEP_SUMMARY"
+      - name: Atelier électronique par de vrais gestes, en 1 600 × 1 000, en 1 024 × 768 et dans la fenêtre à onglets
+        shell: bash
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-electronique | tee essais-electronique.txt
+          xvfb-run -a -s "-screen 0 1024x768x24" build/app/Promethee --essais-electronique
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-electronique --onglets
+          { echo '### Mesures dans l’atelier (carte de 300 composants, vrais gestes)'; echo '```'; grep '^MESURE' essais-electronique.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Parcours d'audit de l'interface électronique
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-audit
+      - name: Atelier électrique (accueil, folios, contacts, fils, bornier, rapports, armoire, faisceau, logement, import QElectroTech)
+        run: |
+          xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-electrique
+          xvfb-run -a -s "-screen 0 1024x768x24" build/app/Promethee --essais-electrique
+      - name: Essai de l'application avec capture d'écran
+        if: hashFiles('app/CMakeLists.txt') != ''
+        run: xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essai --capture capture-linux.png
+      - name: Capture
+        if: hashFiles('capture-linux.png') != ''
+        continue-on-error: true  # stockage des Actions plein : la capture n'arrête rien
+        uses: actions/upload-artifact@v7
+        with:
+          name: capture-linux
+          path: capture-linux.png
+          retention-days: 3
+
+  windows:
+    name: Windows (MSVC, vcpkg, OpenCascade 8)
+    runs-on: windows-2022
+    permissions:
+      contents: write  # le paquet de chaque version est gardé dans une version préliminaire (Releases)
+    env:
+      VCPKG_COMMIT: 9e593bb18ea69cc5095e012465dcd675a822ed0d
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}\vcpkg-cache
+    steps:
+      - uses: actions/checkout@v7
+      - name: Récupération des paquets vcpkg déjà compilés
+        id: cache-vcpkg
+        uses: actions/cache/restore@v6
+        with:
+          path: ${{ github.workspace }}\vcpkg-cache
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+          restore-keys: vcpkg-windows-
+      - name: vcpkg à une version figée
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "$env:VCPKG_DEFAULT_BINARY_CACHE" | Out-Null
+          git clone https://github.com/microsoft/vcpkg "$env:RUNNER_TEMP\vcpkg"
+          git -C "$env:RUNNER_TEMP\vcpkg" checkout $env:VCPKG_COMMIT
+          & "$env:RUNNER_TEMP\vcpkg\bootstrap-vcpkg.bat" -disableMetrics
+      - name: Dépendances (compile OpenCascade au premier passage, environ une heure)
+        shell: pwsh
+        run: |
+          & "$env:RUNNER_TEMP\vcpkg\vcpkg.exe" install --triplet x64-windows
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      - name: Sauvegarde des paquets compilés, même en cas d'échec plus loin
+        if: always() && steps.cache-vcpkg.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v6
+        with:
+          path: ${{ github.workspace }}\vcpkg-cache
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+      - name: Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.*'
+          arch: win64_msvc2022_64
+          cache: true
+      - name: Configuration
+        shell: pwsh
+        run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_MANIFEST_INSTALL=OFF -DVCPKG_INSTALLED_DIR="${{ github.workspace }}\vcpkg_installed" -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
+      - name: Compilation
+        run: cmake --build build --config Release
+      - name: Tests
+        run: ctest --test-dir build -C Release --output-on-failure
+      - name: Détail des tests en échec (visible sur la page du run, sans connexion)
+        if: failure()
+        shell: bash
+        run: |
+          exe=build/tests/Release/promethee_tests.exe; [ -f "$exe" ] || exe=build/tests/promethee_tests
+          "$exe" -r compact > resultats.txt 2>&1 || true
+          grep -E "failed|FAILED|error" resultats.txt | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+          { echo '### Tests en échec'; echo '```'; grep -E -B2 -A8 "failed|FAILED" resultats.txt | head -200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+      - name: Paquet de l'application (bibliothèques, runtime Visual C++, source, SBOM), vérifié
+        id: paquet
+        if: hashFiles('app/CMakeLists.txt') != ''
+        shell: pwsh
+        env:
+          PROMETHEE_CERTIFICAT_PFX: ${{ secrets.PROMETHEE_CERTIFICAT_PFX }}
+          PROMETHEE_CERTIFICAT_MDP: ${{ secrets.PROMETHEE_CERTIFICAT_MDP }}
+        run: pwsh outils/paquet-windows.ps1 -Build build -Sortie paquet -Vcpkg "$env:RUNNER_TEMP\vcpkg\vcpkg.exe" -VcpkgInstalle "${{ github.workspace }}\vcpkg_installed\x64-windows"
+      - name: Envoi du paquet (pour la publication d'une étiquette v*, gardé un jour)
+        if: steps.paquet.outcome == 'success'
+        continue-on-error: true  # stockage des Actions plein : la version préliminaire garde le paquet
+        uses: actions/upload-artifact@v7
+        with:
+          name: ${{ steps.paquet.outputs.nom }}-windows-x64
+          path: paquet
+          retention-days: 1
+      - name: Essais de l'interface sous Windows, sur le paquet tel que livré (rendu OpenGL logiciel)
+        id: essais
+        if: steps.paquet.outcome == 'success'
+        shell: pwsh
+        run: |
+          $essai = "essai-windows"
+          Copy-Item -Recurse "paquet\${{ steps.paquet.outputs.nom }}" $essai
+          # Pas de carte graphique sur la machine d'intégration : la copie d'essai prend le rendu logiciel
+          # livré (Mesa), que Prométhée reconnaît et partage entre Qt et OpenCascade.
+          Copy-Item "$essai\opengl32sw.dll" "$essai\opengl32.dll"
+          & "$essai\Promethee.exe" --version | Out-Host
+          foreach ($mode in "--essais-interface", "--essais-onglets", "--essais-electronique", "--essais-electrique") {
+            $p = Start-Process -FilePath "$essai\Promethee.exe" -ArgumentList $mode -PassThru -NoNewWindow -RedirectStandardOutput "sortie$mode.txt" -RedirectStandardError "erreurs$mode.txt"
+            $null = $p.Handle
+            if (-not $p.WaitForExit(900000)) { $p.Kill(); throw "$mode : délai dépassé" }
+            Get-Content "sortie$mode.txt"
+            if ($p.ExitCode -ne 0) {
+              Get-Content "$env:TEMP\promethee-journal.txt" -ErrorAction SilentlyContinue | Select-Object -Last 60
+              throw "$mode : $($p.ExitCode) échec(s)"
+            }
+          }
+
+      # Chaque version a sa version préliminaire « v<version> » sur GitHub, avec son paquet et sa somme SHA-256 : on
+      # essaie la nouvelle en gardant les anciennes, qui ne sont jamais retirées (les fichiers des Releases ne comptent
+      # pas dans le stockage des Actions). Un nouvel envoi de la même version remplace son paquet ; le paquet est
+      # gardé même si les essais sous Windows échouent, les notes le disent. Attention : la marque qui saute
+      # l'intégration continue est cherchée dans tout le message du dernier commit envoyé, pas seulement le titre.
+      - name: Version préliminaire à essayer (anciennes versions gardées)
+        if: always() && steps.paquet.outcome == 'success' && github.event_name != 'pull_request'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NOM: ${{ steps.paquet.outputs.nom }}
+          ESSAIS: ${{ steps.essais.outcome }}
+        run: |
+          $version = $env:NOM -replace '^Promethee-', ''
+          $etiquette = "v$version"
+          $zip = "$env:NOM-windows-x64.zip"
+          Compress-Archive -Path "paquet\*" -DestinationPath $zip -Force
+          $somme = (Get-FileHash -Algorithm SHA256 $zip).Hash.ToLower()
+          "$somme  $zip" | Out-File -Encoding ascii "$zip.sha256"
+          $essais = if ($env:ESSAIS -eq 'success') { "essais de l'interface sous Windows passés" } else { "essais de l'interface sous Windows : $env:ESSAIS (voir le run)" }
+          $notes = "Prométhée $version à essayer : paquet Windows compilé par l'intégration continue sur la branche ${env:GITHUB_REF_NAME}, commit ${env:GITHUB_SHA} ; $essais. SHA-256 : $somme. Les versions précédentes restent dans la liste des Releases."
+          $existe = gh release view $etiquette --repo $env:GITHUB_REPOSITORY --json isPrerelease --jq .isPrerelease 2>$null
+          if ($existe -eq 'false') {
+            Write-Host "$etiquette est une version publiée : elle n'est pas touchée"
+            exit 0
+          }
+          if ($existe -eq 'true') { gh release delete $etiquette --repo $env:GITHUB_REPOSITORY --cleanup-tag --yes }
+          gh release create $etiquette $zip "$zip.sha256" --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA --prerelease --title "Prométhée $version (à essayer)" --notes $notes
+
+  publication:
+    name: Publication de la version (étiquette v*)
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [linux, windows, macos]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: paquets
+      - name: Archive, somme SHA-256 et version publiée (seulement si tous les essais sont passés)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd paquets
+          for d in *-windows-x64/; do (cd "$d" && zip -qr "../${d%/}.zip" .); done
+          sha256sum *.zip > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          gh release create "${GITHUB_REF_NAME}" *.zip SHA256SUMS.txt --repo "${GITHUB_REPOSITORY}" --title "Prométhée ${GITHUB_REF_NAME}" \
+            --notes "Paquets compilés et vérifiés par l'intégration continue (commit ${GITHUB_SHA}). Sommes SHA-256 dans SHA256SUMS.txt ; source correspondante dans chaque paquet (dossier source)."
+
+  macos:
+    name: macOS (Apple Silicon, Homebrew)
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+      - name: Dépendances
+        run: brew install ninja opencascade nlohmann-json catch2 qt
+      - name: Configuration
+        run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix)"
+      - name: Compilation
+        run: cmake --build build
+      - name: Tests
+        run: ctest --test-dir build --output-on-failure
+      - name: Détail des tests en échec (visible sur la page du run, sans connexion)
+        if: failure()
+        shell: bash
+        run: |
+          exe=build/tests/Release/promethee_tests.exe; [ -f "$exe" ] || exe=build/tests/promethee_tests
+          "$exe" -r compact > resultats.txt 2>&1 || true
+          grep -E "failed|FAILED|error" resultats.txt | head -40 | while IFS= read -r l; do echo "::error::$l"; done
+          { echo '### Tests en échec'; echo '```'; grep -E -B2 -A8 "failed|FAILED" resultats.txt | head -200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"

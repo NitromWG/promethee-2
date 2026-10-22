@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitromwg.github.io/promethee/schemas/schemas/projet-0.31.schema.json",
+  "title": "Projet Prométhée écrit pour la 0.31",
+  "description": "Ce que la 0.31 écrit, et ce que « Enregistrer pour une version précédente… » de la 0.32 écrit pour elle : cartes au format 3. Les clés de la 0.32 (valeurs calculées, paramètres typés, genres de composant, provenance des hauteurs, volumes libres…) peuvent y rester : la 0.31 les garde objet par objet sans les appliquer.",
+  "allOf": [
+    {
+      "$ref": "../schema_projet.json#/$defs/projet"
+    }
+  ],
+  "properties": {
+    "version": {
+      "const": 3
+    },
+    "electronique": {
+      "items": {
+        "$ref": "#/$defs/conception"
+      }
+    }
+  },
+  "$defs": {
+    "conception": {
+      "allOf": [
+        {
+          "$ref": "../schema_conception.json#/$defs/conception"
+        }
+      ],
+      "required": [
+        "format",
+        "formatElectronique"
+      ],
+      "properties": {
+        "format": {
+          "const": 3
+        },
+        "formatElectronique": {
+          "const": 3
+        }
+      }
+    }
+  }
+}

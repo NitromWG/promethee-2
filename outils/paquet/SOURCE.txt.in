@@ -1,0 +1,30 @@
+SOURCE CORRESPONDANTE DE PROMÉTHÉE @VERSION@
+Build @IDENTIFIANT@ (révision @REVISION@, @DATE@)
+
+Ce paquet contient Prométhée sous forme compilée, distribué selon la licence publique générale GNU,
+version 3 seule (GPL-3.0-only, fichier LICENSE). Comme le prévoit l'article 6 de cette licence, la
+source correspondante est livrée avec le programme :
+
+  source/promethee-@VERSION@-source.zip
+
+C'est l'archive exacte du commit compilé (git archive de la révision @REVISION@) : tout le code de
+Prométhée, ses tests, et les fichiers qui pilotent la compilation et la fabrication de ce paquet
+(CMakeLists.txt, vcpkg.json, .github/workflows/ci.yml, outils/paquet-windows.ps1). Le même commit est
+consultable sur https://github.com/NitromWG/promethee/commit/@REVISION@
+
+Recompiler ce programme :
+  1. Visual Studio 2022 (outils C++ x64), CMake 3.22 ou plus, Qt 6.8 pour MSVC 2022 64 bits, et vcpkg
+     au commit indiqué dans VERSIONS.txt.
+  2. Dans le dossier des sources : vcpkg install --triplet x64-windows
+  3. cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE=<vcpkg>\scripts\buildsystems\vcpkg.cmake
+           -DVCPKG_TARGET_TRIPLET=x64-windows -DCMAKE_PREFIX_PATH=<dossier de Qt>
+  4. cmake --build build --config Release
+  5. pwsh outils\paquet-windows.ps1 -Build build -Sortie paquet -Vcpkg <vcpkg>\vcpkg.exe
+
+Bibliothèques tierces : programmes distincts, sous leur propre licence, livrés sous forme de
+bibliothèques dynamiques séparées (Qt6*.dll, TK*.dll…) que l'on peut remplacer par une version
+modifiée compatible. Elles ne sont pas modifiées par Prométhée.
+  Qt (LGPL-3.0) : version exacte dans VERSIONS.txt ; sources sur https://download.qt.io/archive/qt/
+  Open CASCADE Technology (LGPL-2.1 avec exception) et les autres paquets vcpkg : versions exactes
+  dans VERSIONS.txt, recettes de compilation dans le dépôt vcpkg au commit indiqué
+  (https://github.com/microsoft/vcpkg), licences dans le dossier « licences ».

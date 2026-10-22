@@ -1,0 +1,84 @@
+// Prométhée : nomenclature unique. Licence GPL-3.0-only.
+#include "promethee/nomenclature.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <map>
+
+namespace prom {
+
+namespace {
+// Tri naturel des repères : D2 avant D10.
+bool avantNaturel(const std::string& a, const std::string& b) {
+  size_t i = 0, j = 0;
+  while (i < a.size() && j < b.size()) {
+    if (std::isdigit(static_cast<unsigned char>(a[i])) && std::isdigit(static_cast<unsigned char>(b[j]))) {
+      size_t fi = i, fj = j;
+      while (fi < a.size() && std::isdigit(static_cast<unsigned char>(a[fi]))) ++fi;
+      while (fj < b.size() && std::isdigit(static_cast<unsigned char>(b[fj]))) ++fj;
+      // Suites de chiffres comparées comme des chaînes (longueur sans les zéros de tête, puis ordre) : aucune
+      // conversion, donc aucun débordement quelle que soit leur longueur (EX-14)
+      std::size_t si = i, sj = j;
+      while (si + 1 < fi && a[si] == '0') ++si;
+      while (sj + 1 < fj && b[sj] == '0') ++sj;
+      if (fi - si != fj - sj) return fi - si < fj - sj;
+      if (const int c = a.compare(si, fi - si, b, sj, fj - sj); c != 0) return c < 0;
+      i = fi; j = fj;
+    } else {
+      if (a[i] != b[j]) return a[i] < b[j];
+      ++i; ++j;
+    }
+  }
+  return a.size() - i < b.size() - j;
+}
+
+}  // namespace
+
+std::string champCsv(const std::string& s) {
+  if (s.find_first_of(";\"\n\r") == std::string::npos) return s;
+  std::string r = "\"";
+  for (char c : s) { if (c == '"') r += '"'; r += c; }
+  return r + "\"";
+}
+
+bool avantNaturelRepere(const std::string& a, const std::string& b) { return avantNaturel(a, b); }
+
+std::vector<LigneNomenclature> nomenclature(const Projet& p, const Derive& d) {
+  std::vector<LigneNomenclature> l;
+  std::vector<const Composant*> comps;
+  for (const auto& k : p.composants) comps.push_back(&k);
+  std::sort(comps.begin(), comps.end(), [](const Composant* a, const Composant* b) { return avantNaturel(a->ref, b->ref); });
+  for (const auto* k : comps) {
+    const TypeComposant* T = typeComposant(k->type);
+    l.push_back({"Électronique", k->ref, (T ? T->nom : k->type) + (k->valeur.empty() ? "" : ", " + k->valeur), "Achat", 1});
+  }
+  const auto& c = p.carte;
+  l.push_back({"Pièces fabriquées", "PCB1", "Carte " + fmt(c.L, 2) + " × " + fmt(c.W, 2) + " mm, épaisseur " + fmt(c.t, 2) + " mm", "Fabrication de circuits imprimés", 1});
+  l.push_back({"Pièces fabriquées", "B1", "Boîtier " + fmt(d.Lo, 2) + " × " + fmt(d.Wo, 2) + " × " + fmt(d.zt, 2) + " mm", "Impression 3D", 1});
+  l.push_back({"Pièces fabriquées", "B2", "Couvercle " + fmt(d.Lo, 2) + " × " + fmt(d.Wo, 2) + " × " + fmt(p.boitier.couvercle + Levre::h, 2) + " mm", "Impression 3D", 1});
+  // Visserie regroupée par taille.
+  std::map<std::string, int> vis, inserts, visInserts;
+  for (const auto& t : d.trous) {
+    const std::string taille = t.nomVis + " × " + std::to_string(t.longVis);
+    if (t.insert) {
+      ++inserts[t.nomVis + " × " + fmt(t.longInsert)];
+      ++visInserts[taille];
+    } else {
+      ++vis[taille];
+    }
+  }
+  int n = 0;
+  for (const auto& [taille, q] : vis) l.push_back({"Visserie", "V" + std::to_string(++n), "Vis autotaraudeuse pour plastique " + taille, "Achat", q});
+  for (const auto& [taille, q] : visInserts) l.push_back({"Visserie", "V" + std::to_string(++n), "Vis à métaux tête cylindrique " + taille, "Achat", q});
+  for (const auto& [taille, q] : inserts) l.push_back({"Visserie", "I" + std::to_string(++n), "Insert laiton à poser à chaud " + taille, "Achat", q});
+  return l;
+}
+
+std::string versCsv(const std::vector<LigneNomenclature>& lignes) {
+  std::string s = "\xEF\xBB\xBF" "Groupe;Repère;Désignation;Quantité;Approvisionnement\r\n";
+  for (const auto& x : lignes)
+    s += champCsv(x.groupe) + ";" + champCsv(x.ref) + ";" + champCsv(x.designation) + ";" + std::to_string(x.qte) + ";" + champCsv(x.appro) + "\r\n";
+  return s;
+}
+
+}  // namespace prom

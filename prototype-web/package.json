@@ -1,0 +1,11 @@
+{
+  "name": "promethee-prototype-web",
+  "private": true,
+  "description": "Prototype du jalon 0 : la carte et le boîtier forment un seul modèle",
+  "license": "GPL-3.0-only",
+  "scripts": {
+    "assembler": "python3 assembler.py promethee-jalon0.html",
+    "reference": "node gen_reference.js"
+  },
+  "dependencies": { "three": "0.128.0" }
+}
