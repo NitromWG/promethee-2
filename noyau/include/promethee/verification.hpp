@@ -30,4 +30,17 @@ BilanVerification bilanDRC(const ConceptionElec& c, const Connectivite& k, const
 std::string rapportVerificationHtml(const ConceptionElec& c, const std::vector<Violation>& erc, const BilanVerification& drc);
 std::string rapportVerificationTexte(const ConceptionElec& c, const std::vector<Violation>& erc, const BilanVerification& drc);
 
+// La DRC calcule l'état du routage (chevelu, courts-circuits) sur un autre fil pendant ses contrôles : tant que cet
+// objet vit, la DRC lancée sur ce fil le recopie dans « sortie », pour que l'appelant n'ait pas à le refaire (9.2)
+class EtatRoutageRendu {
+ public:
+  explicit EtatRoutageRendu(EtatRoutage& sortie);
+  ~EtatRoutageRendu();
+  EtatRoutageRendu(const EtatRoutageRendu&) = delete;
+  EtatRoutageRendu& operator=(const EtatRoutageRendu&) = delete;
+
+ private:
+  EtatRoutage* m_avant;
+};
+
 }  // namespace prom::ecad

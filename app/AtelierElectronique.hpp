@@ -94,6 +94,7 @@ class AtelierElectronique : public QWidget {
   // gardant le dernier résultat (« vérification en cours ») ; un résultat périmé est jeté et le calcul relancé
   void recalculerApresModification();
   bool calculEnCours() const { return m_calculEnCours; }
+  int constructions3D() const { return m_constructions3D; }  // nombre de constructions de la vue 3D (essais, 9.5)
   struct Resultat;
   // Actions (aussi pour les essais)
   void annoter(bool tout);
@@ -190,6 +191,16 @@ class AtelierElectronique : public QWidget {
   QStringList controlerFichiers(const QString& dossier);
   void controlerFichiersEcrits();
   bool exporterVisionneuse(const QString& chemin);
+  // ---------- Échanges (lot L10) ----------
+  // Netlist (KiCad ou Prométhée) : la conception ouverte mise à jour en un pas, le bilan rendu (une ligne par
+  // changement) ; « csv » : le rapport, s'il est demandé
+  QStringList importerNetlist(const QString& chemin, const QString& csv = {});
+  int importerSessionSpecctra(const QString& chemin);  // routage d'un routeur externe posé en un pas ; pistes posées
+  // Dossier de fabrication (Gerber, perçages) relu en carte modifiable, ajoutée au projet ; faux s'il est illisible
+  bool ajouterCarteDepuisGerber(const QString& dossier);
+  // ---------- Simulation (lot L11) ----------
+  void ouvrirSimulation();
+  class FenetreSimulation* simulation() const;
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
   void creerEmpreinte(const std::string& composant);
   // Symbole à plusieurs unités : pose l'unité suivante non posée du composant de ce symbole, à côté de lui
@@ -314,7 +325,7 @@ class AtelierElectronique : public QWidget {
   void perimerVerification();  // la conception a changé : la vérification complète est « à refaire »
   void afficherEtat(int niveau);
   void allerAuProbleme(const QString& lien);  // compteur du bilan cliqué : la première violation
-  void lancerCalcul();
+  void lancerCalcul(int niveau = 2);  // niveau 1 : pendant un geste (chevelu et pastilles), sans zones ni DRC
   void majEtatCalcul();
 
   Document* m_doc;
@@ -334,6 +345,7 @@ class AtelierElectronique : public QWidget {
   QPointer<class FenetreFacade> m_facade;
   QPointer<class GestionnaireContraintes> m_contraintes;
   QPointer<class FenetreDevis> m_devis;
+  QPointer<class FenetreSimulation> m_simulation;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;
   class TableauChamps* m_tableauChamps = nullptr;
@@ -384,5 +396,8 @@ class AtelierElectronique : public QWidget {
   prom::ecad::ChangementConception m_enAttente;
   int m_niveauCalcul = 2;  // niveau du dernier résultat appliqué (2 : DRC comprise)
   bool m_3dAJour = false;
+  // Vue 3D (9.5) : construite seulement quand ce qu'elle montre a changé (cuivre, corps, hauteurs, modèles)
+  std::string m_signature3D;
+  int m_constructions3D = 0;
   std::string m_symboleApercu;
 };

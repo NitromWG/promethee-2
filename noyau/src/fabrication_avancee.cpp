@@ -289,7 +289,7 @@ LectureGerber lireGerber(const std::string& texte) {
           } else {
             const auto it = ouvertures.find(courante);
             const Nm l = it == ouvertures.end() ? 100'000 : it->second.l;
-            r.objets.push_back({ObjetGerber::Genre::Trait, oblong(a, b, std::max<Nm>(l, 1000)), ref, num, reseau});
+            r.objets.push_back({ObjetGerber::Genre::Trait, oblong(a, b, std::max<Nm>(l, 1000)), ref, num, reseau, a, b, l});
           }
         } else if (op == "D02") {
           if (region) {
@@ -297,7 +297,7 @@ LectureGerber lireGerber(const std::string& texte) {
             pointsRegion = {b};
           }
         } else if (op == "D03")
-          r.objets.push_back({ObjetGerber::Genre::Flash, forme(b), ref, num, reseau});
+          r.objets.push_back({ObjetGerber::Genre::Flash, forme(b), ref, num, reseau, b, b, 0});
         x = nx;
         y = ny;
       }

@@ -13,6 +13,7 @@
 #include <QApplication>
 #include <QEnterEvent>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QDragEnterEvent>
 #include <QMimeData>
 #include <QInputDialog>
@@ -31,6 +32,7 @@
 #include <QPageSize>
 #include <QPainter>
 #include <QPainterPath>
+#include <QRegion>
 #include <QPdfWriter>
 #include <QTimer>
 #include <QWheelEvent>
@@ -52,6 +54,7 @@
 #include "promethee/routeur.hpp"
 #include "promethee/modele.hpp"
 #include "promethee/police.hpp"
+#include "promethee/remplissage_local.hpp"
 
 using namespace prom::ecad;
 
@@ -70,6 +73,8 @@ QPainterPath chemin(const Polygones& ps, const std::function<QPointF(Pt)>& e) {
   return p;
 }
 }  // namespace
+
+VueCircuit::~VueCircuit() = default;
 
 VueCircuit::VueCircuit(Document* doc, QWidget* parent) : QWidget(parent), m_doc(doc) {
   setMouseTracking(true);
@@ -1141,6 +1146,33 @@ void VueCircuit::dupliquer() {
 
 // ---------- Routage ----------
 // ---------- Dessin ----------
+const Polygones& VueCircuit::cuivreAffiche(const std::string& zone, const Polygones& cuivre) {
+  if (m_generationZonesAffichees != m_generationCalculs || m_echelleZonesAffichees != m_echelle) {
+    m_zonesAffichees.clear();
+    m_generationZonesAffichees = m_generationCalculs;
+    m_echelleZonesAffichees = m_echelle;
+  }
+  auto [it, neuf] = m_zonesAffichees.try_emplace(zone);
+  if (!neuf) return it->second;
+  // Demi-pixel en nanomètres ; un sommet plus proche que cela du dernier gardé est retiré (le polygone garde au
+  // moins trois sommets)
+  const double pas = 0.5 / std::max(m_echelle, 1e-9) * 1e6;
+  const double pas2 = pas * pas;
+  for (const auto& p : cuivre) {
+    Polygone q;
+    q.reserve(p.size());
+    for (const Pt& x : p) {
+      if (!q.empty()) {
+        const double dx = static_cast<double>(x.x - q.back().x), dy = static_cast<double>(x.y - q.back().y);
+        if (dx * dx + dy * dy < pas2) continue;
+      }
+      q.push_back(x);
+    }
+    it->second.push_back(q.size() >= 3 ? std::move(q) : p);
+  }
+  return it->second;
+}
+
 void VueCircuit::dessinerCouche(QPainter& g, Couche couche, double opacite) {
   const ConceptionElec* c = conception();
   if (!c || !m_calc || !coucheVisible(couche)) return;
@@ -1149,30 +1181,42 @@ void VueCircuit::dessinerCouche(QPainter& g, Couche couche, double opacite) {
   g.setOpacity(opacite);
   for (const auto& z : c->circuit.zones) {
     if (z.couche != couche) continue;
-    if (const auto it = m_calc->zones.find(z.uuid); it != m_calc->zones.end()) {
+    if (const auto it = m_calc->zones.find(z.uuid); it != m_calc->zones.end() && !m_zonesSansCuivre.count(z.uuid)) {
       QColor f = col;
       f.setAlpha(150);
-      g.fillPath(chemin(it->second, e), f);
+      // Un grand plan se remplit sans lissage, sommets plus proches qu'un demi-pixel retirés : la même image, à une
+      // fraction du temps (9.4)
+      const bool lisse = g.testRenderHint(QPainter::Antialiasing);
+      g.setRenderHint(QPainter::Antialiasing, false);
+      g.fillPath(chemin(cuivreAffiche(z.uuid, it->second), e), f);
+      g.setRenderHint(QPainter::Antialiasing, lisse);
     }
     g.setPen(QPen(col, 1, Qt::DashLine));
     g.setBrush(Qt::NoBrush);
     g.drawPath(chemin({z.contour}, e));
   }
   for (const auto& t : c->circuit.pistes) {
-    if (t.couche != couche) continue;
+    if (t.couche != couche || exclu(t.uuid)) continue;
     g.setPen(QPen(col, std::max(1.0, mm(t.largeur) * m_echelle), Qt::SolidLine, Qt::RoundCap));
     g.drawLine(ecran(t.a), ecran(t.b));
   }
   g.setPen(Qt::NoPen);
   g.setBrush(col);
   for (const auto& p : m_calc->pastilles)
-    if (p.pastille.type == TypePastille::CMS && (p.couches & bit(couche))) g.drawPath(chemin({p.forme}, e));
+    if (p.pastille.type == TypePastille::CMS && (p.couches & bit(couche)) && !exclu(p.composant)) g.drawPath(chemin({p.forme}, e));
   g.setOpacity(1);
 }
 
 // Le dessin fixe (grille, carte, cuivre, pastilles, sérigraphie, chevelu, surlignage, sélection, marques) vient de
 // l'image gardée tant que rien ne l'a changé ; l'outil, l'article glissé et les repères sont dessinés par-dessus
 void VueCircuit::paintEvent(QPaintEvent*) {
+  QElapsedTimer chrono;
+  chrono.start();
+  struct Fin {
+    double& total;
+    QElapsedTimer& t;
+    ~Fin() { total += static_cast<double>(t.nsecsElapsed()) * 1e-6; }
+  } fin{m_tempsTravail, chrono};
   const ConceptionElec* c = conception();
   CleCache cle;
   cle.generation = m_generationDoc;
@@ -1192,17 +1236,36 @@ void VueCircuit::paintEvent(QPaintEvent*) {
     cle.estompage = static_cast<int>(m_sel->estompage());
     cle.niveau = m_sel->niveauEstompage();
   }
-  if (m_cache.isNull() || !(cle == m_cleCache)) {
-    m_cache = QPixmap(size() * cle.dpr);
+  const bool glisse = m_glissement && c;
+  if (!glisse && (m_cache.isNull() || !(cle == m_cleCache))) {
+    // Deux étages (9.4) : la base (grille, carte, cuivre, sérigraphie, chevelu) ne se refait que si elle change ;
+    // un clic qui change la sélection ne repeint que ce qui en dépend, sur une copie de la base
+    CleCache cleBase = cle;
+    cleBase.selection.clear();
+    cleBase.reseau.clear();
+    cleBase.estompage = 0;
+    cleBase.niveau = 0;
+    if (m_cacheBase.isNull() || !(cleBase == m_cleBase)) {
+      m_cacheBase = QPixmap(size() * cle.dpr);
+      m_cacheBase.setDevicePixelRatio(cle.dpr);
+      QPainter p(&m_cacheBase);
+      p.setRenderHint(QPainter::Antialiasing, Theme::anticrenelage());  // réglable (2.31)
+      p.fillRect(rect(), FOND);
+      m_etage = 1;
+      if (c) peindreFixe(p, *c);
+      m_etage = 0;
+      m_cleBase = cleBase;
+    }
+    m_cache = m_cacheBase.copy();
     m_cache.setDevicePixelRatio(cle.dpr);
     QPainter p(&m_cache);
-    p.setRenderHint(QPainter::Antialiasing, Theme::anticrenelage());  // réglable (2.31)
-    p.fillRect(rect(), FOND);
-    if (c) peindreFixe(p, *c);
+    p.setRenderHint(QPainter::Antialiasing, Theme::anticrenelage());
+    if (c) peindreSelection(p, *c);
     m_cleCache = cle;
   }
   QPainter g(this);
-  g.drawPixmap(0, 0, m_cache);
+  if (glisse) peindreGlissement(g, *c);
+  else g.drawPixmap(0, 0, m_cache);
   g.setRenderHint(QPainter::Antialiasing);
   if (!c) return;
   const SignesCanevas& sg = theme().signesCircuit();
@@ -1233,7 +1296,7 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
   const auto e = [this](Pt p) { return ecran(p); };
   const Polygone carte = c->circuit.contour.polygone();
   // Grille au pas réglé (EL-37), sur la partie visible ; le pas affiché grandit tant que les points seraient trop serrés
-  {
+  if (m_partie != Partie::Dessus) {
     double pas = mm(pasPlacement());
     while (pas * m_echelle < 8) pas *= pas * m_echelle < 1.6 ? 10 : (pas * m_echelle < 4 ? 5 : 2);
     const Pt h = monde(QPointF(0, 0)), b = monde(QPointF(width(), height()));
@@ -1248,7 +1311,7 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     }
   }
   // Carte : contour et découpes (EL-44), le fond de la vue visible à travers les découpes
-  {
+  if (m_partie != Partie::Dessus) {
     QPainterPath plaque = chemin({carte}, e);
     for (const auto& d : c->circuit.contour.decoupes) plaque.addPath(chemin({d}, e));
     plaque.setFillRule(Qt::OddEvenFill);
@@ -1256,13 +1319,14 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     g.setBrush(CARTE);
     g.drawPath(plaque);
   }
+  if (m_partie == Partie::Fond) return;
   // Cuivre : couches inactives atténuées (opacité réglable, EL-25), la couche active par-dessus
   for (Couche x : couchesCuivre(c->circuit.empilage.couchesCuivre))
     if (x != m_coucheActive) dessinerCouche(g, x, m_opacite);
   dessinerCouche(g, m_coucheActive, 1.0);
   if (m_calc) {
     for (const auto& p : m_calc->pastilles) {
-      if (p.pastille.type == TypePastille::CMS) continue;
+      if (p.pastille.type == TypePastille::CMS || exclu(p.composant)) continue;
       if (p.pastille.type == TypePastille::Traversante) {
         g.setPen(Qt::NoPen);
         g.setBrush(TRAVERSANT);
@@ -1273,6 +1337,7 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     }
   }
   for (const auto& v : c->circuit.vias) {
+    if (exclu(v.uuid)) continue;
     g.setPen(Qt::NoPen);
     g.setBrush(VIA);
     g.drawEllipse(ecran(v.p), mm(v.diametre) / 2 * m_echelle, mm(v.diametre) / 2 * m_echelle);
@@ -1281,6 +1346,7 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
   }
   // Sérigraphie et références
   for (const auto& em : c->circuit.empreintes) {
+    if (exclu(em.composant)) continue;
     const DefEmpreinte* d = c->empreinte(em.empreinte);
     if (!d) continue;
     for (const auto& t : d->traits) {
@@ -1293,8 +1359,9 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     }
   }
   // Repères, valeurs et textes de carte : les mêmes traits que dans les Gerber (police vectorielle commune, EL-06)
-  for (const auto& t : textesSerigraphie(*c)) {
-    if (!coucheVisible(t.couche)) continue;
+  const std::vector<TraitSerigraphie> textesCalcules = m_textesFiges ? std::vector<TraitSerigraphie>{} : textesSerigraphie(*c);
+  for (const auto& t : m_textesFiges ? m_textesGlisse : textesCalcules) {
+    if (!coucheVisible(t.couche) || exclu(t.composant)) continue;
     g.setPen(QPen(t.couche == Couche::SerigraphieDessous ? SERIG_DESSOUS : SERIG_DESSUS, std::max(1.0, mm(t.epaisseur) * m_echelle), Qt::SolidLine, Qt::RoundCap));
     g.drawLine(ecran(t.a), ecran(t.b));
   }
@@ -1329,11 +1396,18 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     }
   }
   g.setBrush(Qt::NoBrush);
-  // Chevelu
-  if (m_calc) {
+  // Chevelu (pas pendant un glissement rapide : il suit à la fin du geste)
+  if (m_calc && !m_exclus) {
     g.setPen(QPen(CHEVELU, 1));
     for (const auto& l : m_calc->etat.chevelu) g.drawLine(ecran(l.a), ecran(l.b));
   }
+  // Ce qui dépend de la sélection : peint à part, sur l'image gardée du reste (9.4)
+  if (m_etage != 1) peindreSelection(g, *c);
+}
+// Réseau surligné, estompage, objets choisis et marques de la DRC : redessinés seuls quand la sélection change
+void VueCircuit::peindreSelection(QPainter& g, const ConceptionElec& cref) {
+  const ConceptionElec* c = &cref;
+  const auto e = [this](Pt p) { return ecran(p); };
   const SignesCanevas& sg = theme().signesCircuit();
   // Réseau surligné : le reste s'estompe, son cuivre prend un halo (charte, S5)
   if (!m_reseau.empty()) {
@@ -1341,21 +1415,21 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     voile.setAlphaF(0.40);
     g.fillRect(rect(), voile);
     for (const auto& t : c->circuit.pistes)
-      if (t.reseau == m_reseau && coucheVisible(t.couche)) {
+      if (t.reseau == m_reseau && coucheVisible(t.couche) && !exclu(t.uuid)) {
         signes::haloTrait(g, ecran(t.a), ecran(t.b), mm(t.largeur) * m_echelle, sg.surl);
         g.setPen(QPen(couleurCuivre(t.couche), std::max(1.0, mm(t.largeur) * m_echelle), Qt::SolidLine, Qt::RoundCap));
         g.drawLine(ecran(t.a), ecran(t.b));
       }
     if (m_calc)
       for (const auto& p : m_calc->pastilles)
-        if (p.reseau == m_reseau) {
+        if (p.reseau == m_reseau && !exclu(p.composant)) {
           signes::haloChemin(g, chemin({p.forme}, e), sg.surl);
           g.setPen(Qt::NoPen);
           g.setBrush(p.pastille.type == TypePastille::CMS ? couleurCuivre(p.dessous ? Couche::CuivreDessous : Couche::CuivreDessus) : TRAVERSANT);
           g.drawPath(chemin({p.forme}, e));
         }
     for (const auto& v : c->circuit.vias)
-      if (v.reseau == m_reseau) signes::haloPoint(g, ecran(v.p), mm(v.diametre) / 2 * m_echelle, sg.surl);
+      if (v.reseau == m_reseau && !exclu(v.uuid)) signes::haloPoint(g, ecran(v.p), mm(v.diametre) / 2 * m_echelle, sg.surl);
   }
   // Ce qui n'est pas choisi s'estompe (2.26, ERG-28) : un voile au niveau réglé, puis le cuivre et la sérigraphie des
   // objets choisis repeints par-dessus ; en masque et en ombre, ce qui est voilé ne se prend plus (objetSous)
@@ -1371,13 +1445,13 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
           g.fillPath(chemin(it->second, e), f);
         }
     for (const auto& t : c->circuit.pistes)
-      if (estChoisi(Genre::Piste, t.uuid) && coucheVisible(t.couche)) {
+      if (!exclu(t.uuid) && estChoisi(Genre::Piste, t.uuid) && coucheVisible(t.couche)) {
         g.setPen(QPen(couleurCuivre(t.couche), std::max(1.0, mm(t.largeur) * m_echelle), Qt::SolidLine, Qt::RoundCap));
         g.drawLine(ecran(t.a), ecran(t.b));
       }
     g.setPen(Qt::NoPen);
     for (const auto& v : c->circuit.vias)
-      if (estChoisi(Genre::Via, v.uuid)) {
+      if (estChoisi(Genre::Via, v.uuid) && !exclu(v.uuid)) {
         g.setBrush(VIA);
         g.drawEllipse(ecran(v.p), mm(v.diametre) / 2 * m_echelle, mm(v.diametre) / 2 * m_echelle);
         g.setBrush(FOND);
@@ -1385,13 +1459,13 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
       }
     if (m_calc)
       for (const auto& p : m_calc->pastilles)
-        if (estChoisi(Genre::Empreinte, p.composant)) {
+        if (estChoisi(Genre::Empreinte, p.composant) && !exclu(p.composant)) {
           g.setPen(Qt::NoPen);
           g.setBrush(p.pastille.type == TypePastille::CMS ? couleurCuivre(p.dessous ? Couche::CuivreDessous : Couche::CuivreDessus) : TRAVERSANT);
           g.drawPath(chemin({p.forme}, e));
         }
     for (const auto& em : c->circuit.empreintes)
-      if (estChoisi(Genre::Empreinte, em.composant))
+      if (estChoisi(Genre::Empreinte, em.composant) && !exclu(em.composant))
         if (const DefEmpreinte* d = c->empreinte(em.empreinte))
           for (const auto& t : d->traits) {
             const Couche cs = coucheSurCarte(em, t.couche);
@@ -1404,12 +1478,12 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
   }
   // Objets choisis : fond, contour plein, poignées
   for (const auto& em : c->circuit.empreintes)
-    if (estChoisi(Genre::Empreinte, em.composant))
+    if (estChoisi(Genre::Empreinte, em.composant) && !exclu(em.composant))
       if (const DefEmpreinte* d = c->empreinte(em.empreinte)) signes::selectionChemin(g, chemin({encombrementSurCarte(em, *d)}, e), sg.sel);
   for (const auto& t : c->circuit.pistes)
-    if (estChoisi(Genre::Piste, t.uuid)) signes::selectionTrait(g, ecran(t.a), ecran(t.b), mm(t.largeur) * m_echelle, sg.sel);
+    if (!exclu(t.uuid) && estChoisi(Genre::Piste, t.uuid)) signes::selectionTrait(g, ecran(t.a), ecran(t.b), mm(t.largeur) * m_echelle, sg.sel);
   for (const auto& v : c->circuit.vias)
-    if (estChoisi(Genre::Via, v.uuid)) {
+    if (estChoisi(Genre::Via, v.uuid) && !exclu(v.uuid)) {
       const double r = mm(v.diametre) / 2 * m_echelle + 2;
       signes::selectionBoite(g, QRectF(ecran(v.p) - QPointF(r, r), QSizeF(2 * r, 2 * r)), sg.sel);
     }
@@ -1433,7 +1507,218 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     }
 }
 
+
 // Repères par-dessus le dessin : couche active, position de la souris, verrou, menu à marques, liseré du focus
+// ---------- Glissement rapide (9.4, 9.9) ----------
+void VueCircuit::commencerGlissement() {
+  finirGlissement();
+  const ConceptionElec* c = conception();
+  // Une petite carte se redessine entière à chaque image sans peine : le dessin exact est gardé
+  if (!c || !m_calc || c->circuit.empreintes.size() < 200) return;
+  for (const auto& o : m_selection)
+    if (o.genre != Genre::Empreinte && o.genre != Genre::Piste && o.genre != Genre::Via) return;
+  for (const auto& o : m_selection) m_mobiles.insert(o.id);
+  for (const auto& a : m_accroches) m_mobiles.insert(a.piste);
+  m_textesGlisse = textesSerigraphie(*c);
+  m_textesFiges = true;
+  // Zones des couches que touchent les pistes et vias glissées : remplies de nouveau sur place, à chaque image
+  std::set<std::string> cuivreMobile;
+  Couches couches = 0;
+  for (const auto& t : c->circuit.pistes)
+    if (m_mobiles.count(t.uuid)) {
+      cuivreMobile.insert(t.uuid);
+      couches |= bit(t.couche);
+    }
+  for (const auto& v : c->circuit.vias)
+    if (m_mobiles.count(v.uuid)) {
+      cuivreMobile.insert(v.uuid);
+      couches |= tousLesCuivres(c->circuit.empilage.couchesCuivre);
+    }
+  if (!cuivreMobile.empty())
+    for (const auto& z : c->circuit.zones) {
+      if (!(couches & bit(z.couche)) || !m_calc->zones.count(z.uuid)) continue;
+      auto rl = std::make_unique<RemplissageLocal>(*c, m_calc->k, m_calc->zones, z.uuid, cuivreMobile);
+      if (!rl->valide()) continue;
+      m_zonesSansCuivre.insert(z.uuid);
+      m_zonesLocales.push_back(std::move(rl));
+    }
+  m_glissement = true;
+  m_fondGlisse = QPixmap();
+}
+
+void VueCircuit::finirGlissement() {
+  const bool etait = m_glissement;
+  m_glissement = false;
+  m_mobiles.clear();
+  m_zonesSansCuivre.clear();
+  m_zonesLocales.clear();
+  m_cuivreLocal.clear();
+  m_textesGlisse.clear();
+  m_textesFiges = false;
+  m_fondGlisse = m_dessusGlisse = m_zoneGlisse = QPixmap();
+  if (etait) update();
+}
+
+const Polygones* VueCircuit::cuivreLocal(const std::string& zone) const {
+  const auto it = m_cuivreLocal.find(zone);
+  return it == m_cuivreLocal.end() ? nullptr : &it->second;
+}
+
+void VueCircuit::peindreGlissement(QPainter& g, const ConceptionElec& c) {
+  const auto e = [this](Pt p) { return ecran(p); };
+  const qreal dpr = devicePixelRatioF();
+  const CleGlisse cle{m_echelle, m_opacite, m_origine, size(), dpr, theme().generation(), m_coucheActive};
+  if (m_fondGlisse.isNull() || !(cle == m_cleGlisse)) {
+    auto preparer = [&](QPixmap& px, Partie partie, bool transparent) {
+      px = QPixmap(size() * dpr);
+      px.setDevicePixelRatio(dpr);
+      px.fill(transparent ? QColor(Qt::transparent) : FOND);
+      QPainter p(&px);
+      p.setRenderHint(QPainter::Antialiasing, Theme::anticrenelage());
+      m_partie = partie;
+      m_exclus = &m_mobiles;
+      peindreFixe(p, c);
+      m_partie = Partie::Tout;
+      m_exclus = nullptr;
+    };
+    if (m_zonesLocales.empty()) {
+      preparer(m_fondGlisse, Partie::Tout, false);
+      m_dessusGlisse = m_zoneGlisse = QPixmap();
+    } else {
+      // Trois plans : la plaque, le cuivre des zones suivies (tel qu'avant le geste), tout le reste par-dessus
+      preparer(m_fondGlisse, Partie::Fond, false);
+      preparer(m_dessusGlisse, Partie::Dessus, true);
+      m_zoneGlisse = QPixmap(size() * dpr);
+      m_zoneGlisse.setDevicePixelRatio(dpr);
+      m_zoneGlisse.fill(Qt::transparent);
+      QPainter p(&m_zoneGlisse);
+      p.setRenderHint(QPainter::Antialiasing, Theme::anticrenelage());
+      for (const auto& rl : m_zonesLocales) {
+        if (!coucheVisible(rl->couche())) continue;
+        const auto it = m_calc->zones.find(rl->zone());
+        if (it == m_calc->zones.end()) continue;
+        QColor f = couleurCuivre(rl->couche());
+        f.setAlpha(150);
+        p.setOpacity(rl->couche() == m_coucheActive ? 1.0 : m_opacite);
+        p.fillPath(chemin(it->second, e), f);
+      }
+    }
+    m_cleGlisse = cle;
+  }
+  g.drawPixmap(0, 0, m_fondGlisse);
+  if (!m_zonesLocales.empty()) {
+    // Fenêtre : les pistes et vias glissées, à leur place de départ et à leur place courante
+    Boite w;
+    Nm demi = 0;
+    std::vector<Piste> pistes;
+    std::vector<Via> vias;
+    for (const auto& t : c.circuit.pistes)
+      if (m_mobiles.count(t.uuid)) {
+        w.etendre(t.a);
+        w.etendre(t.b);
+        demi = std::max(demi, t.largeur / 2);
+        pistes.push_back(t);
+      }
+    for (const auto& v : c.circuit.vias)
+      if (m_mobiles.count(v.uuid)) {
+        w.etendre(v.p);
+        demi = std::max(demi, v.diametre / 2);
+        vias.push_back(v);
+      }
+    for (const auto& t : m_circuitDepart.pistes)
+      if (m_mobiles.count(t.uuid)) {
+        w.etendre(t.a);
+        w.etendre(t.b);
+      }
+    for (const auto& v : m_circuitDepart.vias)
+      if (m_mobiles.count(v.uuid)) w.etendre(v.p);
+    QRegion fenetres;
+    std::vector<std::pair<const RemplissageLocal*, QRect>> rects;
+    for (const auto& rl : m_zonesLocales) {
+      const Boite f = w.gonflee(demi + rl->portee());
+      m_cuivreLocal[rl->zone()] = rl->dans(f, pistes, vias);
+      const QRect r = QRectF(ecran({f.x0, f.y0}), ecran({f.x1, f.y1})).normalized().toAlignedRect();
+      fenetres += r;
+      rects.push_back({rl.get(), r});
+    }
+    g.save();
+    g.setClipRegion(QRegion(rect()) - fenetres);
+    g.drawPixmap(0, 0, m_zoneGlisse);
+    g.restore();
+    for (const auto& [rl, r] : rects) {
+      if (!coucheVisible(rl->couche())) continue;
+      QColor f = couleurCuivre(rl->couche());
+      f.setAlpha(150);
+      g.save();
+      g.setClipRect(r);
+      g.setOpacity(rl->couche() == m_coucheActive ? 1.0 : m_opacite);
+      g.fillPath(chemin(m_cuivreLocal[rl->zone()], e), f);
+      g.restore();
+    }
+    g.drawPixmap(0, 0, m_dessusGlisse);
+  }
+  peindreMobiles(g, c);
+}
+
+void VueCircuit::peindreMobiles(QPainter& g, const ConceptionElec& c) {
+  const auto e = [this](Pt p) { return ecran(p); };
+  const SignesCanevas& sg = theme().signesCircuit();
+  g.save();
+  g.setRenderHint(QPainter::Antialiasing, Theme::anticrenelage());
+  for (const auto& t : c.circuit.pistes) {
+    if (!m_mobiles.count(t.uuid) || !coucheVisible(t.couche)) continue;
+    g.setOpacity(t.couche == m_coucheActive ? 1.0 : m_opacite);
+    g.setPen(QPen(couleurCuivre(t.couche), std::max(1.0, mm(t.largeur) * m_echelle), Qt::SolidLine, Qt::RoundCap));
+    g.drawLine(ecran(t.a), ecran(t.b));
+  }
+  g.setOpacity(1);
+  g.setPen(Qt::NoPen);
+  for (const auto& v : c.circuit.vias) {
+    if (!m_mobiles.count(v.uuid)) continue;
+    g.setBrush(VIA);
+    g.drawEllipse(ecran(v.p), mm(v.diametre) / 2 * m_echelle, mm(v.diametre) / 2 * m_echelle);
+    g.setBrush(FOND);
+    g.drawEllipse(ecran(v.p), mm(v.percage) / 2 * m_echelle, mm(v.percage) / 2 * m_echelle);
+  }
+  for (const auto& em : c.circuit.empreintes) {
+    if (!m_mobiles.count(em.composant)) continue;
+    const DefEmpreinte* d = c.empreinte(em.empreinte);
+    if (!d) continue;
+    for (const auto& pa : d->pastilles) {
+      const Pastille ps = pastilleSurCarte(em, pa);
+      if (pa.type == TypePastille::CMS) {
+        const Couche cc = em.dessous ? Couche::CuivreDessous : Couche::CuivreDessus;
+        if (!coucheVisible(cc)) continue;
+        g.setOpacity(cc == m_coucheActive ? 1.0 : m_opacite);
+        g.fillPath(chemin({formePastille(ps)}, e), couleurCuivre(cc));
+        g.setOpacity(1);
+        continue;
+      }
+      if (pa.type == TypePastille::Traversante) g.fillPath(chemin({formePastille(ps)}, e), TRAVERSANT);
+      g.setPen(Qt::NoPen);
+      g.setBrush(FOND);
+      g.drawEllipse(ecran(ps.position), mm(ps.percage) / 2 * m_echelle, mm(ps.percage) / 2 * m_echelle);
+    }
+    for (const auto& t : d->traits) {
+      const Couche cs = coucheSurCarte(em, t.couche);
+      if ((cs != Couche::SerigraphieDessus && cs != Couche::SerigraphieDessous) || !coucheVisible(cs)) continue;
+      g.setPen(QPen(cs == Couche::SerigraphieDessus ? SERIG_DESSUS : SERIG_DESSOUS, std::max(1.0, mm(t.epaisseur) * m_echelle)));
+      g.setBrush(Qt::NoBrush);
+      if (t.rayon > 0) g.drawEllipse(ecran(versCarte(em, t.a)), mm(t.rayon) * m_echelle, mm(t.rayon) * m_echelle);
+      else g.drawLine(ecran(versCarte(em, t.a)), ecran(versCarte(em, t.b)));
+    }
+    if (estChoisi(Genre::Empreinte, em.composant)) signes::selectionChemin(g, chemin({encombrementSurCarte(em, *d)}, e), sg.sel);
+  }
+  for (const auto& t : c.circuit.pistes)
+    if (m_mobiles.count(t.uuid) && estChoisi(Genre::Piste, t.uuid)) signes::selectionTrait(g, ecran(t.a), ecran(t.b), mm(t.largeur) * m_echelle, sg.sel);
+  for (const auto& v : c.circuit.vias)
+    if (m_mobiles.count(v.uuid) && estChoisi(Genre::Via, v.uuid)) {
+      const double r = mm(v.diametre) / 2 * m_echelle + 2;
+      signes::selectionBoite(g, QRectF(ecran(v.p) - QPointF(r, r), QSizeF(2 * r, 2 * r)), sg.sel);
+    }
+  g.restore();
+}
+
 void VueCircuit::peindreReperes(QPainter& g, const ConceptionElec& cref) {
   const ConceptionElec* c = &cref;
   // Couche active, en bas à gauche
@@ -1495,6 +1780,13 @@ void VueCircuit::mousePressEvent(QMouseEvent* ev) {
 }
 
 void VueCircuit::mouseMoveEvent(QMouseEvent* ev) {
+  // Temps de travail de la vue (9.1) : traitement du mouvement et peinture, hors pose de l'image par le système
+  struct Chrono {
+    double& total;
+    QElapsedTimer t;
+    explicit Chrono(double& x) : total(x) { t.start(); }
+    ~Chrono() { total += static_cast<double>(t.nsecsElapsed()) * 1e-6; }
+  } chrono(m_tempsTravail);
   m_souris = ev->position();
   if (m_nav->deplacer(ev)) {
     update();

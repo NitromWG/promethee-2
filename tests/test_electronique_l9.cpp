@@ -131,6 +131,8 @@ TEST_CASE("Mesure d'une phase pour le profilage", "[.mesure]") {
     if (phase == "connectivite") CHECK(!connectivite(c).reseaux.empty());
     else if (phase == "zones") CHECK(!remplirZones(c, k).empty());
     else if (phase == "etat") CHECK(etatRoutage(c, k, z).reseauxTotal > 0);
+    else if (phase == "erc") CHECK_NOTHROW(verifierERC(c, k, NiveauErc::Complet));
+    else if (phase == "pastilles") CHECK(!pastilles(c, k).empty());
     else CHECK_NOTHROW(verifierDRCReglee(c, k, z));
   }
   WARN(phase << " : " << ms(t0) / 3 << " ms");

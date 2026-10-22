@@ -184,6 +184,7 @@ class VueCircuit::OutilSelection : public OutilBase {
       v.m_accroches = v.accroches(v.m_selection);
       v.m_doc->debutGesteConception(v.m_conception);
       m_glisse = true;
+      v.commencerGlissement();  // grande carte : fond peint une fois, zones suivies sur place (9.4, 9.9)
       // L'empreinte tenue se cale sur la grille de placement ; sinon le premier objet sur celle du routage
       v.m_positionDepart = Pt{};
       for (const auto& em : c->circuit.empreintes)
@@ -214,6 +215,7 @@ class VueCircuit::OutilSelection : public OutilBase {
     if (m_glisse) {
       m_glisse = false;
       m_vue.m_accroches.clear();
+      m_vue.finirGlissement();
       m_vue.m_doc->finGeste();
     }
   }
@@ -279,6 +281,7 @@ class VueCircuit::OutilSelection : public OutilBase {
       m_glisse = m_appuye = false;
       m_sommet = -1;
       m_vue.m_accroches.clear();
+      m_vue.finirGlissement();
       m_vue.m_doc->annulerGeste();
       return true;
     }
@@ -293,6 +296,7 @@ class VueCircuit::OutilSelection : public OutilBase {
     m_glisse = m_appuye = false;
     m_sommet = -1;
     m_vue.m_accroches.clear();
+    m_vue.finirGlissement();
   }
   void dessiner(QPainter& g) const override {
     if (!m_cadre || (m_souris - m_pression).manhattanLength() <= 3) return;

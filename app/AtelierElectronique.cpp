@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <array>
+#include <future>
 #include <cctype>
 #include <map>
 #include <set>
@@ -87,6 +88,8 @@
 #include "VueSchema.hpp"
 #include "promethee/bibliotheque.hpp"
 #include "promethee/fichiers.hpp"
+#include "promethee/hauteurs.hpp"
+#include "promethee/verification.hpp"
 #include "promethee/carte3d.hpp"
 #include "promethee/construction.hpp"
 #include "promethee/modele.hpp"
@@ -466,6 +469,8 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
   // sélection d'avant ce pas revient ; un autre projet repart de l'état neutre (S24)
   connect(m_doc, &Document::conceptionChangee, this, [this](const ChangementConception& ch) {
     const ConceptionElec* c = conceptionCourante();
+    // Pendant un glissement rien ne disparaît : sélection et inspecteur attendent la fin du geste (9.4)
+    if (m_doc->enGeste()) return;
     if (c && (ch.conception.empty() || ch.conception == c->uuid)) {
       m_selection->filtrer(*c);
       // L'inspecteur relit ses champs, sans toucher à celui qui a le focus (P1)
@@ -700,12 +705,21 @@ AtelierElectronique::Resultat calculerConception(const ConceptionElec& c, int ni
   AtelierElectronique::Resultat r;
   r.niveau = niveau;
   r.calculs.k = connectivite(c);
-  r.erc = verifierERC(c, r.calculs.k, NiveauErc::Complet);  // gravités réglées et exclusions du projet appliquées
-  if (niveau == 0) return r;
+  if (niveau == 0) {
+    r.erc = verifierERC(c, r.calculs.k, NiveauErc::Complet);  // gravités réglées et exclusions du projet appliquées
+    return r;
+  }
+  // L'ERC sur un autre fil pendant le cuivre (9.2) : elle ne lit que la conception et la connectivité
+  auto erc = std::async(std::launch::async, [&c, &r] { return verifierERC(c, r.calculs.k, NiveauErc::Complet); });
   r.calculs.pastilles = pastilles(c, r.calculs.k);
   r.calculs.zones = niveau == 2 || !zones ? remplirZones(c, r.calculs.k) : *zones;
-  r.calculs.etat = etatRoutage(c, r.calculs.k, r.calculs.zones);
-  if (niveau == 2) r.calculs.drc = verifierDRCReglee(c, r.calculs.k, r.calculs.zones);  // gravités et exclusions du projet (2.33)
+  if (niveau == 2) {
+    // La DRC calcule l'état du routage en même temps que ses contrôles et le rend : il n'est pas refait
+    const EtatRoutageRendu rendu(r.calculs.etat);
+    r.calculs.drc = verifierDRCReglee(c, r.calculs.k, r.calculs.zones);  // gravités et exclusions du projet (2.33)
+  } else
+    r.calculs.etat = etatRoutage(c, r.calculs.k, r.calculs.zones);
+  r.erc = erc.get();
   return r;
 }
 }  // namespace
@@ -726,10 +740,13 @@ void AtelierElectronique::recalculer() {
 void AtelierElectronique::recalculerApresModification() {
   const ConceptionElec* c = conceptionCourante();
   if (!c) return;
-  if (m_ecarts) m_ecarts->majPlusTard();  // la pastille des écarts suit chaque modification
-  majTableauChamps();
-  if (m_tableauObjets && m_vues->visibleDansMosaique(m_tableauObjets)) m_tableauObjets->recharger();
-  if (m_aPlacer && m_dockAPlacer && !m_dockAPlacer->isHidden()) m_aPlacer->refaire();
+  // Pendant un glissement, écarts, tableaux et liste « À placer » attendent la fin du geste (9.4)
+  if (!m_doc->enGeste()) {
+    if (m_ecarts) m_ecarts->majPlusTard();  // la pastille des écarts suit chaque modification
+    majTableauChamps();
+    if (m_tableauObjets && m_vues->visibleDansMosaique(m_tableauObjets)) m_tableauObjets->recharger();
+    if (m_aPlacer && m_dockAPlacer && !m_dockAPlacer->isHidden()) m_aPlacer->refaire();
+  }
   const ChangementConception ch = std::exchange(m_enAttente, ChangementConception{});
   // Une valeur, un fabricant, une hauteur, le cartouche : la connectivité, le cuivre et la DRC restent valables ;
   // seule l'ERC peut voir un brochage vérifié ou une empreinte (A12). Un calcul en fond part d'un état plus ancien :
@@ -753,7 +770,12 @@ void AtelierElectronique::recalculerApresModification() {
     return;
   }
   if (m_doc->enGeste()) {
-    // Pendant un glissement : chevelu et pastilles à jour, zones et DRC à la fin du geste
+    // Pendant un glissement : chevelu et pastilles à jour, zones et DRC à la fin du geste. Sur une grande carte, ce
+    // calcul part en fond (9.4) : la vue garde ses 60 images par seconde, le chevelu suit quand il arrive.
+    if (c->circuit.empreintes.size() >= 200) {
+      if (!m_calculEnCours) lancerCalcul(1);
+      return;
+    }
     Resultat r = calculerConception(*c, 1, &m_calculs.zones);
     r.generation = m_generation;
     appliquerResultat(std::move(r));
@@ -763,7 +785,7 @@ void AtelierElectronique::recalculerApresModification() {
   majEtatCalcul();
 }
 
-void AtelierElectronique::lancerCalcul() {
+void AtelierElectronique::lancerCalcul(int niveau) {
   const ConceptionElec* c = conceptionCourante();
   if (!c) return;
   if (m_fil.joinable()) m_fil.join();  // le fil précédent a déjà rendu son résultat
@@ -777,16 +799,22 @@ void AtelierElectronique::lancerCalcul() {
   });
   const std::uint64_t generation = m_generation;
   QPointer<AtelierElectronique> moi(this);
-  m_fil = std::thread([copie = *c, generation, moi] {
-    auto r = std::make_shared<Resultat>(calculerConception(copie, 2, nullptr));
+  auto zones = niveau == 1 ? std::make_shared<Remplissages>(m_calculs.zones) : std::shared_ptr<Remplissages>();
+  m_fil = std::thread([copie = *c, generation, moi, niveau, zones] {
+    auto r = std::make_shared<Resultat>(calculerConception(copie, niveau, zones.get()));
     r->generation = generation;
     QMetaObject::invokeMethod(qApp, [moi, r] {
       if (!moi) return;
       moi->m_calculEnCours = false;
       moi->m_schema->setCalculLong(false);
       moi->m_circuit->setCalculLong(false);
-      if (r->generation == moi->m_generation) moi->appliquerResultat(std::move(*r));
-      else moi->lancerCalcul();  // la conception a changé pendant le calcul : on repart du dernier état
+      const bool geste = moi->m_doc->enGeste();
+      // Un calcul de geste arrive pendant le geste : il s'applique s'il est le dernier ; sinon on repart du dernier état
+      if (r->generation == moi->m_generation && (r->niveau == 2 || geste)) moi->appliquerResultat(std::move(*r));
+      else {
+        if (r->niveau == 1 && geste) moi->appliquerResultat(std::move(*r));  // chevelu presque à jour, mieux que rien
+        moi->lancerCalcul(geste ? 1 : 2);
+      }
     }, Qt::QueuedConnection);
   });
 }
@@ -961,6 +989,17 @@ void AtelierElectronique::allerAuProbleme(const QString& lien) {
 void AtelierElectronique::majVue3D() {
   const ConceptionElec* c = conceptionCourante();
   if (!c || m_3dAJour) return;
+  // Ce que la 3D montre : le circuit (cuivre, contour, empreintes, empilage), les corps et leurs modèles ; une valeur,
+  // un fabricant ou une note changés ne la refont pas (9.5)
+  std::string sig = prom::ecad::versJson(*c)["circuit"].dump();
+  for (const auto& x : c->composants) sig += x.uuid + ':' + std::to_string(hauteurComposant(*c, x).mm) + ':' + x.modele3D + ':' + x.empreinte + ';';
+  for (const auto& [id, m] : c->modeles3D) sig += id + ',' + std::to_string(m.dx) + ',' + std::to_string(m.dy) + ',' + std::to_string(m.dz) + ',' + std::to_string(m.quarts) + ';';
+  if (sig == m_signature3D) {
+    m_3dAJour = true;
+    return;
+  }
+  m_signature3D = std::move(sig);
+  ++m_constructions3D;
   const prom::Carte3D m = prom::modele3DCarte(*c);
   std::vector<std::pair<TopoDS_Shape, QColor>> couleurs;
   for (const auto& [forme, couleur] : m.couleurs) couleurs.push_back({forme, QColor(QString::fromStdString(couleur))});

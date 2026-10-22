@@ -19,6 +19,7 @@
         {"forme": "separateur"},
         {"titre": "Annoter", "forme": "grand", "actions": ["schema.annoter", "schema.renumeroter"]},
         {"titre": "Vérifier", "forme": "grand", "actions": ["schema.erc", "regles.contraintes"]},
+        {"titre": "Simuler", "forme": "grand", "actions": ["simulation.ouvrir"]},
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
         {"titre": "Circuit", "forme": "grand", "actions": ["schema.creerCircuit"]},
         {"titre": "Feuille", "forme": "grand", "actions": ["schema.feuilleNouvelle", "schema.feuilleSuivante", "schema.feuillePrecedente", "schema.feuilleSupprimer"]},
@@ -59,6 +60,7 @@
         {"titre": "Dessins", "forme": "grand", "actions": ["fabrication.dessinSchema", "fabrication.typon", "fabrication.planMontage"]},
         {"titre": "Listes", "forme": "grand", "actions": ["fabrication.nomenclature", "fabrication.reseaux"]},
         {"titre": "Échanges", "forme": "grand", "actions": ["fabrication.kicad", "fabrication.netlistKicad", "fabrication.ipc"]},
+        {"titre": "Autres logiciels", "forme": "grille", "actions": ["fabrication.importerNetlist", "fabrication.dsn", "fabrication.ses", "fabrication.dxfMeca", "fabrication.boardview", "fabrication.ipc2581", "fabrication.gerberCarte"]},
         {"titre": "Boîtier", "forme": "grand", "actions": ["fabrication.boitier"]},
         {"titre": "Fabricant", "forme": "grille", "actions": ["fabrication.panneau", "fabrication.devis", "fabrication.controler", "fabrication.visionneuse"]}
       ]

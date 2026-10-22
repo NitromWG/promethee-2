@@ -294,24 +294,45 @@ ChangementConception CommandeProprieteComposant::changement() const {
 }
 
 // ---------- Instantané ----------
+namespace {
+// Place mémoire approchée d'une conception (borne de la pile d'annulation) : les objets comptés à leur taille
+std::size_t tailleApprochee(const ConceptionElec& c) {
+  std::size_t n = sizeof(ConceptionElec) + c.composants.size() * (sizeof(ComposantElec) + 160);
+  for (const auto& f : c.feuilles)
+    n += f.symboles.size() * (sizeof(SymbolePlace) + 96) + f.fils.size() * (sizeof(Fil) + 48) + f.etiquettes.size() * (sizeof(Etiquette) + 48) +
+         f.textes.size() * (sizeof(TexteSchema) + 64) + f.jonctions.size() * sizeof(Jonction);
+  const Circuit& k = c.circuit;
+  n += k.empreintes.size() * (sizeof(EmpreintePlacee) + 96) + k.pistes.size() * (sizeof(Piste) + 80) + k.vias.size() * (sizeof(Via) + 80) + k.textes.size() * (sizeof(TexteCircuit) + 64);
+  for (const auto& z : k.zones) n += sizeof(Zone) + z.contour.size() * sizeof(Pt) + 96;
+  n += (c.symboles.size() + c.empreintes.size()) * 2048;
+  return n;
+}
+}  // namespace
+
 CommandeInstantane::CommandeInstantane(std::string nom, const ConceptionElec& avant, const ConceptionElec& apres)
-    : m_nom(std::move(nom)), m_avant(versJson(avant).dump()), m_apres(versJson(apres).dump()), m_changement(differencier(avant, apres)) {}
+    : m_nom(std::move(nom)),
+      m_avant(std::make_shared<const ConceptionElec>(avant)),
+      m_apres(std::make_shared<const ConceptionElec>(apres)),
+      m_changement(differencier(avant, apres)),
+      m_octets(tailleApprochee(avant) + tailleApprochee(apres) + 256) {}
 
 namespace {
-void remplacer(ConceptionElec& c, const std::string& texte) {
+void remplacer(ConceptionElec& c, const ConceptionElec& etat) {
   // L'affichage (grille, unité, opacité) reste celui du moment : ce n'est pas de l'historique
   const AffichageCircuit affichage = c.circuit.affichage;
-  c = conceptionDepuisJson(nlohmann::ordered_json::parse(texte));
+  c = etat;
   c.circuit.affichage = affichage;
 }
 }  // namespace
 
-void CommandeInstantane::appliquer(ConceptionElec& c) { remplacer(c, m_apres); }
-void CommandeInstantane::defaire(ConceptionElec& c) { remplacer(c, m_avant); }
+void CommandeInstantane::appliquer(ConceptionElec& c) { remplacer(c, *m_apres); }
+void CommandeInstantane::defaire(ConceptionElec& c) { remplacer(c, *m_avant); }
+bool CommandeInstantane::neutre() const { return m_avant == m_apres || differencier(*m_avant, *m_apres).vide(); }
 
 void CommandeInstantane::prolonger(const CommandeInstantane& suivante) {
   m_apres = suivante.m_apres;
   m_changement.fusionner(suivante.m_changement);
+  m_octets = tailleApprochee(*m_avant) + tailleApprochee(*m_apres) + 256;
 }
 
 // ---------- Commande et ses suites ----------

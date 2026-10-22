@@ -21,6 +21,7 @@
 #include <QDockWidget>
 #include <QFile>
 #include <QFileDialog>
+#include <QFileInfo>
 #include <QGridLayout>
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -43,6 +44,7 @@
 #include "VuePiece.hpp"
 #include "VueSchema.hpp"
 #include "Vignettes.hpp"
+#include "promethee/echanges_electronique.hpp"
 #include "promethee/bibliotheque.hpp"
 #include "promethee/dxf.hpp"
 #include "promethee/fichiers.hpp"
@@ -325,6 +327,34 @@ void AtelierElectronique::enregistrerCommandes() {
     enregistrerTexte(QStringLiteral("Liste IPC-D-356"), QStringLiteral(".ipc"), QStringLiteral("IPC-D-356 (*.ipc *.d356)"), [](const ConceptionElec& x) { return ipcD356(x, connectivite(x)); });
   };
   c["fabrication.boitier"] = [this] { lierAuBoitier(); };
+  // Échanges (lot L10)
+  c["fabrication.dsn"] = [enregistrerTexte] {
+    enregistrerTexte(QStringLiteral("Carte Specctra pour un routeur externe"), QStringLiteral(".dsn"), QStringLiteral("Specctra (*.dsn)"), [](const ConceptionElec& x) { return specctraDsn(x); });
+  };
+  c["fabrication.ses"] = [this] {
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Session du routeur externe"), {}, QStringLiteral("Sessions Specctra (*.ses)"));
+    if (!f.isEmpty()) importerSessionSpecctra(f);
+  };
+  c["fabrication.dxfMeca"] = [enregistrerTexte] {
+    enregistrerTexte(QStringLiteral("DXF de la mécanique de la carte"), QStringLiteral(".dxf"), QStringLiteral("DXF (*.dxf)"), [](const ConceptionElec& x) { return dxfMecaniqueCarte(x); });
+  };
+  c["fabrication.boardview"] = [enregistrerTexte] {
+    enregistrerTexte(QStringLiteral("BoardView pour la réparation"), QStringLiteral(".brd"), QStringLiteral("BoardView (*.brd)"), [](const ConceptionElec& x) { return boardView(x); });
+  };
+  c["fabrication.ipc2581"] = [enregistrerTexte] {
+    enregistrerTexte(QStringLiteral("IPC-2581"), QStringLiteral(".xml"), QStringLiteral("IPC-2581 (*.xml *.cvg)"), [](const ConceptionElec& x) { return ipc2581(x); });
+  };
+  c["fabrication.importerNetlist"] = [this] {
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Netlist à appliquer"), {}, QStringLiteral("Netlists (*.net *.txt)"));
+    if (f.isEmpty()) return;
+    const QString csv = QFileInfo(f).dir().filePath(QFileInfo(f).completeBaseName() + QStringLiteral("-changements.csv"));
+    importerNetlist(f, csv);
+  };
+  c["simulation.ouvrir"] = [this] { ouvrirSimulation(); };
+  c["fabrication.gerberCarte"] = [this] {
+    const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Dossier Gerber et perçages à relire en carte"));
+    if (!d.isEmpty()) ajouterCarteDepuisGerber(d);
+  };
 }
 
 // Couche active, couches visibles et opacité des cuivres inactifs (EL-25)

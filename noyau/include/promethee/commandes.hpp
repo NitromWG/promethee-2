@@ -89,14 +89,18 @@ class CommandeInstantane : public Commande {
   void appliquer(ConceptionElec& c) override;
   void defaire(ConceptionElec& c) override;
   ChangementConception changement() const override { return m_changement; }
-  bool neutre() const override { return m_avant == m_apres; }
-  std::size_t octets() const override { return m_avant.size() + m_apres.size() + 256; }
+  bool neutre() const override;
+  std::size_t octets() const override { return m_octets; }
   // Pour fusionner deux instantanés successifs (appuis répétés sur les flèches, C18) : garde l'état de départ
   void prolonger(const CommandeInstantane& suivante);
 
  private:
-  std::string m_nom, m_avant, m_apres;  // conceptions au format du fichier
+  // Copies des deux états, partagées entre instantanés fusionnés : plus de mise au format du fichier à chaque pas,
+  // qui coûtait des centaines de millisecondes sur une grande carte (9.4)
+  std::string m_nom;
+  std::shared_ptr<const ConceptionElec> m_avant, m_apres;
   ChangementConception m_changement;
+  std::size_t m_octets = 0;
 };
 
 // Une commande et ses suites (lot L3, 3.6 et 3.14) : ce que la conception tire de la commande, valeurs calculées

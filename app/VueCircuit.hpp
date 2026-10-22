@@ -10,6 +10,9 @@
 #pragma once
 
 #include <array>
+#include <map>
+#include <memory>
+#include <set>
 #include <functional>
 #include <optional>
 #include <utility>
@@ -22,6 +25,10 @@
 
 #include "OutilVue.hpp"
 #include "promethee/electronique.hpp"
+
+namespace prom::ecad {
+class RemplissageLocal;
+}
 
 class AppuiLong;
 class NavigationVue;
@@ -43,7 +50,18 @@ class VueCircuit : public QWidget {
     std::vector<prom::ecad::Violation> drc;
   };
   explicit VueCircuit(Document* doc, QWidget* parent = nullptr);
+  ~VueCircuit() override;
   void setConception(int i);
+  // ---------- Glissement rapide (lot L9, 9.4 et 9.9) ----------
+  // Pendant un glissement, le fond (tout sauf les objets glissés) est peint une fois ; chaque image le pose, puis la
+  // zone remplie de nouveau dans la fenêtre que la piste touche, puis les seuls objets glissés
+  void commencerGlissement();
+  void finirGlissement();
+  bool glissementRapide() const { return m_glissement; }
+  double tempsTravail() const { return m_tempsTravail; }  // ms cumulées dans les mouvements et la peinture (essais)
+  int zonesSuivies() const { return static_cast<int>(m_zonesLocales.size()); }
+  // Cuivre recalculé de la zone dans la fenêtre de la dernière image (vide hors glissement)
+  const prom::ecad::Polygones* cuivreLocal(const std::string& zone) const;
   void setCalculs(const Calculs* c) {
     m_calc = c;
     ++m_generationCalculs;
@@ -228,6 +246,38 @@ class VueCircuit : public QWidget {
   std::optional<prom::ecad::DefSymbole> m_article;  // article mécanique glissé (2.2)
   // Le dessin fixe gardé en image (2.4, A10) : la souris ne redessine que l'outil, l'article glissé et les repères
   void peindreFixe(class QPainter& g, const prom::ecad::ConceptionElec& c);
+  void peindreGlissement(class QPainter& g, const prom::ecad::ConceptionElec& c);
+  void peindreSelection(class QPainter& g, const prom::ecad::ConceptionElec& c);
+  // Étage du dessin fixe : 0 tout, 1 la base seule (sans ce qui dépend de la sélection), 2 la sélection seule
+  int m_etage = 0;
+  // Cuivre des zones simplifié pour l'affichage (sommets plus proches qu'un demi-pixel retirés), par zone
+  std::map<std::string, prom::ecad::Polygones> m_zonesAffichees;
+  std::uint64_t m_generationZonesAffichees = ~std::uint64_t{0};
+  double m_echelleZonesAffichees = 0;
+  const prom::ecad::Polygones& cuivreAffiche(const std::string& zone, const prom::ecad::Polygones& cuivre);  void peindreMobiles(class QPainter& g, const prom::ecad::ConceptionElec& c);
+  bool exclu(const std::string& id) const { return m_exclus && m_exclus->count(id); }
+  // Partie du dessin fixe : tout, le fond seul (grille et plaque), ou le dessus seul (fond transparent)
+  enum class Partie { Tout, Fond, Dessus };
+  Partie m_partie = Partie::Tout;
+  bool m_glissement = false;
+  double m_tempsTravail = 0;
+  std::set<std::string> m_mobiles;                 // composants, pistes et vias glissés
+  const std::set<std::string>* m_exclus = nullptr;  // pendant la peinture du fond du glissement
+  std::set<std::string> m_zonesSansCuivre;          // zones dont le cuivre est peint à part pendant le glissement
+  QPixmap m_fondGlisse, m_dessusGlisse, m_zoneGlisse;
+  struct CleGlisse {
+    double echelle = 0, opacite = 0;
+    QPointF origine;
+    QSize taille;
+    qreal dpr = 0;
+    int theme = -1;
+    prom::ecad::Couche active{};
+    friend bool operator==(const CleGlisse&, const CleGlisse&) = default;
+  } m_cleGlisse;
+  std::vector<std::unique_ptr<prom::ecad::RemplissageLocal>> m_zonesLocales;
+  std::map<std::string, prom::ecad::Polygones> m_cuivreLocal;  // zone → cuivre de la fenêtre courante
+  std::vector<prom::ecad::TraitSerigraphie> m_textesGlisse;    // textes des objets fixes, calculés au début du geste
+  bool m_textesFiges = false;
   void peindreReperes(class QPainter& g, const prom::ecad::ConceptionElec& c);
   struct CleCache {
     std::uint64_t generation = ~std::uint64_t{0}, calculs = 0;
@@ -246,6 +296,8 @@ class VueCircuit : public QWidget {
   };
   QPixmap m_cache;
   CleCache m_cleCache;
+  QPixmap m_cacheBase;
+  CleCache m_cleBase;
   std::uint64_t m_generationDoc = 0, m_generationCalculs = 0;
   prom::ecad::Pt m_posArticle{};
   double m_rotationArticle = 0;

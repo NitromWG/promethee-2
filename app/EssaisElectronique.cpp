@@ -350,6 +350,11 @@ void essaisElectroniqueL5(FenetrePrincipale& f, const std::function<void(bool, c
 void essaisElectroniqueL6(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL7(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL8(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void essaisElectroniqueL9(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void essaisElectroniqueL10(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void essaisElectroniqueL11(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void profilerClicsL9(FenetrePrincipale& f);
+void profilerGlisseL9(FenetrePrincipale& f);
 
 namespace {
 // Objectifs de la charte d'interaction : 16 ms pour un retour de souris, 50 ms pour un clic, 100 ms pour une
@@ -358,6 +363,10 @@ void mesure(const char* quoi, double ms, double objectif) {
   std::printf("MESURE  %-62s %8.1f ms%s\n", quoi, ms,
               objectif > 0 ? (ms > objectif ? QStringLiteral("  (objectif %1 ms : dépassé)").arg(objectif).toUtf8().constData() : QStringLiteral("  (objectif %1 ms)").arg(objectif).toUtf8().constData()) : "");
   std::fflush(stdout);
+  // Lot L9 (9.1, AUT-12) : un temps qui dépasse son objectif de plus de 20 % fait échouer les essais, donc la
+  // construction ; PROMETHEE_MESURES_INDICATIVES=1 les garde indicatifs (machine lente, rendu logiciel)
+  if (objectif > 0 && ms > 1.2 * objectif && qEnvironmentVariableIsEmpty("PROMETHEE_MESURES_INDICATIVES"))
+    verifier(false, std::string("mesure dans son objectif (+20 %) : ") + quoi, QStringLiteral("%1 ms pour %2 ms").arg(ms, 0, 'f', 1).arg(objectif).toStdString());
 }
 
 void mesurerAtelier(FenetrePrincipale& f) {
@@ -524,7 +533,7 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
   QDir().mkpath(dossier);
   qputenv("PROMETHEE_BIBLIOTHEQUE", QDir(dossier).filePath(QStringLiteral("bibliotheque.json")).toUtf8());
   // PROMETHEE_ESSAIS_LOTS=L1,L2 : les seuls essais de ces lots, sans le parcours ni les mesures
-  if (const QString lots = qEnvironmentVariable("PROMETHEE_ESSAIS_LOTS"); !lots.isEmpty()) {
+  if (const QStringList lots = qEnvironmentVariable("PROMETHEE_ESSAIS_LOTS").split(QLatin1Char(','), Qt::SkipEmptyParts); !lots.isEmpty()) {
     verifier(reel::activer(&f), "la fenêtre est active : les touches et les raccourcis lui parviennent");
     const auto v = [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); };
     if (lots.contains(QStringLiteral("L1"))) essaisElectroniqueL1(f, v);
@@ -535,6 +544,12 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
     if (lots.contains(QStringLiteral("L6"))) essaisElectroniqueL6(f, v);
     if (lots.contains(QStringLiteral("L7"))) essaisElectroniqueL7(f, v);
     if (lots.contains(QStringLiteral("L8"))) essaisElectroniqueL8(f, v);
+    if (lots.contains(QStringLiteral("L9"))) essaisElectroniqueL9(f, v);
+    if (lots.contains(QStringLiteral("L10"))) essaisElectroniqueL10(f, v);
+    if (lots.contains(QStringLiteral("L11"))) essaisElectroniqueL11(f, v);
+    if (lots.contains(QStringLiteral("CLICS"))) profilerClicsL9(f);
+    if (lots.contains(QStringLiteral("GLISSE"))) profilerGlisseL9(f);
+    if (lots.contains(QStringLiteral("MESURES"))) mesurerAtelier(f);
     std::printf("%d échec(s)\n", g_echecs);
     std::fflush(stdout);
     QDir(dossier).removeRecursively();
@@ -1257,6 +1272,15 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
 
   // ---------- Lot L8 : fabrication et cartes complexes (EssaisElectroniqueL8.cpp) ----------
   essaisElectroniqueL8(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
+
+  // ---------- Lot L9 : performances (EssaisElectroniqueL9.cpp) ----------
+  essaisElectroniqueL9(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
+
+  // ---------- Lot L10 : échanges (EssaisElectroniqueL10.cpp) ----------
+  essaisElectroniqueL10(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
+
+  // ---------- Lot L11 : simulation (EssaisElectroniqueL11.cpp) ----------
+  essaisElectroniqueL11(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
 
   // ---------- Mesures (1.1, Q5, ERG-10) : la carte de mesure de 300 composants dans l'atelier, par de vrais gestes ;
   // temps relevés à chaque construction (lignes « MESURE »), sans seuil avant le lot L9 ----------

@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <memory>
 #include <thread>
+#include <utility>
 #include <future>
 #include <cctype>
 #include <cmath>
@@ -14,6 +15,7 @@
 
 #include "promethee/electronique.hpp"
 #include "promethee/remplissage_local.hpp"
+#include "promethee/verification.hpp"
 
 namespace prom::ecad {
 
@@ -738,6 +740,12 @@ Polygones RemplissageLocal::dans(const Boite& fenetre, const std::vector<Piste>&
   return intersecter(rempli, {cadre});
 }
 
+namespace {
+thread_local EtatRoutage* g_etatRendu = nullptr;
+}
+EtatRoutageRendu::EtatRoutageRendu(EtatRoutage& sortie) : m_avant(std::exchange(g_etatRendu, &sortie)) {}
+EtatRoutageRendu::~EtatRoutageRendu() { g_etatRendu = m_avant; }
+
 std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& k, const Remplissages& remplis) {
   // L'état du routage (chevelu, courts-circuits, bouts libres) se calcule sur un autre fil pendant les contrôles
   // d'isolement (9.2) : il ne lit que des données constantes
@@ -1113,6 +1121,7 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
   }
   // Routage : liaisons manquantes, courts-circuits, bouts de piste libres, zones vides
   const EtatRoutage etat = etatFutur.get();
+  if (g_etatRendu) *g_etatRendu = etat;
   std::map<std::string, std::vector<const Liaison*>> parReseau;
   for (const auto& l : etat.chevelu) parReseau[l.reseau].push_back(&l);
   for (const auto& [reseau, liste] : parReseau)

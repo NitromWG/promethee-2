@@ -538,6 +538,29 @@ std::vector<DefSymbole> construire() {
     s.posValeur = ptMm(0, 1.524);
     v.push_back(s);
   }
+  // ----- Simulation (lot L11) : sources sans empreinte, hors nomenclature ; la valeur dit la source -----
+  {
+    DefSymbole s = S("Source_tension", "Source de tension", "Simulation", "V", "",
+                     "Source de tension pour la simulation (1 : +) ; valeur « 5 », « DC 5 AC 1 », « SIN(0 1 1k) », « PULSE(0 5 0 1n 1n 1m 2m) » "
+                     "ou « 0 V pendant 1 ms, puis rampe à 5 V en 10 µs »",
+                     "source tension simulation sinus impulsion generateur");
+    s.genre = GenreComposant::HorsNomenclature;
+    s.broches = {B("1", "+", T::AlimSortie, 0, -5.08, 1, 2.54, false, true), B("2", "-", T::Passive, 0, 5.08, 3, 2.54, false, true)};
+    s.traces = {Arc(0, 0, 2.54, 0, 360), Txt(0, -0.9, "+", 1.27), Txt(0, 1.6, "−", 1.27)};
+    s.posReference = ptMm(3.302, -1.27);
+    s.posValeur = ptMm(3.302, 1.27);
+    v.push_back(s);
+  }
+  {
+    DefSymbole s = S("Source_courant", "Source de courant", "Simulation", "I", "",
+                     "Source de courant pour la simulation : le courant sort de la broche 2 ; valeur « 10m », « SIN(0 1m 1k) »", "source courant simulation");
+    s.genre = GenreComposant::HorsNomenclature;
+    s.broches = {Bp("1", 0, -5.08, 1, 2.54), Bp("2", 0, 5.08, 3, 2.54)};
+    s.traces = {Arc(0, 0, 2.54, 0, 360), Ligne({{0, -1.524}, {0, 1.524}}), Ligne({{-0.762, 0.508}, {0, 1.524}, {0.762, 0.508}})};
+    s.posReference = ptMm(3.302, -1.27);
+    s.posValeur = ptMm(3.302, 1.27);
+    v.push_back(s);
+  }
   {
     DefSymbole s = S("Drapeau_alim", "Drapeau d’alimentation", "Alimentations", "#FLG", "", "Déclare le réseau alimenté (vérification électrique)", "pwr_flag drapeau");
     s.drapeau = true;

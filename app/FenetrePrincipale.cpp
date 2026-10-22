@@ -429,6 +429,7 @@ FenetrePrincipale::FenetrePrincipale(bool dansCoquille) : m_dansCoquille(dansCoq
   connect(m_doc, &Document::change, this, [this] { QTimer::singleShot(0, this, [this] { suivreConceptionsElec(); suivreProjetsElectriques(); }); });
   connect(m_doc, &Document::change, this, [this] { m_arbrePerime = true; });
   connect(m_doc, &Document::conceptionChangee, this, [this](const prom::ecad::ChangementConception& ch) {
+    if (m_doc->enGeste()) return;  // pendant un glissement, l'arbre attend la fin du geste (9.4)
     const auto it = m_signaturesArbre.find(ch.conception);
     const prom::ecad::ConceptionElec* c = nullptr;
     for (const auto& x : m_doc->projet().electronique)

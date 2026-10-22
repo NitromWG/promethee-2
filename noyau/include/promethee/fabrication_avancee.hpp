@@ -39,6 +39,8 @@ struct ObjetGerber {
   Polygone forme;                   // cuivre de l'objet (repère de fabrication, nm)
   std::string reference, numero;    // %TO.P en vigueur (pastille)
   std::string reseau;               // %TO.N en vigueur
+  Pt a, b;                          // trait : extrémités ; flash : centre (dans a)
+  Nm largeur = 0;                   // trait : largeur de l'ouverture
 };
 struct LectureGerber {
   std::vector<ObjetGerber> objets;
