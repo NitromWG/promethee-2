@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "promethee/migrations.hpp"
+#include "promethee/robustesse.hpp"
 
 namespace prom::ecad {
 
@@ -381,6 +382,8 @@ J versJson(const ConceptionElec& c) {
       if (x.versionArticle != 0) y["versionArticle"] = x.versionArticle;
     }
     if (!x.lcsc.empty()) y["lcsc"] = x.lcsc;
+    if (!x.modele3D.empty()) y["modele3D"] = x.modele3D;
+    if (!x.modeleComposant.empty()) y["modeleComposant"] = x.modeleComposant;
     rendreInconnues(c, "composant:" + x.uuid, y);
     comps.push_back(y);
   }
@@ -390,6 +393,8 @@ J versJson(const ConceptionElec& c) {
   J feuilles = J::array();
   for (const auto& f : c.feuilles) {
     J y = {{"uuid", f.uuid}, {"nom", f.nom}, {"format", f.format}};
+    if (f.repetitions > 1) y["repetitions"] = f.repetitions;
+    if (!f.modele.empty()) y["modele"] = f.modele, y["instance"] = f.instance;
     J s = J::array();
     for (const SymbolePlace* px : trie(f.symboles, parUuid)) {
       const SymbolePlace& x = *px;
@@ -493,6 +498,39 @@ J versJson(const ConceptionElec& c) {
     for (const auto& [id, a] : c.articles) ar.push_back(articleVersJson(a));
     o["articles"] = ar;
   }
+  if (!c.modeles3D.empty()) {
+    J mo = J::array();
+    for (const auto& [id, m] : c.modeles3D) {
+      J y = {{"id", id}, {"nom", m.nom}, {"boite", {m.x0, m.y0, m.z0, m.x1, m.y1, m.z1}}, {"brep", m.brep}};
+      if (m.quarts) y["quarts"] = m.quarts;
+      if (m.dx != 0 || m.dy != 0 || m.dz != 0) y["reglage"] = {m.dx, m.dy, m.dz};
+      mo.push_back(y);
+    }
+    o["modeles3D"] = mo;
+  }
+  if (!c.facades.empty()) {
+    J fa = J::array();
+    for (const auto& f : c.facades) {
+      J y = {{"uuid", f.uuid}, {"nom", f.nom}, {"ecartMin", f.ecartMin}, {"marge", f.marge}, {"elements", J::array()}};
+      static const char* genres[] = {"decoupeRonde", "decoupeRect", "legende", "echelle"};
+      for (const auto& e : f.elements) {
+        J z = {{"uuid", e.uuid}, {"genre", genres[static_cast<int>(e.genre)]}, {"dx", e.dx}, {"dy", e.dy}};
+        if (!e.composant.empty()) z["composant"] = e.composant;
+        switch (e.genre) {
+          case ElementFacade::Genre::DecoupeRonde: z["diametre"] = e.diametre; break;
+          case ElementFacade::Genre::DecoupeRect: z["largeur"] = e.largeur, z["hauteur"] = e.hauteur; break;
+          case ElementFacade::Genre::Legende: z["texte"] = e.texte, z["taille"] = e.taille; break;
+          case ElementFacade::Genre::Echelle:
+            z["graduations"] = e.graduations, z["rayon"] = e.rayon, z["angleDebut"] = e.angleDebut, z["angleFin"] = e.angleFin, z["longueurTrait"] = e.longueurTrait;
+            break;
+        }
+        y["elements"].push_back(z);
+      }
+      fa.push_back(y);
+    }
+    o["facades"] = fa;
+  }
+  if (!c.esquisseContour.is_null()) o["esquisseContour"] = c.esquisseContour;
   const Circuit& k = c.circuit;
   J ci = {{"contour", {{"origine", pt(k.contour.origine)}, {"largeur", k.contour.largeur}, {"hauteur", k.contour.hauteur}, {"rayon", k.contour.rayon}, {"libre", points(k.contour.libre)}}},
           {"empilage", {{"couches", k.empilage.couchesCuivre}, {"epaisseur", k.empilage.epaisseur}, {"cuivre", k.empilage.cuivre}, {"materiau", k.empilage.materiau}, {"finition", k.empilage.finition},
@@ -550,6 +588,16 @@ J versJson(const ConceptionElec& c) {
   }
   ci["textes"] = te;
   if (!k.volumes.empty()) ci["volumes"] = volumesVersJson(k.volumes);
+  if (!k.dessins.empty()) {
+    J ds = J::array();
+    static const char* formes[] = {"trait", "arc", "cercle", "polygone"};
+    for (const auto& d : k.dessins) {
+      J y = {{"uuid", d.uuid}, {"forme", formes[static_cast<int>(d.forme)]}, {"couche", codeCouche(d.couche)}, {"points", points(d.points)}, {"epaisseur", d.epaisseur}};
+      if (d.plein) y["plein"] = true;
+      ds.push_back(y);
+    }
+    ci["dessins"] = ds;
+  }
   rendreInconnues(c, "circuit", ci);
   o["circuit"] = ci;
   rendreInconnues(c, "conception", o);
@@ -666,10 +714,58 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
   c.nom = txt(o, "nom", c.nom);
   garderInconnues(c, "conception", o,
                   {"uuid", "nom", "format", "formatElectronique", "pilotageBoitier", "schemaSeul", "verrouillee", "publications", "cartouche", "composants", "feuilles", "symboles", "nomsReseaux",
-                   "erc", "bibliothequeEmpreintes", "circuit", "synchroSurConfirmation", "variables", "articles"});
+                   "erc", "bibliothequeEmpreintes", "circuit", "synchroSurConfirmation", "variables", "articles", "modeles3D", "facades", "esquisseContour"});
   for (const auto& x : tableau(o, "articles"))
     if (x.is_object())
       if (Article a = articleDepuisJson(x); !a.id.empty()) c.articles[a.id] = a;
+  for (const auto& x : tableau(o, "modeles3D")) {
+    if (!x.is_object() || txt(x, "id").empty()) continue;
+    Modele3D m;
+    m.nom = txt(x, "nom");
+    m.brep = txt(x, "brep");
+    if (const J& b = champ(x, "boite"); b.is_array() && b.size() == 6) {
+      double v[6];
+      for (int i = 0; i < 6; ++i) v[i] = b[static_cast<std::size_t>(i)].is_number() ? b[static_cast<std::size_t>(i)].get<double>() : 0;
+      m.x0 = v[0], m.y0 = v[1], m.z0 = v[2], m.x1 = v[3], m.y1 = v[4], m.z1 = v[5];
+    }
+    m.quarts = ent(x, "quarts", 0);
+    if (const J& r = champ(x, "reglage"); r.is_array() && r.size() == 3 && r[0].is_number() && r[1].is_number() && r[2].is_number())
+      m.dx = r[0].get<double>(), m.dy = r[1].get<double>(), m.dz = r[2].get<double>();
+    c.modeles3D[txt(x, "id")] = m;
+  }
+  for (const auto& x : tableau(o, "facades")) {
+    if (!x.is_object()) continue;
+    Facade f;
+    f.uuid = txt(x, "uuid");
+    if (f.uuid.empty()) f.uuid = nouvelUuid();
+    f.nom = txt(x, "nom", f.nom);
+    f.ecartMin = num(x, "ecartMin", 2);
+    f.marge = num(x, "marge", 1.5);
+    for (const auto& z : tableau(x, "elements")) {
+      if (!z.is_object()) continue;
+      ElementFacade e;
+      e.uuid = txt(z, "uuid");
+      if (e.uuid.empty()) e.uuid = nouvelUuid();
+      const std::string g = txt(z, "genre");
+      e.genre = g == "decoupeRect" ? ElementFacade::Genre::DecoupeRect : g == "legende" ? ElementFacade::Genre::Legende : g == "echelle" ? ElementFacade::Genre::Echelle : ElementFacade::Genre::DecoupeRonde;
+      e.composant = txt(z, "composant");
+      e.dx = num(z, "dx");
+      e.dy = num(z, "dy");
+      e.diametre = num(z, "diametre", 7);
+      e.largeur = num(z, "largeur", 10);
+      e.hauteur = num(z, "hauteur", 5);
+      e.texte = txt(z, "texte");
+      e.taille = num(z, "taille", 3);
+      e.graduations = ent(z, "graduations", 11);
+      e.rayon = num(z, "rayon", 10);
+      e.angleDebut = num(z, "angleDebut", 225);
+      e.angleFin = num(z, "angleFin", -45);
+      e.longueurTrait = num(z, "longueurTrait", 2);
+      f.elements.push_back(e);
+    }
+    c.facades.push_back(f);
+  }
+  if (o.is_object() && o.contains("esquisseContour") && o["esquisseContour"].is_object()) c.esquisseContour = o["esquisseContour"];
   // Format de la conception (ECH-10) : « format », « formatElectronique » dans les fichiers de la 0.29, rien jusqu'à
   // la 0.28. Plus récent que ce logiciel : lecture tolérante, et l'alerte dit ce qu'enregistrer peut perdre.
   const int format = o.is_object() && o.contains("format") && o["format"].is_number() ? ent(o, "format", 1) : ent(o, "formatElectronique", 1);
@@ -806,10 +902,12 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
     k.article = txt(x, "article");
     k.versionArticle = ent(x, "versionArticle");
     k.lcsc = txt(x, "lcsc");
+    k.modele3D = txt(x, "modele3D");
+    k.modeleComposant = txt(x, "modeleComposant");
     garderInconnues(c, "composant:" + k.uuid, x,
                     {"uuid", "ref", "valeur", "symbole", "empreinte", "fabricant", "mpn", "fournisseur", "description", "fiche", "nePasMonter", "horsCarte", "hauteur", "provenanceHauteur",
                      "sourceHauteur", "genre", "horsSimulation", "formule", "parametres", "valeurLue", "brochageVerifie", "horsNomenclature", "horsPlacement", "champs", "article",
-                     "versionArticle", "lcsc"});
+                     "versionArticle", "lcsc", "modele3D", "modeleComposant"});
     c.composants.push_back(k);
   }
   for (const auto& x : tableau(o, "feuilles")) {
@@ -819,7 +917,10 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
     if (f.uuid.empty()) f.uuid = nouvelUuid();
     f.nom = txt(x, "nom", f.nom);
     f.format = txt(x, "format", "A4");
-    garderInconnues(c, "feuille:" + f.uuid, x, {"uuid", "nom", "format", "symboles", "fils", "jonctions", "nonConnexions", "etiquettes", "textes"});
+    f.repetitions = ent(x, "repetitions", 0);
+    f.modele = txt(x, "modele");
+    f.instance = ent(x, "instance", 0);
+    garderInconnues(c, "feuille:" + f.uuid, x, {"uuid", "nom", "format", "symboles", "fils", "jonctions", "nonConnexions", "etiquettes", "textes", "repetitions", "modele", "instance"});
     for (const auto& y : tableau(x, "symboles")) {
       if (!objet(y, "symbole placé")) continue;
       SymbolePlace s;
@@ -887,7 +988,7 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
   if (o.is_object() && o.contains("circuit") && o["circuit"].is_object()) {
     const J& k = o["circuit"];
     Circuit& ci = c.circuit;
-    garderInconnues(c, "circuit", k, {"contour", "affichage", "empilage", "regles", "serigraphie", "fabrication", "empreintes", "pistes", "vias", "zones", "textes", "volumes"});
+    garderInconnues(c, "circuit", k, {"contour", "affichage", "empilage", "regles", "serigraphie", "fabrication", "empreintes", "pistes", "vias", "zones", "textes", "volumes", "dessins"});
     garderInconnues(c, "circuit/contour", champ(k, "contour"), {"origine", "largeur", "hauteur", "rayon", "libre", "decoupes"});
     garderInconnues(c, "circuit/affichage", champ(k, "affichage"), {"unite", "grille", "opacite"});
     garderInconnues(c, "circuit/empilage", champ(k, "empilage"), {"couches", "epaisseur", "cuivre", "materiau", "finition", "vernis", "serigraphie"});
@@ -994,13 +1095,28 @@ ConceptionElec lireConception(const J& o, std::vector<std::string>* alertes) {
         garderInconnues(c, "texteCarte:" + ci.textes.back().uuid, y, {"uuid", "texte", "couche", "p", "hauteur", "rot"});
       }
     ci.volumes = volumesDepuisJson(champ(k, "volumes"));
+    for (const auto& y : tableau(k, "dessins")) {
+      if (!y.is_object()) continue;
+      DessinCircuit d;
+      d.uuid = txt(y, "uuid", nouvelUuid());
+      const std::string f = txt(y, "forme");
+      d.forme = f == "arc" ? DessinCircuit::Forme::Arc : f == "cercle" ? DessinCircuit::Forme::Cercle : f == "polygone" ? DessinCircuit::Forme::Polygone : DessinCircuit::Forme::Trait;
+      d.couche = couche(y, "couche", Couche::SerigraphieDessus);
+      d.points = lirePoints(champ(y, "points"));
+      d.epaisseur = entier(y, "epaisseur", 150'000);
+      d.plein = vrai(y, "plein");
+      ci.dessins.push_back(d);
+    }
     trierEnPlace(ci.empreintes, [](const EmpreintePlacee& a) { return a.composant; });
     trierEnPlace(ci.pistes, [](const Piste& a) { return a.uuid; });
     trierEnPlace(ci.vias, [](const Via& a) { return a.uuid; });
     trierEnPlace(ci.textes, [](const TexteCircuit& a) { return a.uuid; });
   }
+  // Identifiants en double (9.7) : renouvelés, et dits
+  const std::vector<std::string> doublons = reparerDoublons(c);
   if (alertes) {
     const std::string ctx = "Carte « " + c.nom + " » : ";
+    for (const auto& n : doublons) alertes->push_back(ctx + n + ".");
     if (!compte.ignores.empty()) {
       std::string liste;
       for (const auto& [quoi, n] : compte.ignores) liste += (liste.empty() ? "" : ", ") + quoi + " × " + std::to_string(n);

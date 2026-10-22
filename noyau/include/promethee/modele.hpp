@@ -85,11 +85,23 @@ struct Carte {
   bool libre() const { return !contours.empty(); }
 };
 
+// Impression 3D des pièces du boîtier (6.16, MEC-28) : matière, densité, prix au kilo, débit et prix de la machine
+struct Impression {
+  std::string matiere = "PETG";
+  double densite = 1.27;   // g/cm³
+  double prixKg = 25;      // € par kilo de filament
+  double debit = 8;        // mm³/s déposés
+  double prixHeure = 1.5;  // € par heure de machine
+  friend bool operator==(const Impression&, const Impression&) = default;
+};
 struct Boitier {
   double jeu = 1, paroi = 2, fond = 2, entretoise = 5, hauteur = 20, couvercle = 2;
   std::string vis = "M3";
   bool hauteurAuto = true;  // la hauteur suit le composant le plus haut
   double margeDebord = 1;   // marge ajoutée au jeu autour des composants qui dépassent de la carte
+  // Type (6.13) : « couvercle » (fond et couvercle posé), « coques » (coques haute et basse, coupées à mi-hauteur)
+  std::string type = "couvercle";
+  Impression impression;
 };
 
 struct Trou {
@@ -247,6 +259,10 @@ void orienterContours(std::vector<Contour>& contours);
 // Rend les remarques à faire (composant tourné hors quart de tour…). Les réglages faits côté boîtier (fixation,
 // vis, perçage de couvercle, découpe) sont gardés par identifiant de composant.
 std::vector<std::string> appliquerCarteElectronique(Projet& p, std::size_t indice);
+// La carte n° « indice » dans le boîtier qu'elle pilote (6.4, DRC-13 du catalogue) : hauteur sous le couvercle
+// (DRC-45) et collisions avec les piliers, les parois et le fond (DRC-46), en violations de la DRC qui visent le
+// composant ; vide si la carte ne pilote pas le boîtier
+std::vector<ecad::Violation> verifierCarteDansBoitier(const Projet& p, std::size_t indice);
 
 // ---------- Outils géométriques ----------
 Point posTrou(const Projet& p, const Trou& t);

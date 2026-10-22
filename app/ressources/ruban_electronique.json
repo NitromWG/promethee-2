@@ -18,10 +18,11 @@
         {"titre": "Champs", "forme": "grand", "actions": ["schema.champs"]},
         {"forme": "separateur"},
         {"titre": "Annoter", "forme": "grand", "actions": ["schema.annoter", "schema.renumeroter"]},
-        {"titre": "Vérifier", "forme": "grand", "actions": ["schema.erc"]},
+        {"titre": "Vérifier", "forme": "grand", "actions": ["schema.erc", "regles.contraintes"]},
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
         {"titre": "Circuit", "forme": "grand", "actions": ["schema.creerCircuit"]},
-        {"titre": "Feuille", "forme": "grand", "actions": ["schema.feuilleNouvelle", "schema.feuilleSuivante", "schema.feuillePrecedente", "schema.feuilleSupprimer"]}
+        {"titre": "Feuille", "forme": "grand", "actions": ["schema.feuilleNouvelle", "schema.feuilleSuivante", "schema.feuillePrecedente", "schema.feuilleSupprimer"]},
+        {"titre": "Structure", "forme": "grille", "actions": ["schema.repeterFeuille", "schema.deplacerVersFeuille"]}
       ]
     },
     {
@@ -29,15 +30,16 @@
       "titre": "Circuit imprimé",
       "groupes": [
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
-        {"titre": "Placer", "forme": "grand", "actions": ["circuit.aPlacer", "circuit.disposerCercle"]},
-        {"titre": "Router", "forme": "grand", "actions": ["circuit.router", "circuit.via", "circuit.routerAuto"]},
+        {"titre": "Placer", "forme": "grand", "actions": ["circuit.aPlacer", "circuit.disposerCercle", "circuit.reproduireCanal"]},
+        {"titre": "Router", "forme": "grand", "actions": ["circuit.router", "circuit.via", "circuit.routerAuto", "circuit.routerComplet"]},
         {"titre": "Zone", "forme": "grand", "actions": ["circuit.zone", "circuit.contour", "circuit.decoupe", "circuit.texte"]},
         {"titre": "Modifier", "forme": "grille", "actions": ["objet.tourner", "objet.tournerInverse", "circuit.changerFace", "selection.supprimer", "circuit.mesurer"]},
         {"titre": "Presse-papiers", "forme": "grille", "actions": ["edition.copier", "edition.coller", "edition.dupliquer", "edition.couper", "selection.tout"]},
         {"titre": "Vue", "forme": "grille", "actions": ["vue.toutVoir", "commun.inspecteur", "vue.zoomPlus", "vue.zoomMoins", "atelier.raccourcis"]},
         {"titre": "Couche active", "forme": "controle", "actions": ["circuit.coucheActive"]},
         {"titre": "Grille et unité", "forme": "controle", "actions": ["circuit.grilleUnite"]},
-        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport"]}
+        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes"]},
+        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression"]}
       ]
     },
     {
@@ -57,7 +59,8 @@
         {"titre": "Dessins", "forme": "grand", "actions": ["fabrication.dessinSchema", "fabrication.typon", "fabrication.planMontage"]},
         {"titre": "Listes", "forme": "grand", "actions": ["fabrication.nomenclature", "fabrication.reseaux"]},
         {"titre": "Échanges", "forme": "grand", "actions": ["fabrication.kicad", "fabrication.netlistKicad", "fabrication.ipc"]},
-        {"titre": "Boîtier", "forme": "grand", "actions": ["fabrication.boitier"]}
+        {"titre": "Boîtier", "forme": "grand", "actions": ["fabrication.boitier"]},
+        {"titre": "Fabricant", "forme": "grille", "actions": ["fabrication.panneau", "fabrication.devis", "fabrication.controler", "fabrication.visionneuse"]}
       ]
     }
   ]

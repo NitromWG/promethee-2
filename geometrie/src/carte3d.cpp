@@ -1,6 +1,13 @@
 // Prométhée : vue 3D d'une carte électronique. Licence GPL-3.0-only.
 #include "promethee/carte3d.hpp"
+#include "promethee/derive.hpp"
+#include "promethee/fichiers.hpp"
 #include "promethee/hauteurs.hpp"
+
+#include <map>
+
+#include <BRepAlgoAPI_Common.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
 
 #include <cmath>
 #include <numbers>
@@ -54,7 +61,58 @@ std::string couleurVernis(const std::string& v) {
 }
 }  // namespace
 
-Carte3D modele3DCarte(const ConceptionElec& c) {
+TopoDS_Shape corpsComposant(const ConceptionElec& c, const EmpreintePlacee& e) {
+  const DefEmpreinte* d = c.empreinte(e.empreinte);
+  const auto cp = corpsPose(c, e);
+  if (!d || !cp) return {};
+  const double t = c.circuit.empilage.epaisseur, cu = std::max(0.035, c.circuit.empilage.cuivre);
+  const double h = cp->hauteur.mm;
+  const ecad::Boite emprise = empriseCorps(*d);
+  // Centre de l'emprise dans le repère local, retourné comme versCarte le fait pour le dessous ; repère 3D : Y vers le haut
+  const double cx = (e.dessous ? -1.0 : 1.0) * mm(emprise.centre().x), cy = -mm(emprise.centre().y);
+  TopoDS_Shape corps;
+  // Modèle exact (6.2) : boîte brute centrée, posée sur la carte, tournée de son calage, puis réglée
+  const ComposantElec* k = c.composant(e.composant);
+  if (k && !k->modele3D.empty())
+    if (const auto it = c.modeles3D.find(k->modele3D); it != c.modeles3D.end() && !it->second.brep.empty()) {
+      const Modele3D& m = it->second;
+      try {
+        TopoDS_Shape s = formeDepuisBrep(m.brep);
+        if (!s.IsNull()) {
+          gp_Trsf centrer, quart, placer;
+          centrer.SetTranslation(gp_Vec(-(m.x0 + m.x1) / 2, -(m.y0 + m.y1) / 2, -m.z0));
+          quart.SetRotation(gp::OZ(), m.quarts * std::numbers::pi / 2);
+          placer.SetTranslation(gp_Vec(cx + (e.dessous ? -m.dx : m.dx), cy - m.dy, m.dz));
+          s = BRepBuilderAPI_Transform(s, centrer, true).Shape();
+          s = BRepBuilderAPI_Transform(s, quart, true).Shape();
+          corps = BRepBuilderAPI_Transform(s, placer, true).Shape();
+        }
+      } catch (const Standard_Failure&) {
+        corps.Nullify();
+      }
+    }
+  if (corps.IsNull()) {
+    const double l = cp->largeur, p = cp->profondeur;
+    corps = cp->rond ? BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(cx, cy, 0), gp::DZ()), l / 2, h).Shape() : BRepPrimAPI_MakeBox(gp_Pnt(cx - l / 2, cy - p / 2, 0), l, p, h).Shape();
+  }
+  gp_Trsf rot, pose, retourne;
+  rot.SetRotation(gp::OZ(), e.rotation * std::numbers::pi / 180);
+  if (e.dessous) retourne.SetMirror(gp_Ax2(gp_Pnt(0, 0, -t / 2), gp::DZ()));
+  pose.SetTranslation(gp_Vec(mm(e.position.x), -mm(e.position.y), cu));
+  corps = BRepBuilderAPI_Transform(corps, rot, true).Shape();
+  corps = BRepBuilderAPI_Transform(corps, pose, true).Shape();
+  if (e.dessous) corps = BRepBuilderAPI_Transform(corps, retourne, true).Shape();
+  return corps;
+}
+
+namespace {
+Carte3D construireCarte3D(const ConceptionElec& c, bool avecCorps);
+}
+
+Carte3D modele3DCarte(const ConceptionElec& c) { return construireCarte3D(c, true); }
+
+namespace {
+Carte3D construireCarte3D(const ConceptionElec& c, bool avecCorps) {
   Carte3D r;
   BRep_Builder b;
   TopoDS_Compound tout;
@@ -99,23 +157,8 @@ Carte3D modele3DCarte(const ConceptionElec& c) {
   // sur le centre de leur encombrement (T5) ; une empreinte sans corps a une pastille plate (T2)
   for (const auto& e : c.circuit.empreintes) {
     const DefEmpreinte* d = c.empreinte(e.empreinte);
-    const auto cp = corpsPose(c, e);
-    if (!d || !cp) continue;
-    const double h = cp->hauteur.mm;
-    const Boite emprise = empriseCorps(*d);
-    const double l = cp->largeur, p = cp->profondeur;
-    // Centre de l'emprise dans le repère local, retourné comme versCarte le fait pour le dessous ; repère 3D : Y vers le haut
-    const double cx = (e.dessous ? -1.0 : 1.0) * mm(emprise.centre().x), cy = -mm(emprise.centre().y);
-    const bool rond = cp->rond;
-    TopoDS_Shape corps = rond ? BRepPrimAPI_MakeCylinder(gp_Ax2(gp_Pnt(cx, cy, 0), gp::DZ()), l / 2, h).Shape() : BRepPrimAPI_MakeBox(gp_Pnt(cx - l / 2, cy - p / 2, 0), l, p, h).Shape();
-    gp_Trsf rot, pose, retourne;
-    rot.SetRotation(gp::OZ(), e.rotation * std::numbers::pi / 180);
-    if (e.dessous) retourne.SetMirror(gp_Ax2(gp_Pnt(0, 0, -t / 2), gp::DZ()));
-    pose.SetTranslation(gp_Vec(mm(e.position.x), -mm(e.position.y), cu));
-    corps = BRepBuilderAPI_Transform(corps, rot, true).Shape();
-    corps = BRepBuilderAPI_Transform(corps, pose, true).Shape();
-    if (e.dessous) corps = BRepBuilderAPI_Transform(corps, retourne, true).Shape();
-    ajouter(corps, d->corps.couleur);
+    if (!d || !avecCorps) continue;
+    ajouter(corpsComposant(c, e), d->corps.couleur);
   }
   // Volumes libres (3.20, EMP-11) : un contour extrudé entre deux hauteurs, dans une empreinte ou sur la carte
   auto volume = [&](const Polygone& contour, Nm z0, Nm z1, bool dessous, const std::string& couleur) {
@@ -132,6 +175,86 @@ Carte3D modele3DCarte(const ConceptionElec& c) {
       }
   for (const auto& v : c.circuit.volumes) volume(v.contour, v.z0, v.z1, false, v.couleur);
   r.forme = tout;
+  return r;
+}
+}  // namespace
+
+std::vector<PieceNommee> piecesCarte(const ConceptionElec& c) {
+  std::vector<PieceNommee> r;
+  // La carte : plaque et cuivre, sans les corps
+  {
+    PieceNommee carte;
+    carte.nom = c.nom.empty() ? "Carte" : c.nom;
+    carte.forme = construireCarte3D(c, false).forme;
+    couleurDe("#1F6B45", carte.r, carte.g, carte.b);
+    r.push_back(carte);
+  }
+  for (const auto& e : c.circuit.empreintes) {
+    const ComposantElec* k = c.composant(e.composant);
+    const DefEmpreinte* d = c.empreinte(e.empreinte);
+    if (!k || !d || k->nePasMonter) continue;
+    TopoDS_Shape s = corpsComposant(c, e);
+    if (s.IsNull()) continue;
+    PieceNommee x;
+    x.nom = k->reference + (k->valeur.empty() ? std::string() : " " + k->valeur);
+    x.forme = s;
+    couleurDe(d->corps.couleur, x.r, x.g, x.b);
+    r.push_back(x);
+  }
+  return r;
+}
+
+void exporterStepCarte(const ConceptionElec& c, const std::string& chemin, const OptionsStep& options) { exporterStep(piecesCarte(c), chemin, options); }
+
+std::optional<Modele3D> lireModele3D(const std::string& chemin, std::string* erreur) {
+  std::string e;
+  const std::string brep = lireFichierCAO(chemin, &e);
+  if (brep.empty()) {
+    if (erreur) *erreur = e.empty() ? "fichier illisible" : e;
+    return std::nullopt;
+  }
+  const TopoDS_Shape s = formeDepuisBrep(brep);
+  const prom::Boite b = prom::encombrement(s);
+  if (b.vide) {
+    if (erreur) *erreur = "le fichier n’a pas de géométrie";
+    return std::nullopt;
+  }
+  Modele3D m;
+  m.nom = utf8(cheminFichier(chemin).filename());
+  m.brep = brep;
+  m.x0 = b.xmin, m.y0 = b.ymin, m.z0 = b.zmin, m.x1 = b.xmax, m.y1 = b.ymax, m.z1 = b.zmax;
+  return m;
+}
+
+std::vector<PieceImprimee> piecesImpression(const Projet& p) {
+  std::vector<PieceImprimee> r;
+  const Derive d = deriver(p);
+  const TopoDS_Shape corps = construireCorps(p, d), couvercle = construireCouvercle(p, d);
+  const auto& im = p.boitier.impression;
+  auto chiffrer = [&](const std::string& nom, const TopoDS_Shape& s) {
+    PieceImprimee x;
+    x.nom = nom;
+    x.forme = s;
+    x.volumeMm3 = volume(s);
+    x.masseG = x.volumeMm3 / 1000 * im.densite;
+    x.dureeH = x.volumeMm3 / std::max(0.1, im.debit) / 3600;
+    x.cout = x.masseG / 1000 * im.prixKg + x.dureeH * im.prixHeure;
+    r.push_back(x);
+  };
+  if (p.boitier.type == "coques") {
+    // Coupe à mi-hauteur des parois : la coque basse garde le fond, la coque haute le couvercle
+    const double zc = (d.zf + d.zt) / 2, grand = 10000;
+    const TopoDS_Shape bas = BRepPrimAPI_MakeBox(gp_Pnt(-grand, -grand, -grand), 2 * grand, 2 * grand, grand + zc).Shape();
+    const TopoDS_Shape haut = BRepPrimAPI_MakeBox(gp_Pnt(-grand, -grand, zc), 2 * grand, 2 * grand, grand).Shape();
+    const TopoDS_Shape coqueBasse = BRepAlgoAPI_Common(corps, bas).Shape();
+    TopoDS_Shape coqueHaute = BRepAlgoAPI_Common(corps, haut).Shape();
+    coqueHaute = BRepAlgoAPI_Fuse(coqueHaute, couvercle).Shape();
+    chiffrer("coque basse", pourImpression(coqueBasse, false, d.cx, d.cy));
+    chiffrer("coque haute", pourImpression(coqueHaute, true, d.cx, d.cy));
+  } else {
+    chiffrer("fond", pourImpression(corps, false, d.cx, d.cy));
+    chiffrer("couvercle", pourImpression(couvercle, true, d.cx, d.cy));
+  }
   return r;
 }
 

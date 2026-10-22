@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <functional>
 #include <map>
+#include <set>
 #include <memory>
 #include <string>
 #include <thread>
@@ -25,6 +26,7 @@
 #include "promethee/bibliotheque.hpp"
 #include "promethee/commandes.hpp"
 #include "promethee/electronique.hpp"
+#include "promethee/fabrication_avancee.hpp"
 
 class Document;
 class DispositionsAtelier;
@@ -155,6 +157,39 @@ class AtelierElectronique : public QWidget {
   void disposerEnCercle();
   void ouvrirRapport();  // rapport de vérification, groupé par règle, dans Prométhée
   class FenetreRapport* rapport() const;
+  // ---------- Mécatronique (lot L6) ----------
+  // Modèle 3D exact (STEP, IGES, BREP) associé au composant, calé sur son empreinte ; faux s'il ne se lit pas
+  bool associerModele3D(const std::string& composant, const QString& chemin);
+  // Un dossier de modèles rapproché d'un coup des empreintes, des articles et des références ; rend le nombre associé
+  int associerDossierModeles(const QString& dossier);
+  bool exporterStepCarte(const QString& chemin);
+  // Pièces du boîtier pour l'impression 3D, posées à plat, en STL dans le dossier ; rend le texte du chiffrage
+  QString exporterImpression(const QString& dossier);
+  void ouvrirFacade();
+  class FenetreFacade* facade() const;
+  void ouvrirContourEsquisse();  // l'esquisse est créée d'après la carte si elle n'existe pas
+  class DialogueContourEsquisse* contourEsquisse() const;
+  // ---------- Structure du schéma (lot L7) ----------
+  // La feuille devient une feuille de canal à « exemplaires » copies liées ; rend le nombre de copies faites
+  int repeterFeuille(int feuille, int exemplaires);
+  // Placement et routage du canal source reproduits sur ses copies, rangées à droite ; rend le nombre d'empreintes
+  int reproduireCanal(int feuilleSource);
+  // Symboles choisis déplacés vers une autre feuille : UUID, repères, empreintes et pistes gardés ; liaisons coupées
+  // remplacées par des étiquettes globales ; rend le nombre de symboles déplacés
+  int deplacerVersFeuille(const std::set<std::string>& symboles, int cible);
+  // ---------- Fabrication et cartes complexes (lot L8) ----------
+  void ouvrirContraintes();  // gestionnaire de contraintes, le même au schéma et au circuit
+  class GestionnaireContraintes* contraintes() const;
+  // Panneau en languettes perforées écrit dans le dossier (Gerber et perçages) ; rend les fichiers écrits, vide si le
+  // contrôle du panneau trouve des défauts (rendus dans « defauts »)
+  QStringList ecrirePanneau(const QString& dossier, const prom::ecad::OptionsPanneau& o, QStringList* defauts = nullptr);
+  void exporterPanneau();
+  void ouvrirDevis();
+  class FenetreDevis* fenetreDevis() const;
+  // Contrôle d'un dossier de fabrication avant l'envoi (fichiers relus, connectivité comparée) ; vide s'il est juste
+  QStringList controlerFichiers(const QString& dossier);
+  void controlerFichiersEcrits();
+  bool exporterVisionneuse(const QString& chemin);
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
   void creerEmpreinte(const std::string& composant);
   // Symbole à plusieurs unités : pose l'unité suivante non posée du composant de ce symbole, à côté de lui
@@ -166,7 +201,7 @@ class AtelierElectronique : public QWidget {
   prom::ecad::Validation validation() const;
   bool publier(const QString& dossierParent, const QString& auteur, const QString& derogation, QString* erreur = nullptr);
   void nouvelleRevision();
-  void routerAutomatiquement();
+  void routerAutomatiquement(bool complet = false);  // complet : routeur par recherche de chemin (8.9)
 
   // ---------- Pour l'inspecteur (InspecteurElectronique, 1.9) ----------
   Document* document() const { return m_doc; }
@@ -296,6 +331,10 @@ class AtelierElectronique : public QWidget {
               *m_dockEcarts = nullptr, *m_dockChamps = nullptr, *m_dockAPlacer = nullptr;
   class PanneauAPlacer* m_aPlacer = nullptr;
   QPointer<class FenetreRapport> m_rapport;
+  QPointer<class FenetreFacade> m_facade;
+  QPointer<class GestionnaireContraintes> m_contraintes;
+  QPointer<class FenetreDevis> m_devis;
+  QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;
   class TableauChamps* m_tableauChamps = nullptr;
   std::string m_pinceau;                         // composant modèle du pinceau

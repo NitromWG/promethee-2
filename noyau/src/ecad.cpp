@@ -176,15 +176,43 @@ double aireMm2(const Polygones& p) {
 }
 double aireMm2(const Polygone& p) { return p.size() < 3 ? 0 : std::abs(Area(enClipper(p))) * 1e-12; }
 
-bool dedans(const Polygone& p, Pt q) { return p.size() >= 3 && PointInPolygon(Point64(q.x, q.y), enClipper(p)) != PointInPolygonResult::IsOutside; }
+namespace {
+__extension__ typedef __int128 Grand;
+// Position d'un point par rapport à un polygone simple : -1 dehors, 0 sur le bord, 1 dedans. Arithmétique exacte, sans
+// allocation (9.2) : les tests d'inclusion se comptent par millions dans la DRC d'une grande carte.
+int positionPoint(const Polygone& p, Pt q) {
+  const std::size_t n = p.size();
+  if (n < 3) return -1;
+  bool dedans = false;
+  for (std::size_t i = 0, j = n - 1; i < n; j = i++) {
+    const Pt a = p[j], b = p[i];
+    // Sur l'arête : colinéaire et dans sa boîte
+    if (q.x >= std::min(a.x, b.x) && q.x <= std::max(a.x, b.x) && q.y >= std::min(a.y, b.y) && q.y <= std::max(a.y, b.y) &&
+        static_cast<Grand>(b.x - a.x) * (q.y - a.y) == static_cast<Grand>(b.y - a.y) * (q.x - a.x))
+      return 0;
+    // Croisement de la demi-droite vers +x, règle demi-ouverte sur y
+    if ((a.y > q.y) != (b.y > q.y)) {
+      const Grand dy = b.y - a.y;
+      const Grand num = static_cast<Grand>(a.x - q.x) * dy + static_cast<Grand>(q.y - a.y) * (b.x - a.x);
+      if ((num > 0) == (dy > 0)) dedans = !dedans;
+    }
+  }
+  return dedans ? 1 : -1;
+}
+Grand aireDouble(const Polygone& p) {
+  Grand a = 0;
+  for (std::size_t i = 0, j = p.size() - 1; i < p.size(); j = i++) a += static_cast<Grand>(p[j].x) * p[i].y - static_cast<Grand>(p[i].x) * p[j].y;
+  return a;
+}
+}  // namespace
+
+bool dedans(const Polygone& p, Pt q) { return positionPoint(p, q) >= 0; }
 
 bool dedans(const Polygones& p, Pt q) {
   int enroulement = 0;
   for (const auto& x : p) {
-    if (x.size() < 3) continue;
-    const Path64 c = enClipper(x);
-    if (PointInPolygon(Point64(q.x, q.y), c) == PointInPolygonResult::IsOutside) continue;
-    enroulement += Area(c) >= 0 ? 1 : -1;
+    if (x.size() < 3 || positionPoint(x, q) < 0) continue;
+    enroulement += aireDouble(x) >= 0 ? 1 : -1;
   }
   return enroulement != 0;
 }

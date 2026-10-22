@@ -378,6 +378,14 @@ Projet normaliser(const Json& s, std::vector<std::string>* avertissements) {
   const Json& ja = champ(b, "hauteurAuto");
   bo.hauteurAuto = ja.is_boolean() ? ja.get<bool>() : true;
   bo.hauteur = borne(nombre(champ(b, "hauteur"), 20), bo.entretoise + p.carte.t + 1, 200);
+  if (const Json& jt = champ(b, "type"); jt.is_string() && (jt.get<std::string>() == "coques" || jt.get<std::string>() == "couvercle")) bo.type = jt.get<std::string>();
+  if (const Json& ji = champ(b, "impression"); ji.is_object()) {
+    if (const Json& m = champ(ji, "matiere"); m.is_string()) bo.impression.matiere = chaine(m, 40);
+    bo.impression.densite = borne(nombre(champ(ji, "densite"), 1.27), 0.1, 20);
+    bo.impression.prixKg = borne(nombre(champ(ji, "prixKg"), 25), 0, 10000);
+    bo.impression.debit = borne(nombre(champ(ji, "debit"), 8), 0.1, 1000);
+    bo.impression.prixHeure = borne(nombre(champ(ji, "prixHeure"), 1.5), 0, 10000);
+  }
 
   std::vector<std::string> ids;
   auto prendreId = [&ids](const Json& v, const char* prefixe) {
@@ -632,6 +640,9 @@ Json versJson(const Projet& p, bool avecGeometries) {
   j["boitier"] = {{"jeu", b.jeu}, {"paroi", b.paroi}, {"fond", b.fond}, {"entretoise", b.entretoise},
                   {"hauteur", b.hauteur}, {"couvercle", b.couvercle}, {"vis", b.vis}, {"hauteurAuto", b.hauteurAuto}};
   if (std::abs(b.margeDebord - 1) > 1e-9) j["boitier"]["margeDebord"] = b.margeDebord;
+  if (b.type != "couvercle") j["boitier"]["type"] = b.type;
+  if (!(b.impression == Impression{}))
+    j["boitier"]["impression"] = {{"matiere", b.impression.matiere}, {"densite", b.impression.densite}, {"prixKg", b.impression.prixKg}, {"debit", b.impression.debit}, {"prixHeure", b.impression.prixHeure}};
   if (p.kicad) j["kicad"] = {{"fichier", p.kicad->fichier}, {"dx", p.kicad->dx}, {"dy", p.kicad->dy}};
   j["trous"] = Json::array();
   for (const auto& t : p.trous) {

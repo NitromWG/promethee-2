@@ -293,6 +293,17 @@ struct AffichageCircuit {
   double opaciteInactives = 0.45;  // couches de cuivre autres que l'active (EL-25)
   friend bool operator==(const AffichageCircuit&, const AffichageCircuit&) = default;
 };
+// Dessin sur la carte (7.22, CAR-26) : trait, arc (début, milieu, fin), cercle (centre, point du bord) ou polygone,
+// sur une couche de dessin (sérigraphie, encombrement, documentation…), plein ou non
+struct DessinCircuit {
+  enum class Forme : std::uint8_t { Trait, Arc, Cercle, Polygone } forme = Forme::Trait;
+  std::string uuid;
+  Couche couche = Couche::SerigraphieDessus;
+  std::vector<Pt> points;
+  Nm epaisseur = 150'000;
+  bool plein = false;
+  friend bool operator==(const DessinCircuit&, const DessinCircuit&) = default;
+};
 struct Circuit {
   ContourCarte contour;
   AffichageCircuit affichage;
@@ -306,6 +317,7 @@ struct Circuit {
   std::vector<Zone> zones;
   std::vector<TexteCircuit> textes;
   std::vector<VolumeLibre> volumes;  // volumes libres posés sur la carte (repère de la carte)
+  std::vector<DessinCircuit> dessins;  // dessins sur les couches de dessin (7.22)
   friend bool operator==(const Circuit&, const Circuit&) = default;
 };
 

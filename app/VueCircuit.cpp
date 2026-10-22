@@ -47,6 +47,7 @@
 #include "SelectionElectronique.hpp"
 #include "SignesCanevas.hpp"
 #include "promethee/commandes.hpp"
+#include "promethee/dessins_circuit.hpp"
 #include "promethee/placement_circuit.hpp"
 #include "promethee/routeur.hpp"
 #include "promethee/modele.hpp"
@@ -1297,6 +1298,37 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
     g.setPen(QPen(t.couche == Couche::SerigraphieDessous ? SERIG_DESSOUS : SERIG_DESSUS, std::max(1.0, mm(t.epaisseur) * m_echelle), Qt::SolidLine, Qt::RoundCap));
     g.drawLine(ecran(t.a), ecran(t.b));
   }
+  // Dessins sur la carte (7.22) : traits, arcs, cercles, polygones, sur leur couche
+  for (const auto& d : c->circuit.dessins) {
+    if (!coucheVisible(d.couche) || d.points.empty()) continue;
+    const QColor teinte = d.couche == Couche::SerigraphieDessous ? SERIG_DESSOUS : d.couche == Couche::SerigraphieDessus ? SERIG_DESSUS : QColor(0xD0, 0xB0, 0x60);
+    g.setPen(QPen(teinte, std::max(1.0, mm(d.epaisseur) * m_echelle), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    QColor plein = teinte;
+    plein.setAlphaF(0.35);
+    g.setBrush(d.plein ? QBrush(plein) : QBrush(Qt::NoBrush));
+    QPolygonF poly;
+    switch (d.forme) {
+      case DessinCircuit::Forme::Trait:
+        if (d.points.size() >= 2) g.drawLine(ecran(d.points[0]), ecran(d.points[1]));
+        break;
+      case DessinCircuit::Forme::Arc:
+        if (d.points.size() == 3)
+          for (const Pt q : pointsArc(d.points[0], d.points[1], d.points[2])) poly << ecran(q);
+        g.drawPolyline(poly);
+        break;
+      case DessinCircuit::Forme::Cercle:
+        if (d.points.size() >= 2) {
+          const double r = distance(d.points[0], d.points[1]) * 1e-6 * m_echelle;
+          g.drawEllipse(ecran(d.points[0]), r, r);
+        }
+        break;
+      case DessinCircuit::Forme::Polygone:
+        for (const Pt q : d.points) poly << ecran(q);
+        g.drawPolygon(poly);
+        break;
+    }
+  }
+  g.setBrush(Qt::NoBrush);
   // Chevelu
   if (m_calc) {
     g.setPen(QPen(CHEVELU, 1));
@@ -1493,6 +1525,9 @@ void VueCircuit::mouseReleaseEvent(QMouseEvent* ev) {
       // ailleurs, fin du geste puis de l'outil (le menu contextuel général viendra au lot L2)
       if (outil() == Outil::Router && m_outils.actif()->geste()) menuRoutage(ev->position());
       else if (const auto l = outil() == Outil::Selection ? liaisonSous(ev->position()) : std::nullopt) menuLiaison(ev->position(), *l);
+      else if (const auto coin = outil() == Outil::Selection ? coinSous(ev->position()) : std::nullopt) menuCoin(ev->position(), coin->first, coin->second);
+      else if (const int ie = outil() == Outil::Selection ? empreinteSous(monde(ev->position())) : -1; ie >= 0 && conception())
+        menuEmpreinte(ev->position(), conception()->circuit.empreintes[static_cast<std::size_t>(ie)].composant);
       else if (!m_outils.actif()->echap() && outil() != Outil::Selection) setOutil(Outil::Selection);
       majBandeau();
       appliquerCurseur();
@@ -1923,4 +1958,86 @@ int VueCircuit::poserGroupe(const std::vector<std::string>& composants, Pt coin)
   modifier([&](ConceptionElec& c) { n = placerGroupe(c, composants, surGrille(coin, pasPlacement())); });
   emit message(QStringLiteral("%1 composant(s) posé(s) sur la carte.").arg(n));
   return n;
+}
+
+// ---------- Dessins (lot L7) ----------
+std::optional<std::pair<std::string, std::string>> VueCircuit::coinSous(QPointF q) const {
+  const ConceptionElec* c = conception();
+  if (!c) return std::nullopt;
+  const Pt w = monde(q);
+  const double tolerance = 6.0 / m_echelle * 1e6;
+  const auto& d = c->circuit.dessins;
+  for (std::size_t i = 0; i < d.size(); ++i)
+    for (std::size_t j = i + 1; j < d.size(); ++j) {
+      if (d[i].forme != DessinCircuit::Forme::Trait || d[j].forme != DessinCircuit::Forme::Trait || !coucheVisible(d[i].couche)) continue;
+      Pt coin;
+      if (coinCommun(d[i], d[j], coin) && distance(coin, w) <= tolerance) return std::make_pair(d[i].uuid, d[j].uuid);
+    }
+  return std::nullopt;
+}
+
+std::string VueCircuit::poserCongeOuChanfrein(const std::string& a, const std::string& b, Nm r, bool chanfrein) {
+  if (refuseVerrou()) return {};
+  std::string raison, id;
+  const ConceptionElec* c = conception();
+  if (!c) return {};
+  Circuit essai = c->circuit;
+  id = chanfrein ? poserChanfrein(essai, a, b, r, &raison) : poserConge(essai, a, b, r, &raison);
+  if (id.empty()) {
+    emit message(QStringLiteral("<span style='color:#C2402E'>%1 impossible</span> : %2.").arg(chanfrein ? QStringLiteral("Chanfrein") : QStringLiteral("Congé"), QString::fromStdString(raison).toHtmlEscaped()));
+    return {};
+  }
+  modifier([&](ConceptionElec& cc) { cc.circuit.dessins = essai.dessins; });
+  emit message(QStringLiteral("%1 de %2 mm posé.").arg(chanfrein ? QStringLiteral("Chanfrein") : QStringLiteral("Congé"), QLocale(QLocale::French).toString(mm(r), 'g', 4)));
+  return id;
+}
+
+void VueCircuit::menuCoin(QPointF q, const std::string& a, const std::string& b) {
+  auto* menu = new QMenu(this);
+  menu->setObjectName(QStringLiteral("menuCoin"));
+  menu->setAttribute(Qt::WA_DeleteOnClose);
+  menu->addSection(QStringLiteral("Coin de deux traits"));
+  for (const double r : {0.5, 1.0, 2.0, 5.0}) {
+    QAction* x = menu->addAction(QStringLiteral("Congé de %1 mm").arg(QLocale(QLocale::French).toString(r)), this, [this, a, b, r] { poserCongeOuChanfrein(a, b, nm(r), false); });
+    x->setObjectName(QStringLiteral("conge:%1").arg(r));
+  }
+  menu->addAction(QStringLiteral("Congé d’un autre rayon…"), this, [this, a, b] {
+    bool ok = false;
+    const double r = QInputDialog::getDouble(this, QStringLiteral("Congé"), QStringLiteral("Rayon (mm)"), 2, 0.01, 1000, 3, &ok);
+    if (ok) poserCongeOuChanfrein(a, b, nm(r), false);
+  });
+  menu->addAction(QStringLiteral("Chanfrein de 1 mm"), this, [this, a, b] { poserCongeOuChanfrein(a, b, nm(1), true); });
+  menu->popup(mapToGlobal(q.toPoint()));
+}
+
+int VueCircuit::contourAutour(const std::vector<std::string>& composants, Nm d, Couche couche) {
+  const ConceptionElec* c = conception();
+  if (!c || refuseVerrou()) return 0;
+  Polygones p;
+  for (const auto& id : composants)
+    for (const auto& x : pastillesDe(*c, id)) p.push_back(x);
+  const auto contours = contourDecale(p, d, couche);
+  if (contours.empty()) return 0;
+  modifier([&](ConceptionElec& cc) {
+    for (const auto& x : contours) cc.circuit.dessins.push_back(x);
+  });
+  emit message(QStringLiteral("Contour décalé de %1 mm : %2 polygone(s).").arg(QLocale(QLocale::French).toString(mm(d), 'g', 4)).arg(contours.size()));
+  return static_cast<int>(contours.size());
+}
+
+void VueCircuit::menuEmpreinte(QPointF q, const std::string& composant) {
+  auto* menu = new QMenu(this);
+  menu->setObjectName(QStringLiteral("menuEmpreinte"));
+  menu->setAttribute(Qt::WA_DeleteOnClose);
+  const ConceptionElec* c = conception();
+  const ComposantElec* k = c ? c->composant(composant) : nullptr;
+  menu->addSection(k ? QString::fromStdString(k->reference) : QStringLiteral("Empreinte"));
+  // Les empreintes choisies, ou celle-ci
+  std::vector<std::string> ids;
+  for (const auto& o : m_selection)
+    if (o.genre == Genre::Empreinte) ids.push_back(o.id);
+  if (std::find(ids.begin(), ids.end(), composant) == ids.end()) ids = {composant};
+  QAction* x = menu->addAction(QStringLiteral("Contour décalé de 0,25 mm autour des pastilles"), this, [this, ids] { contourAutour(ids, 250'000, Couche::EncombrementDessus); });
+  x->setObjectName(QStringLiteral("contourPastilles"));
+  menu->popup(mapToGlobal(q.toPoint()));
 }

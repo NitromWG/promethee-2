@@ -147,6 +147,14 @@ class VueCircuit : public QWidget {
   std::string routerLiaisonChoisie(const prom::ecad::Liaison& l);  // vide si posée, sinon la raison
   // Groupe de la liste « À placer » lâché sur la carte (5.2) : posé en rangées à partir du point
   int poserGroupe(const std::vector<std::string>& composants, prom::ecad::Pt coin);
+  // ---------- Dessins (lot L7) ----------
+  // Coin commun à deux traits de dessin sous le point (6 pixels) ; son menu pose un congé ou un chanfrein
+  std::optional<std::pair<std::string, std::string>> coinSous(QPointF q) const;
+  void menuCoin(QPointF q, const std::string& trait1, const std::string& trait2);
+  std::string poserCongeOuChanfrein(const std::string& trait1, const std::string& trait2, prom::ecad::Nm r, bool chanfrein);
+  void menuEmpreinte(QPointF q, const std::string& composant);
+  // Contour décalé de « d » autour des pastilles réunies des composants, sur la couche ; rend le nombre de polygones
+  int contourAutour(const std::vector<std::string>& composants, prom::ecad::Nm d, prom::ecad::Couche couche);
   // Plan de montage en PDF (A4 paysage) : faces dessus et dessous à l'échelle, contour coté, pastilles, sérigraphie,
   // repères des composants, cartouche. C'est le dessin que l'on garde à côté de soi pour câbler la carte.
   bool exporterPlanMontage(const QString& chemin) const;

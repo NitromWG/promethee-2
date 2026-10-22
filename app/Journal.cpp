@@ -48,6 +48,8 @@ int g_fd = -1;  // ouvert d'avance : seul write() est permis dans un gestionnair
 #endif
 
 std::string dossierTemporaire() {
+  // Mode portable (9.11) : le journal reste à côté du programme
+  if (const char* p = std::getenv("PROMETHEE_DOSSIER_JOURNAL"); p && *p) return std::string(p) + "/";
 #ifdef _WIN32
   wchar_t tampon[MAX_PATH + 1];
   const DWORD n = GetTempPathW(MAX_PATH, tampon);

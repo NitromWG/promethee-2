@@ -17,6 +17,7 @@
 #include <QVBoxLayout>
 
 #include "AtelierElectrique.hpp"
+#include "ChienDeGarde.hpp"
 #include "EtiquetteEtat.hpp"
 #include "FormulaireAppareil.hpp"
 #include "Icones.hpp"
@@ -38,7 +39,7 @@ std::filesystem::path chemin() { return prom::cheminFichier(AtelierElectrique::c
 QString AtelierElectrique::cheminMesAppareils() {
   const QString env = qEnvironmentVariable("PROMETHEE_BIBLIOTHEQUE_ELECTRIQUE");
   if (!env.isEmpty()) return env;
-  return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath(QStringLiteral("bibliotheque-electrique.json"));
+  return QDir(portable::dossierDonneesAppli()).filePath(QStringLiteral("bibliotheque-electrique.json"));
 }
 
 void AtelierElectrique::chargerMesAppareils() {

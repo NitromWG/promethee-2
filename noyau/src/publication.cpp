@@ -13,6 +13,7 @@
 #include <stdexcept>
 
 #include "promethee/electronique.hpp"
+#include "promethee/fabrication_avancee.hpp"
 #include "promethee/fichiers.hpp"
 #include "promethee/hachage.hpp"
 #include "promethee/version.hpp"
@@ -306,6 +307,8 @@ std::vector<std::string> controlerDossierFabrication(const ConceptionElec& c, co
   // Couches Gerber : une par couche du modèle, toutes au format 4.6 en millimètres, attributs X2, terminées
   int cuivres = 0;
   bool contour = false;
+  std::map<Couche, std::string> cuivresLus;
+  std::string percagesLus;
   for (const auto& cf : m.couches) {
     std::string code = codeCouche(cf.couche);
     std::replace(code.begin(), code.end(), '.', '_');
@@ -317,7 +320,10 @@ std::vector<std::string> controlerDossierFabrication(const ConceptionElec& c, co
     if (g.find("%MOMM*%") == std::string::npos) d.push_back(nom + " : unité millimètre absente");
     if (g.find("%TF.FileFunction,") == std::string::npos) d.push_back(nom + " : fonction de la couche (attribut X2) absente");
     if (g.size() < 4 || g.rfind("M02*") == std::string::npos) d.push_back(nom + " : fichier non terminé (M02 absent)");
-    if (estCuivre(cf.couche)) ++cuivres;
+    if (estCuivre(cf.couche)) {
+      ++cuivres;
+      cuivresLus[cf.couche] = g;
+    }
     if (cf.couche == Couche::Contour) {
       contour = true;
       // Le contour tracé dans le fichier a exactement l'encombrement de la carte
@@ -345,6 +351,7 @@ std::vector<std::string> controlerDossierFabrication(const ConceptionElec& c, co
     std::string e;
     if (!lire(rel, e)) continue;
     const std::string nom = rel.generic_string();
+    if (metallises) percagesLus = e;
     if (e.rfind("M48", 0) != 0 || e.find("METRIC") == std::string::npos || e.find("M30") == std::string::npos) d.push_back(nom + " : en-tête Excellon métrique incomplet");
     std::size_t coups = 0;
     for (std::size_t i = e.find("\nX"); i != std::string::npos; i = e.find("\nX", i + 2)) {
@@ -357,6 +364,10 @@ std::vector<std::string> controlerDossierFabrication(const ConceptionElec& c, co
     const std::size_t attendus = static_cast<std::size_t>(std::count_if(m.trous.begin(), m.trous.end(), [&](const TrouFab& t) { return t.metallise == metallises; }));
     if (coups != attendus) d.push_back(nom + " : " + std::to_string(coups) + " trou(s) écrit(s) pour " + std::to_string(attendus) + " dans la carte");
   }
+  // Connectivité relue dans le cuivre et les perçages écrits, comparée à celle de la conception (8.19, FAB-01) : une
+  // piste coupée ou ajoutée à la main dans un fichier est signalée avant l'envoi, avec ses deux pastilles
+  if (!cuivresLus.empty())
+    for (const auto& x : comparerFabrication(c, cuivresLus, percagesLus)) d.push_back("connectivité relue : " + x);
   // Placement et nomenclature
   {
     std::string pl;

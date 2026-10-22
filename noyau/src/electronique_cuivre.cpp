@@ -2,6 +2,9 @@
 // connectivité du cuivre, chevelu, courts-circuits et vérification des règles de conception (DRC), le tout appuyé
 // sur l'index spatial. Licence GPL-3.0-only.
 #include <algorithm>
+#include <memory>
+#include <thread>
+#include <future>
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -10,6 +13,7 @@
 #include <set>
 
 #include "promethee/electronique.hpp"
+#include "promethee/remplissage_local.hpp"
 
 namespace prom::ecad {
 
@@ -133,22 +137,74 @@ double ecart(const Objet& x, const Objet& y) {
 // Cuivre d'une zone (ou d'un îlot) prêt pour des mesures rapides : ses arêtes rangées dans un index spatial. La
 // distance d'un objet ne regarde que les arêtes proches, au lieu de tout le contour (qui fait des milliers de
 // sommets sur une grande carte).
+__extension__ typedef __int128 Grand;
 class CuivreIndexe {
  public:
   explicit CuivreIndexe(const Polygones& p) : m_poly(p), m_index(NM_PAR_MM) {
-    for (const auto& poly : p)
+    for (std::size_t k = 0; k < p.size(); ++k) {
+      const auto& poly = p[k];
+      if (poly.size() < 3) {
+        m_signes.push_back(0);
+        continue;
+      }
+      Grand aire = 0;
       for (std::size_t i = 0; i < poly.size(); ++i) {
         const Pt a = poly[i], b = poly[(i + 1) % poly.size()];
+        aire += static_cast<Grand>(a.x) * b.y - static_cast<Grand>(b.x) * a.y;
         Boite bo;
         bo.etendre(a);
         bo.etendre(b);
         m_index.inserer(static_cast<int>(m_aretes.size()), bo);
         m_aretes.push_back({a, b});
+        m_polygone.push_back(static_cast<int>(k));
+        m_boite.etendre(a);
       }
+      m_signes.push_back(aire >= 0 ? 1 : -1);
+    }
+  }
+  // Point dans le cuivre (bord compris, trous exclus), comme dedans(Polygones) : seules les arêtes que croise la
+  // demi-droite vers +x sont regardées, par l'index (9.2)
+  bool contient(Pt q) const {
+    if (m_boite.vide() || !m_boite.contient(q)) return false;
+    std::vector<std::pair<int, char>> etats;  // polygone → 1 : croisements impairs ; 2 : sur le bord
+    auto etat = [&etats](int k) -> char& {
+      for (auto& [x, e] : etats)
+        if (x == k) return e;
+      etats.push_back({k, 0});
+      return etats.back().second;
+    };
+    // La demi-droite part vers le bord le plus proche de la boîte (moins de cases à lire) ; la parité des croisements
+    // ne dépend pas de la direction. Les coordonnées sont tournées pour ramener la direction à +x.
+    const Nm versXp = m_boite.x1 - q.x, versXm = q.x - m_boite.x0, versYp = m_boite.y1 - q.y, versYm = q.y - m_boite.y0;
+    const Nm plusCourt = std::min({versXp, versXm, versYp, versYm});
+    const int sens = plusCourt == versXp ? 0 : plusCourt == versXm ? 1 : plusCourt == versYp ? 2 : 3;
+    const Boite rayon = sens == 0 ? Boite{q.x, q.y, m_boite.x1, q.y} : sens == 1 ? Boite{m_boite.x0, q.y, q.x, q.y} : sens == 2 ? Boite{q.x, q.y, q.x, m_boite.y1} : Boite{q.x, m_boite.y0, q.x, q.y};
+    auto tourner = [sens](Pt p) { return sens == 0 ? p : sens == 1 ? Pt{-p.x, p.y} : sens == 2 ? Pt{p.y, p.x} : Pt{-p.y, p.x}; };
+    const Pt qt = tourner(q);
+    for (int i : m_index.chercher(rayon)) {
+      const auto& [a0, b0] = m_aretes[static_cast<std::size_t>(i)];
+      char& e = etat(m_polygone[static_cast<std::size_t>(i)]);
+      if (e == 2) continue;
+      if (q.x >= std::min(a0.x, b0.x) && q.x <= std::max(a0.x, b0.x) && q.y >= std::min(a0.y, b0.y) && q.y <= std::max(a0.y, b0.y) &&
+          static_cast<Grand>(b0.x - a0.x) * (q.y - a0.y) == static_cast<Grand>(b0.y - a0.y) * (q.x - a0.x)) {
+        e = 2;
+        continue;
+      }
+      const Pt a = tourner(a0), b = tourner(b0);
+      if ((a.y > qt.y) != (b.y > qt.y)) {
+        const Grand dy = b.y - a.y;
+        const Grand num = static_cast<Grand>(a.x - qt.x) * dy + static_cast<Grand>(qt.y - a.y) * (b.x - a.x);
+        if ((num > 0) == (dy > 0)) e ^= 1;
+      }
+    }
+    int enroulement = 0;
+    for (const auto& [k, e] : etats)
+      if (e) enroulement += m_signes[static_cast<std::size_t>(k)];
+    return enroulement != 0;
   }
   // Distance de l'objet au cuivre : 0 s'il le touche ou s'y trouve ; au-delà de « portee », une valeur plus grande
   double distance(const Objet& o, Nm portee) const {
-    if (dedans(m_poly, o.a) || (o.type == Objet::Type::Piste && dedans(m_poly, o.b))) return 0;
+    if (contient(o.a) || (o.type == Objet::Type::Piste && contient(o.b))) return 0;
     double d = static_cast<double>(portee) + 1;
     for (int e : m_index.chercher(o.boite.gonflee(portee + 1))) {
       const auto& [a, b] = m_aretes[static_cast<std::size_t>(e)];
@@ -167,6 +223,9 @@ class CuivreIndexe {
   const Polygones& m_poly;
   IndexSpatial m_index;
   std::vector<std::pair<Pt, Pt>> m_aretes;
+  std::vector<int> m_polygone;  // polygone de chaque arête
+  std::vector<int> m_signes;    // +1 contour, −1 trou (sens de parcours)
+  Boite m_boite;
 };
 
 std::string decrire(const Objet& o, const std::vector<PastillePlacee>& pp) {
@@ -203,6 +262,36 @@ std::string mmTexte(double v) {
   std::string s = t;
   std::replace(s.begin(), s.end(), '.', ',');
   return s + " mm";
+}
+}  // namespace
+
+namespace {
+// Ouverture morphologique (érosion puis dilatation de « r ») : retire le cuivre plus étroit que 2r. Sur un grand
+// remplissage, le calcul se fait par bandes verticales en parallèle (9.2) : le résultat en un point ne dépend que
+// du cuivre à moins de 2r, chaque bande est donc calculée sur elle-même élargie de 2r, puis rognée à sa largeur.
+Polygones ouverture(const Polygones& f, Nm r) {
+  std::size_t sommets = 0;
+  for (const auto& p : f) sommets += p.size();
+  const unsigned fils = std::max(2u, std::min(8u, std::thread::hardware_concurrency()));
+  if (sommets < 20'000) return gonfler(gonfler(f, -r), r);
+  const Boite b = boite(f);
+  const int bandes = static_cast<int>(2 * fils);
+  const Nm marge = 2 * r + 10'000;
+  std::vector<Polygones> morceaux(static_cast<std::size_t>(bandes));
+  auto calculer = [&](int i) {
+    const Nm x0 = b.x0 + (b.largeur() + 1) * i / bandes, x1 = b.x0 + (b.largeur() + 1) * (i + 1) / bandes;
+    const Polygone large{{x0 - marge, b.y0 - 1}, {x1 + marge, b.y0 - 1}, {x1 + marge, b.y1 + 1}, {x0 - marge, b.y1 + 1}};
+    const Polygone etroit{{i == 0 ? b.x0 - 1 : x0, b.y0 - 1}, {i == bandes - 1 ? b.x1 + 1 : x1, b.y0 - 1}, {i == bandes - 1 ? b.x1 + 1 : x1, b.y1 + 1}, {i == 0 ? b.x0 - 1 : x0, b.y1 + 1}};
+    const Polygones local = intersecter(f, {large});
+    morceaux[static_cast<std::size_t>(i)] = intersecter(gonfler(gonfler(local, -r), r), {etroit});
+  };
+  std::vector<std::thread> t;
+  for (int i = 1; i < bandes; ++i) t.emplace_back(calculer, i);
+  calculer(0);
+  for (auto& x : t) x.join();
+  Polygones tout;
+  for (auto& m : morceaux) tout.insert(tout.end(), m.begin(), m.end());
+  return unir(tout);
 }
 }  // namespace
 
@@ -278,7 +367,7 @@ Remplissages remplirZones(const ConceptionElec& c, const Connectivite& k) {
       rempli.insert(rempli.end(), r2.begin(), r2.end());
       rempli = unir(rempli);
     }
-    if (z->epaisseurMin > 0) rempli = gonfler(gonfler(rempli, -z->epaisseurMin / 2), z->epaisseurMin / 2);
+    if (z->epaisseurMin > 0) rempli = ouverture(rempli, z->epaisseurMin / 2);
     // Îlots : on ne garde que le cuivre relié à une pastille, une via ou une piste du réseau de la zone, ou au cuivre
     // déjà gardé d'une autre zone du même réseau sur la même couche (C21)
     Polygones garde;
@@ -496,7 +585,7 @@ EtatRoutage etatRoutage(const ConceptionElec& c, const Connectivite& k, const Re
         if (ecart(point, objets[static_cast<std::size_t>(j)]) <= 1.0) { relie = true; break; }
       }
       for (std::size_t z = 0; z < ilotsZones.size() && !relie; ++z)
-        if ((bit(ilotsZones[z].couche) & point.couches) && dedans(ilotsZones[z].poly, bout)) relie = true;
+        if ((bit(ilotsZones[z].couche) & point.couches) && ilotsZones[z].b.contient(bout) && dedans(ilotsZones[z].poly, bout)) relie = true;
       if (!relie) e.boutsLibres.push_back(bout);
     }
   }
@@ -510,7 +599,149 @@ std::string reseauDeZoneSous(const ConceptionElec& c, const Connectivite& k, con
   return {};
 }
 
+// ---------- Remplissage local (9.9) ----------
+struct RemplissageLocal::Donnees {
+  Zone z;
+  bool valide = false;
+  Regles R;
+  Nm isoZone = 0, portee = 0;
+  Polygones base;
+  Boite boiteBase;
+  std::vector<Polygone> obstacles, anneaux, rayons;  // isolements des autres réseaux, anneaux et rayons thermiques
+  std::vector<Boite> boitesObstacles, boitesAnneaux, boitesRayons;
+  IndexSpatial indexObstacles{2 * NM_PAR_MM}, indexAnneaux{2 * NM_PAR_MM}, indexRayons{2 * NM_PAR_MM};
+  struct Prioritaire {
+    Polygones cuivre;
+    Boite b;
+    Nm requis = 0;
+  };
+  std::vector<Prioritaire> prioritaires;
+  Connectivite k;
+};
+
+RemplissageLocal::RemplissageLocal(const ConceptionElec& c, const Connectivite& k, const Remplissages& remplis, const std::string& zone, const std::set<std::string>& mobiles)
+    : d(std::make_unique<Donnees>()) {
+  const std::vector<Zone> zs = zonesResolues(c, k);
+  const auto it = std::find_if(zs.begin(), zs.end(), [&](const Zone& z) { return z.uuid == zone; });
+  if (it == zs.end() || it->contour.size() < 3) return;
+  Donnees& D = *d;
+  D.z = *it;
+  D.k = k;
+  D.R = reglesResolues(c.circuit.regles, k);
+  const Regles& R = D.R;
+  Polygones interieur = gonfler({c.circuit.contour.polygone()}, -(R.bord + MARGE_REMPLISSAGE));
+  if (!c.circuit.contour.decoupes.empty()) {
+    Polygones trous;
+    for (const auto& x : c.circuit.contour.decoupes)
+      if (x.size() >= 3) trous.push_back(orienter(x));
+    interieur = soustraire(interieur, gonfler(trous, R.bord + MARGE_REMPLISSAGE));
+  }
+  D.base = intersecter({orienter(D.z.contour)}, interieur);
+  D.boiteBase = boite(D.base);
+  D.isoZone = D.z.isolement > 0 ? D.z.isolement : R.isolement;
+  Nm isoMax = std::max(R.isolement, R.cuivreTrou);
+  for (const auto& cl : R.classes) isoMax = std::max(isoMax, cl.isolement);
+  const auto pp = pastilles(c, k);
+  for (const Objet& o : objetsCuivre(c, pp, k)) {
+    if (!(o.couches & bit(D.z.couche))) continue;
+    if ((o.type == Objet::Type::Piste && o.indice >= 0 && mobiles.count(c.circuit.pistes[static_cast<std::size_t>(o.indice)].uuid)) ||
+        (o.type == Objet::Type::Via && mobiles.count(c.circuit.vias[static_cast<std::size_t>(o.indice)].uuid)))
+      continue;
+    if (!D.z.reseau.empty() && o.reseau == D.z.reseau) {
+      if (o.type == Objet::Type::Pastille && D.z.thermique) {
+        for (auto& x : gonfler({o.forme}, D.z.ecartThermique)) {
+          D.indexAnneaux.inserer(static_cast<int>(D.anneaux.size()), boite(x));
+          D.boitesAnneaux.push_back(boite(x));
+          D.anneaux.push_back(std::move(x));
+        }
+        const Pastille& pa = pp[static_cast<std::size_t>(o.indice)].pastille;
+        const Nm longueur = std::max(o.boite.largeur(), o.boite.hauteur()) + 2 * D.z.ecartThermique + 2 * D.z.epaisseurMin;
+        const Nm l = largeurRayonEffective(D.z);
+        for (Polygone x : {rectangle(pa.position, longueur, l, pa.rotation), rectangle(pa.position, l, longueur, pa.rotation)}) {
+          D.indexRayons.inserer(static_cast<int>(D.rayons.size()), boite(x));
+          D.boitesRayons.push_back(boite(x));
+          D.rayons.push_back(std::move(x));
+        }
+      }
+      continue;
+    }
+    Polygone x = contourObjet(o, std::max(D.isoZone, isolementEntre(R, D.z.reseau, o.reseau)) + MARGE_REMPLISSAGE);
+    D.indexObstacles.inserer(static_cast<int>(D.obstacles.size()), boite(x));
+    D.boitesObstacles.push_back(boite(x));
+    D.obstacles.push_back(std::move(x));
+  }
+  for (const auto& p : pp)
+    if (p.pastille.type == TypePastille::NonMetallisee) {
+      Polygone x = cercle(p.pastille.position, p.pastille.percage / 2 + std::max(D.isoZone, R.cuivreTrou) + MARGE_REMPLISSAGE);
+      D.indexObstacles.inserer(static_cast<int>(D.obstacles.size()), boite(x));
+      D.boitesObstacles.push_back(boite(x));
+      D.obstacles.push_back(std::move(x));
+    }
+  for (const auto& y : zs) {
+    if (y.uuid == D.z.uuid || y.couche != D.z.couche || y.reseau == D.z.reseau || y.priorite <= D.z.priorite) continue;
+    const auto f = remplis.find(y.uuid);
+    if (f == remplis.end() || f->second.empty()) continue;
+    const Nm requis = std::max({D.isoZone, y.isolement > 0 ? y.isolement : R.isolement, isolementEntre(R, D.z.reseau, y.reseau)});
+    D.prioritaires.push_back({f->second, boite(f->second), requis});
+  }
+  D.portee = std::max(isoMax, D.isoZone) + MARGE_REMPLISSAGE + 2 * std::max<Nm>(D.z.epaisseurMin, 0) + D.z.ecartThermique + 50'000;
+  D.valide = true;
+}
+
+RemplissageLocal::~RemplissageLocal() = default;
+bool RemplissageLocal::valide() const { return d && d->valide; }
+Couche RemplissageLocal::couche() const { return d->z.couche; }
+const std::string& RemplissageLocal::zone() const { return d->z.uuid; }
+const std::string& RemplissageLocal::reseau() const { return d->z.reseau; }
+Nm RemplissageLocal::portee() const { return d->portee; }
+
+Polygones RemplissageLocal::dans(const Boite& fenetre, const std::vector<Piste>& pistes, const std::vector<Via>& vias) const {
+  if (!valide()) return {};
+  const Donnees& D = *d;
+  // Le calcul se fait sur la fenêtre élargie de ce qui peut l'influencer, puis il est rogné à la fenêtre
+  const Boite large = fenetre.gonflee(D.portee);
+  const Polygone cadreLarge{{large.x0, large.y0}, {large.x1, large.y0}, {large.x1, large.y1}, {large.x0, large.y1}};
+  const Polygone cadre{{fenetre.x0, fenetre.y0}, {fenetre.x1, fenetre.y0}, {fenetre.x1, fenetre.y1}, {fenetre.x0, fenetre.y1}};
+  const Polygones base = intersecter(D.base, {cadreLarge});
+  if (base.empty()) return {};
+  Polygones autres, anneaux, rayons;
+  for (int i : D.indexObstacles.chercher(large))
+    if (D.boitesObstacles[static_cast<std::size_t>(i)].touche(large)) autres.push_back(D.obstacles[static_cast<std::size_t>(i)]);
+  for (int i : D.indexAnneaux.chercher(large))
+    if (D.boitesAnneaux[static_cast<std::size_t>(i)].touche(large)) anneaux.push_back(D.anneaux[static_cast<std::size_t>(i)]);
+  for (int i : D.indexRayons.chercher(large))
+    if (D.boitesRayons[static_cast<std::size_t>(i)].touche(large)) rayons.push_back(D.rayons[static_cast<std::size_t>(i)]);
+  // Les objets mobiles, à leur place courante : un autre réseau s'écarte, le même réseau se fond dans la zone
+  for (const auto& p : pistes) {
+    if (p.couche != D.z.couche) continue;
+    const std::string n = D.k.canonique(p.reseau);
+    if (!D.z.reseau.empty() && n == D.z.reseau) continue;
+    autres.push_back(oblong(p.a, p.b, p.largeur + 2 * (std::max(D.isoZone, isolementEntre(D.R, D.z.reseau, n)) + MARGE_REMPLISSAGE)));
+  }
+  for (const auto& v : vias) {
+    const std::string n = D.k.canonique(v.reseau);
+    if (!D.z.reseau.empty() && n == D.z.reseau) continue;
+    autres.push_back(cercle(v.p, v.diametre / 2 + std::max(D.isoZone, isolementEntre(D.R, D.z.reseau, n)) + MARGE_REMPLISSAGE));
+  }
+  for (const auto& y : D.prioritaires)
+    if (y.b.touche(large))
+      for (auto& x : gonfler(intersecter(y.cuivre, {cadreLarge}), y.requis + MARGE_REMPLISSAGE)) autres.push_back(std::move(x));
+  Polygones obstacles = autres;
+  obstacles.insert(obstacles.end(), anneaux.begin(), anneaux.end());
+  Polygones rempli = soustraire(base, obstacles);
+  if (!rayons.empty()) {
+    Polygones r2 = soustraire(intersecter(rayons, base), autres);
+    rempli.insert(rempli.end(), r2.begin(), r2.end());
+    rempli = unir(rempli);
+  }
+  if (D.z.epaisseurMin > 0) rempli = gonfler(gonfler(rempli, -D.z.epaisseurMin / 2), D.z.epaisseurMin / 2);
+  return intersecter(rempli, {cadre});
+}
+
 std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& k, const Remplissages& remplis) {
+  // L'état du routage (chevelu, courts-circuits, bouts libres) se calcule sur un autre fil pendant les contrôles
+  // d'isolement (9.2) : il ne lit que des données constantes
+  auto etatFutur = std::async(std::launch::async, [&c, &k, &remplis] { return etatRoutage(c, k, remplis); });
   std::vector<Violation> v;
   auto ajouter = [&](Gravite g, const char* code, std::string m, std::string conseil, Pt p, std::vector<std::string> objets = {}) {
     v.push_back({g, code, std::move(m), std::move(conseil), {}, p, std::move(objets)});
@@ -777,24 +1008,35 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     }
     if (d + 0.5 < static_cast<double>(R.bord)) ajouter(Gravite::Erreur, "DRC-07", decrire(o, pp) + " à " + mmTexte(d) + " du bord de la carte (minimum " + mmTexte(static_cast<double>(R.bord)) + ")", "Éloigne le cuivre du bord : la découpe pourrait l’entamer.", o.a);
   }
-  for (std::size_t i = 0; i < c.circuit.empreintes.size(); ++i) {
+  // Encombrements calculés une fois et indexés : le chevauchement (DRC-10) ne regarde que les voisins (9.3)
+  const std::size_t nEmp = c.circuit.empreintes.size();
+  std::vector<Polygone> encs(nEmp);
+  std::vector<Boite> boitesEnc(nEmp);
+  IndexSpatial indexEnc(5 * NM_PAR_MM);
+  for (std::size_t i = 0; i < nEmp; ++i)
+    if (const DefEmpreinte* d = c.empreinte(c.circuit.empreintes[i].empreinte)) {
+      encs[i] = encombrementSurCarte(c.circuit.empreintes[i], *d);
+      boitesEnc[i] = boite(encs[i]);
+      indexEnc.inserer(static_cast<int>(i), boitesEnc[i]);
+    }
+  for (std::size_t i = 0; i < nEmp; ++i) {
     const EmpreintePlacee& e = c.circuit.empreintes[i];
     const ComposantElec* x = c.composant(e.composant);
     const std::string ref = x ? x->reference : std::string("?");
     const DefEmpreinte* d = c.empreinte(e.empreinte);
     if (!d) { ajouter(Gravite::Erreur, "DRC-08", ref + " : empreinte inconnue « " + e.empreinte + " »", "Choisis une empreinte du catalogue dans le schéma.", e.position, {e.composant}); continue; }
-    const Polygone enc = encombrementSurCarte(e, *d);
+    const Polygone& enc = encs[i];
     bool dedansCarte = true;
     for (const Pt& p : enc) dedansCarte &= dansCarte(p);
     if (empreintesHors.count(static_cast<int>(i)) || !dedansCarte)
       ajouter(empreintesHors.count(static_cast<int>(i)) ? Gravite::Erreur : Gravite::Avertissement, "DRC-09", ref + " dépasse de la carte", "Place-le à l’intérieur du contour (un connecteur peut dépasser exprès du bord).", e.position, {e.composant});
-    for (std::size_t j = i + 1; j < c.circuit.empreintes.size(); ++j) {
+    for (const int jj : indexEnc.chercher(boitesEnc[i])) {
+      const std::size_t j = static_cast<std::size_t>(jj);
+      if (j <= i) continue;
       const EmpreintePlacee& f = c.circuit.empreintes[j];
-      if (f.dessous != e.dessous) continue;
-      const DefEmpreinte* g = c.empreinte(f.empreinte);
-      if (!g) continue;
-      const Polygone enc2 = encombrementSurCarte(f, *g);
-      if (!boite(enc).touche(boite(enc2))) continue;
+      if (f.dessous != e.dessous || encs[j].empty()) continue;
+      const Polygone& enc2 = encs[j];
+      if (!boitesEnc[i].touche(boitesEnc[j])) continue;
       if (!intersecter({enc}, {enc2}).empty() && aireMm2(intersecter({enc}, {enc2})) > 1e-4) {
         const ComposantElec* y = c.composant(f.composant);
         ajouter(Gravite::Avertissement, "DRC-10", "Encombrements de " + ref + " et " + (y ? y->reference : std::string("?")) + " qui se chevauchent", "Écarte les composants : l’assemblage risque de les heurter.", e.position, {e.composant, f.composant});
@@ -870,7 +1112,7 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     }
   }
   // Routage : liaisons manquantes, courts-circuits, bouts de piste libres, zones vides
-  const EtatRoutage etat = etatRoutage(c, k, remplis);
+  const EtatRoutage etat = etatFutur.get();
   std::map<std::string, std::vector<const Liaison*>> parReseau;
   for (const auto& l : etat.chevelu) parReseau[l.reseau].push_back(&l);
   for (const auto& [reseau, liste] : parReseau)
@@ -880,6 +1122,14 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     ajouter(Gravite::Erreur, "DRC-21", "Court-circuit entre « " + cc.a + " » et « " + cc.b + " »", "Une piste, une via ou une zone relie deux réseaux : supprime le cuivre en trop.", cc.position);
   for (const Pt& p : etat.boutsLibres) ajouter(Gravite::Avertissement, "DRC-22", "Bout de piste qui ne mène nulle part", "Prolonge la piste jusqu’à une pastille, ou supprime-la.", p);
   // Vias sans réseau, ou qui ne touchent rien de leur réseau (ni piste, ni pastille, ni zone remplie) : EL-12
+  // Cuivre des zones indexé une fois, pour les tests d'inclusion qui suivent (9.2)
+  std::map<std::string, std::unique_ptr<CuivreIndexe>> cuivresIndexes;
+  auto cuivreDeZone = [&](const std::string& uuid) -> const CuivreIndexe* {
+    auto& x = cuivresIndexes[uuid];
+    if (!x)
+      if (const auto it = remplis.find(uuid); it != remplis.end()) x = std::make_unique<CuivreIndexe>(it->second);
+    return x.get();
+  };
   for (const auto& v : c.circuit.vias) {
     if (v.reseau.empty()) {
       ajouter(Gravite::Avertissement, "DRC-25", "Via sans réseau", "Donne-lui un réseau dans son panneau (une via posée dans une zone prend le réseau de la zone).", v.p);
@@ -890,7 +1140,7 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     for (const auto& p : pp) relie = relie || (p.reseau == v.reseau && dedans(p.forme, v.p));
     for (const auto& z : zs)
       if (!relie && z.reseau == v.reseau)
-        if (const auto it = remplis.find(z.uuid); it != remplis.end() && dedans(it->second, v.p)) relie = true;
+        if (const CuivreIndexe* x = cuivreDeZone(z.uuid)) relie = x->contient(v.p);
     if (!relie) ajouter(Gravite::Avertissement, "DRC-25", "Via du réseau « " + v.reseau + " » reliée à rien", "Relie-la par une piste ou une zone de son réseau, ou supprime-la.", v.p);
   }
   for (const auto& z : zs) {
@@ -1011,13 +1261,15 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     if (!z.thermique || z.reseau.empty() || z.contour.size() < 3) continue;
     const auto it = remplis.find(z.uuid);
     if (it == remplis.end()) continue;
-    const Polygones& cuivre = it->second;
+    const CuivreIndexe* cuivre = cuivreDeZone(z.uuid);
+    const Polygone contourZone = orienter(z.contour);
+    const Boite boiteZone = boite(contourZone);
     if (z.epaisseurMin > z.largeurRayon)
       ajouter(Gravite::Avertissement, "DRC-27", "Zone « " + z.reseau + " » : rayons thermiques de " + mmTexte(static_cast<double>(z.largeurRayon)) + " sous l’épaisseur minimale de " +
                                                    mmTexte(static_cast<double>(z.epaisseurMin)) + ", élargis à " + mmTexte(static_cast<double>(largeurRayonEffective(z))),
               "Règle la largeur des rayons au-dessus de l’épaisseur minimale de la zone.", z.contour.front(), {z.uuid});
     for (const auto& p : pp) {
-      if (p.reseau != z.reseau || !(p.couches & bit(z.couche)) || !dedans(orienter(z.contour), p.pastille.position)) continue;
+      if (p.reseau != z.reseau || !(p.couches & bit(z.couche)) || !boiteZone.contient(p.pastille.position) || !dedans(contourZone, p.pastille.position)) continue;
       const Pastille& pa = p.pastille;
       const double a = pa.rotation * 3.141592653589793 / 180;
       const double ux = std::cos(a), uy = std::sin(a);
@@ -1029,7 +1281,7 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
         const double demi = (k2 < 2 ? static_cast<double>(pa.largeur) : static_cast<double>(pa.hauteur)) / 2;
         const double r = demi + static_cast<double>(z.ecartThermique) + 0.6 * static_cast<double>(std::max<Nm>(z.epaisseurMin, 100'000));
         const Pt q{pa.position.x + static_cast<Nm>(std::lround(r * dx)), pa.position.y + static_cast<Nm>(std::lround(r * dy))};
-        if (dedans(cuivre, q)) ++rayons;
+        if (cuivre && cuivre->contient(q)) ++rayons;
       }
       if (rayons < R.rayonsMin)
         ajouter(Gravite::Erreur, "DRC-26", "Pastille " + p.reference + "." + p.numero + " reliée à la zone « " + z.reseau + " » par " + std::to_string(rayons) + " rayon(s) thermique(s) (minimum " +

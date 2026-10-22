@@ -175,6 +175,10 @@ struct ComposantElec {
   // Article d'où vient ce composant (4.2) et sa version au moment de la pose : une version plus récente propose la
   // mise à jour, avec les différences (4.10) ; code LCSC repris dans la nomenclature (4.12)
   std::string article;
+  // Modèle 3D exact associé (6.2) : identifiant dans ConceptionElec::modeles3D ; il remplace la boîte du corps
+  std::string modele3D;
+  // Copie liée d'un composant d'une feuille de canal (7.5) : l'UUID du composant de la feuille source
+  std::string modeleComposant;
   int versionArticle = 0;
   std::string lcsc;
   friend bool operator==(const ComposantElec&, const ComposantElec&) = default;
@@ -250,6 +254,11 @@ struct TexteSchema {
 };
 struct Feuille {
   std::string uuid, nom = "Feuille 1", format = "A4";
+  // Feuille de canal répétée (7.2, 7.5, STR-05, STR-22) : la source porte le nombre d'exemplaires (« 4 × canal ») ;
+  // chaque copie porte l'UUID de sa source et son rang (2, 3…) ; ses composants sont des copies liées
+  int repetitions = 0;
+  std::string modele;
+  int instance = 0;
   std::vector<SymbolePlace> symboles;
   std::vector<Fil> fils;
   std::vector<Jonction> jonctions;

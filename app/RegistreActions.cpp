@@ -148,6 +148,20 @@ RegistreActions::RegistreActions() {
   ajouter("circuit.aPlacer", QStringLiteral("Liste des composants à placer sur la carte"), P::Circuit, {});
   ajouter("circuit.disposerCercle", QStringLiteral("Disposer les empreintes choisies en cercle"), P::Circuit, {});
   ajouter("verification.rapport", QStringLiteral("Rapport de vérification, groupé par règle"), P::Atelier, {});
+  ajouter("carte.modelesDossier", QStringLiteral("Associer un dossier de modèles 3D aux empreintes"), P::Atelier, {});
+  ajouter("carte.exporterStep", QStringLiteral("Exporter la carte équipée en STEP"), P::Atelier, {});
+  ajouter("carte.contourEsquisse", QStringLiteral("Contour de la carte piloté par une esquisse"), P::Atelier, {});
+  ajouter("boitier.facade", QStringLiteral("Façade du boîtier"), P::Atelier, {});
+  ajouter("boitier.impression", QStringLiteral("Pièces du boîtier pour l’impression 3D"), P::Atelier, {});
+  ajouter("schema.repeterFeuille", QStringLiteral("Feuille de canal : répéter la feuille"), P::Schema, {});
+  ajouter("schema.deplacerVersFeuille", QStringLiteral("Déplacer les symboles choisis vers une autre feuille"), P::Schema, {});
+  ajouter("circuit.reproduireCanal", QStringLiteral("Reproduire le placement et le routage du canal sur ses copies"), P::Circuit, {});
+  ajouter("regles.contraintes", QStringLiteral("Gestionnaire de contraintes : règles et classes, communes au schéma et au circuit"), P::Atelier, {});
+  ajouter("circuit.routerComplet", QStringLiteral("Router tout : recherche de chemin pour chaque liaison"), P::Atelier, {});
+  ajouter("fabrication.panneau", QStringLiteral("Mise en panneau en languettes perforées"), P::Atelier, {});
+  ajouter("fabrication.devis", QStringLiteral("Devis de fabrication hors ligne"), P::Atelier, {});
+  ajouter("fabrication.controler", QStringLiteral("Contrôler un dossier de fabrication avant l’envoi"), P::Atelier, {});
+  ajouter("fabrication.visionneuse", QStringLiteral("Visionneuse HTML autonome"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
   ajouter("schema.alimentation.3v3", QStringLiteral("Alimentation +3V3"), P::Schema, {});
@@ -233,6 +247,20 @@ RegistreActions::RegistreActions() {
       {"circuit.aPlacer", "À placer", "composants", "empreintes qui attendent hors de la carte, par feuille ; elles se glissent sur la carte"},
       {"circuit.disposerCercle", "En cercle…", "pivoter", "les empreintes choisies sur un cercle ou un arc, tournées vers le centre"},
       {"verification.rapport", "Rapport…", "drc", "rapport HTML groupé par règle, exclusions à part ; chaque ligne mène à l’objet"},
+      {"carte.modelesDossier", "Modèles 3D…", "composants", "un dossier de modèles STEP rapproché des empreintes, chaque modèle calé"},
+      {"carte.exporterStep", "STEP de la carte…", "composants", "carte équipée, un produit nommé par composant"},
+      {"carte.contourEsquisse", "Contour esquissé…", "proprietes", "le contour suit les cotes d’une esquisse, trous de fixation compris"},
+      {"boitier.facade", "Façade…", "proprietes", "découpes, légendes et échelles qui suivent leurs composants ; SVG et DXF"},
+      {"boitier.impression", "Impression 3D…", "composants", "pièces du boîtier à plat en STL, volume, masse et coût"},
+      {"schema.repeterFeuille", "Canal ×…", "composants", "la feuille répétée en copies liées, repères par canal"},
+      {"schema.deplacerVersFeuille", "Vers la feuille…", "composants", "symboles déplacés, repères, empreintes et pistes gardés"},
+      {"circuit.reproduireCanal", "Reproduire le canal", "composants", "placement et routage du canal source recopiés sur les autres"},
+      {"regles.contraintes", "Contraintes…", "proprietes", "règles de la carte et des classes, les mêmes au schéma et au circuit ; un changement, un pas"},
+      {"circuit.routerComplet", "Router tout", "piste", "recherche de chemin autour des obstacles, sur les deux faces ; jamais sous l’isolement"},
+      {"fabrication.panneau", "Panneau…", "exporter", "cartes en lignes et colonnes, languettes perforées, contrôle avant la sortie"},
+      {"fabrication.devis", "Devis…", "proprietes", "JLCPCB et PCBWay côte à côte, d’après les grilles datées, sans réseau"},
+      {"fabrication.controler", "Contrôler les fichiers…", "drc", "fichiers relus, connectivité comparée à la conception, avant l’envoi"},
+      {"fabrication.visionneuse", "Visionneuse…", "exporter", "une page autonome : schéma, circuit, 3D et nomenclature liés"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},
       {"schema.etiquetteGlobale", "Étiquette globale", "etiquette", "relie les fils du même nom sur toutes les feuilles"},

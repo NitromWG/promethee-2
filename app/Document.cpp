@@ -1,5 +1,6 @@
 // Prométhée : le document ouvert. Licence GPL-3.0-only.
 #include "Document.hpp"
+#include "ChienDeGarde.hpp"
 #include "promethee/synchronisation.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/structure.hpp"
@@ -200,6 +201,7 @@ void Document::empiler(std::unique_ptr<Pas> pas) {
   // les dix derniers pas restent toujours annulables. Le pas le plus ancien oublié devient la base de l'état.
   constexpr std::size_t PAS_MAX = 200, PAS_GARANTIS = 10, OCTETS_MAX = std::size_t{256} << 20;  // 200 pas ou 256 Mo (Spécifications)
   pas->id = m_prochainPas++;
+  chien::geste(pas->nom);  // derniers gestes du rapport de blocage (9.10)
   if (!pas->conception.empty() && m_suiviSelection) pas->selection = m_suiviSelection(pas->conception);
   m_annuler.push_back(std::move(pas));
   std::size_t total = 0;

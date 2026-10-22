@@ -2,11 +2,13 @@
 // liste des réseaux, mise à jour du circuit imprimé depuis le schéma, pastilles placées. Licence GPL-3.0-only.
 #include "promethee/electronique.hpp"
 #include "promethee/articles.hpp"
+#include "promethee/structure_schema.hpp"
 #include "promethee/synchronisation.hpp"
 #include "promethee/valeurs.hpp"
 #include "promethee/verification.hpp"
 
 #include <algorithm>
+#include <unordered_map>
 #include <cctype>
 #include <cstdio>
 #include <mutex>
@@ -15,20 +17,56 @@
 
 namespace prom::ecad {
 
+namespace {
+// Table d'accès par identifiant ou par repère (9.3), propre à chaque fil : refaite quand le tableau des composants
+// change d'adresse ou de taille, ou quand une entrée ne correspond plus (identifiant changé sur place). Chaque réponse
+// est vérifiée ; un identifiant absent se cherche encore pas à pas : la table ne peut jamais rendre un faux résultat.
+struct TableComposants {
+  const ComposantElec* donnees = nullptr;
+  std::size_t taille = 0;
+  bool parRef = false;
+  std::unordered_map<std::string, std::size_t> index;
+};
+template <typename V>
+std::ptrdiff_t chercherComposant(V& v, const std::string& cle, bool parRef) {
+  constexpr std::size_t SEUIL = 48;
+  auto champ = [parRef](const ComposantElec& x) -> const std::string& { return parRef ? x.reference : x.uuid; };
+  if (cle.empty() || v.size() < SEUIL) {
+    for (std::size_t i = 0; i < v.size(); ++i)
+      if (!cle.empty() && champ(v[i]) == cle) return static_cast<std::ptrdiff_t>(i);
+    return -1;
+  }
+  thread_local TableComposants tables[2];
+  TableComposants& t = tables[parRef ? 1 : 0];
+  auto refaire = [&] {
+    t.donnees = v.data();
+    t.taille = v.size();
+    t.index.clear();
+    t.index.reserve(v.size());
+    for (std::size_t i = 0; i < v.size(); ++i) t.index.emplace(champ(v[i]), i);
+  };
+  if (t.donnees != v.data() || t.taille != v.size()) refaire();
+  if (const auto it = t.index.find(cle); it != t.index.end() && it->second < v.size() && champ(v[it->second]) == cle) return static_cast<std::ptrdiff_t>(it->second);
+  for (std::size_t i = 0; i < v.size(); ++i)
+    if (champ(v[i]) == cle) {
+      refaire();
+      return static_cast<std::ptrdiff_t>(i);
+    }
+  return -1;
+}
+}  // namespace
+
 const ComposantElec* ConceptionElec::composant(const std::string& id) const {
-  for (const auto& c : composants)
-    if (c.uuid == id) return &c;
-  return nullptr;
+  const auto i = chercherComposant(composants, id, false);
+  return i < 0 ? nullptr : &composants[static_cast<std::size_t>(i)];
 }
 ComposantElec* ConceptionElec::composant(const std::string& id) {
-  for (auto& c : composants)
-    if (c.uuid == id) return &c;
-  return nullptr;
+  const auto i = chercherComposant(composants, id, false);
+  return i < 0 ? nullptr : &composants[static_cast<std::size_t>(i)];
 }
 const ComposantElec* ConceptionElec::parReference(const std::string& ref) const {
-  for (const auto& c : composants)
-    if (c.reference == ref) return &c;
-  return nullptr;
+  const auto i = chercherComposant(composants, ref, true);
+  return i < 0 ? nullptr : &composants[static_cast<std::size_t>(i)];
 }
 const DefSymbole* ConceptionElec::symbole(const std::string& id) const {
   const auto it = symboles.find(id);
@@ -776,6 +814,12 @@ Connectivite connectivite(const ConceptionElec& c) {
     const Feuille& F = c.feuilles[f];
     std::map<Pt, std::vector<int>> parPoint;
     std::vector<std::pair<int, const Fil*>> fils;
+    // Bus (7.4) : leurs fils et l'étiquette qui les nomme ne relient rien ; les entrées se rejoignent par leur nom
+    std::set<std::string> filsBus, etiquettesBus;
+    for (const auto& b : busDeFeuille(F)) {
+      filsBus.insert(b.fils.begin(), b.fils.end());
+      etiquettesBus.insert(b.etiquette);
+    }
     auto nouveau = [&](Element e, Pt p) {
       const int id = u.ajouter();
       e.feuille = static_cast<int>(f);
@@ -784,7 +828,7 @@ Connectivite connectivite(const ConceptionElec& c) {
       return id;
     };
     for (const auto& w : F.fils) {
-      if (w.a == w.b) continue;
+      if (w.a == w.b || filsBus.count(w.uuid)) continue;
       Element fil;
       fil.genre = Genre::Fil;
       fil.uuid = w.uuid;
@@ -807,6 +851,7 @@ Connectivite connectivite(const ConceptionElec& c) {
       }
     }
     for (const auto& e : F.etiquettes) {
+      if (etiquettesBus.count(e.uuid)) continue;
       Element x;
       x.genre = e.type == TypeEtiquette::Locale ? Genre::Locale : Genre::Globale;  // un connecteur hors feuille relie comme une globale
       x.uuid = e.uuid;
@@ -1463,6 +1508,42 @@ std::vector<Violation> verifierERC(const ConceptionElec& c, const Connectivite& 
       if (!ancrages.count(n.p))
         ajouter(Gravite::Avertissement, "ERC-13", "Marque de non-connexion posée dans le vide", "Pose-la sur le bout de la broche à laisser libre, ou supprime-la.", f.uuid, n.p);
   }
+  // ERC-32 (7.4) : une entrée de bus qui porte un nom hors du bus (D8 sur D[0..7])
+  for (const auto& f : c.feuilles)
+    for (const auto& b : busDeFeuille(f))
+      for (const auto& [fil, nom] : b.entrees) {
+        if (nom.empty()) continue;
+        bool membre = nom.size() > b.nom.prefixe.size() && nom.compare(0, b.nom.prefixe.size(), b.nom.prefixe) == 0 &&
+                      std::all_of(nom.begin() + static_cast<long>(b.nom.prefixe.size()), nom.end(), [](char ch) { return std::isdigit(static_cast<unsigned char>(ch)); });
+        if (membre) {
+          const int n = std::stoi(nom.substr(b.nom.prefixe.size(), 9));
+          membre = n >= b.nom.debut && n <= b.nom.fin;
+        }
+        if (membre) continue;
+        Pt ou;
+        for (const auto& w : f.fils)
+          if (w.uuid == fil) ou = w.a;
+        ajouter(Gravite::Erreur, "ERC-32",
+                "Entrée « " + nom + " » sur le bus " + b.nom.prefixe + "[" + std::to_string(b.nom.debut) + ".." + std::to_string(b.nom.fin) + "] : ce nom n’en fait pas partie",
+                "Renomme l’entrée d’un membre du bus, ou élargis le bus.", f.uuid, ou, {fil});
+      }
+  // ERC-45 (7.17) : électrolytique monté à l'envers, d'après les tensions des réseaux (« + » plus bas que « − »)
+  for (const auto& x : c.composants) {
+    const DefSymbole* d = c.symbole(x.symbole);
+    if (!d || x.symbole.find("C_Pol") == std::string::npos) continue;
+    const int rp = k.reseau(x.uuid, "1"), rm = k.reseau(x.uuid, "2");
+    if (rp < 0 || rm < 0) continue;
+    const auto vp = tensionReseau(k.reseaux[static_cast<std::size_t>(rp)]), vm = tensionReseau(k.reseaux[static_cast<std::size_t>(rm)]);
+    if (!vp || !vm || *vp >= *vm) continue;
+    std::string feuille;
+    Pt ou;
+    for (const auto& f : c.feuilles)
+      for (const auto& sp : f.symboles)
+        if (sp.composant == x.uuid && feuille.empty()) feuille = f.uuid, ou = sp.position;
+    char t[160];
+    std::snprintf(t, sizeof t, " : son « + » est à %g V, son « − » à %g V", *vp, *vm);
+    ajouter(Gravite::Erreur, "ERC-45", x.reference + " est monté à l’envers" + t, "Retourne le condensateur : le « + » va au potentiel le plus haut.", feuille, ou, {x.uuid});
+  }
   for (auto& x : v) x.niveau = niveauErc(x.code);
   std::stable_sort(v.begin(), v.end(), [](const Violation& a, const Violation& b) { return a.gravite < b.gravite; });
   return v;
@@ -1471,7 +1552,7 @@ std::vector<Violation> verifierERC(const ConceptionElec& c, const Connectivite& 
 // ---------- ERC par niveau, matrice des conflits, gravités réglées, exclusions (2.11) ----------
 NiveauErc niveauErc(const std::string& code) {
   static const std::set<std::string> immediat{"ERC-01", "ERC-05", "ERC-06", "ERC-23", "ERC-41", "ERC-42"};
-  static const std::set<std::string> dessin{"ERC-02", "ERC-10", "ERC-11", "ERC-13", "ERC-14", "ERC-16", "ERC-17", "ERC-18", "ERC-30", "ERC-31"};
+  static const std::set<std::string> dessin{"ERC-02", "ERC-32", "ERC-10", "ERC-11", "ERC-13", "ERC-14", "ERC-16", "ERC-17", "ERC-18", "ERC-30", "ERC-31"};
   if (immediat.count(code)) return NiveauErc::Immediat;
   if (dessin.count(code)) return NiveauErc::Dessin;
   return NiveauErc::Complet;

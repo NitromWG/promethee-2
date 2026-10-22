@@ -82,7 +82,18 @@ HauteurComposant hauteurComposant(const ComposantElec* x, const DefEmpreinte* d)
   return h;
 }
 
-HauteurComposant hauteurComposant(const ConceptionElec& c, const ComposantElec& x) { return hauteurComposant(&x, c.empreinte(x.empreinte)); }
+HauteurComposant hauteurComposant(const ConceptionElec& c, const ComposantElec& x) {
+  // Un modèle 3D exact associé (6.2) passe avant tout : sa hauteur, provenance « modèle exact »
+  if (!x.modele3D.empty())
+    if (const auto it = c.modeles3D.find(x.modele3D); it != c.modeles3D.end() && it->second.hauteur() > 0) {
+      HauteurComposant h;
+      h.mm = it->second.hauteur();
+      h.provenance = ProvenanceHauteur::ModeleExact;
+      h.source = "modèle " + it->second.nom;
+      return h;
+    }
+  return hauteurComposant(&x, c.empreinte(x.empreinte));
+}
 
 std::string hauteurAConfirmer(double v, const DefEmpreinte* d) {
   if (v <= 0) return {};
@@ -105,12 +116,22 @@ std::optional<CorpsPose> corpsPose(const ConceptionElec& c, const EmpreintePlace
   const DefEmpreinte* d = c.empreinte(e.empreinte);
   if (!d) return std::nullopt;
   CorpsPose r;
-  r.hauteur = hauteurComposant(c.composant(e.composant), d);
+  const ComposantElec* k = c.composant(e.composant);
+  r.hauteur = k ? hauteurComposant(c, *k) : hauteurComposant(nullptr, d);
   if (r.hauteur.mm <= 0) return std::nullopt;
   const Boite emprise = empriseCorps(*d);
   r.centre = versCarte(e, emprise.centre());
   r.largeur = mm(emprise.largeur());
   r.profondeur = mm(emprise.hauteur());
+  // Modèle exact : ses dimensions, quart de tour du calage compris
+  if (k && !k->modele3D.empty())
+    if (const auto it = c.modeles3D.find(k->modele3D); it != c.modeles3D.end()) {
+      const Modele3D& m = it->second;
+      const bool tourne = m.quarts % 2 != 0;
+      r.largeur = tourne ? m.y1 - m.y0 : m.x1 - m.x0;
+      r.profondeur = tourne ? m.x1 - m.x0 : m.y1 - m.y0;
+      r.centre = versCarte(e, emprise.centre() + Pt{nm(m.dx), nm(m.dy)});
+    }
   r.rotation = e.rotation;
   r.rond = d->corps.rond && d->corps.largeur > 0;
   r.dessous = e.dessous;

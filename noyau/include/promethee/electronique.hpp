@@ -53,6 +53,40 @@ struct ReglagesErc {
   bool vide() const { return gravites.empty() && matrice.empty() && exclusions.empty(); }
   friend bool operator==(const ReglagesErc&, const ReglagesErc&) = default;
 };
+// Modèle 3D exact d'un composant (lot L6, 6.2, MEC-03, EMP-10) : la forme lue d'un fichier STEP (ou WRL, OBJ), gardée
+// dans le projet en BRep d'OpenCascade, calée sur l'empreinte (boîte centrée sur l'encombrement, posée sur la carte,
+// quart de tour qui recouvre le mieux les pastilles), puis réglée ; sa hauteur devient celle du composant, provenance
+// « modèle exact »
+struct Modele3D {
+  std::string nom;   // fichier d'origine
+  std::string brep;  // forme exacte, texte BRep
+  double x0 = 0, y0 = 0, z0 = 0, x1 = 0, y1 = 0, z1 = 0;  // boîte brute du modèle, dans son repère (mm)
+  int quarts = 0;                                        // calage : quarts de tour autour de z
+  double dx = 0, dy = 0, dz = 0;                         // réglage après calage (mm, repère de l'empreinte)
+  double hauteur() const { return z1 - z0 + dz; }
+  friend bool operator==(const Modele3D&, const Modele3D&) = default;
+};
+// Façade (lot L6, 6.14, MEC-24, MEC-25) : sur une face du boîtier, des découpes, légendes et échelles graduées qui
+// suivent leur composant ; contrôlée avant la sortie en SVG et en DXF
+struct ElementFacade {
+  enum class Genre : std::uint8_t { DecoupeRonde, DecoupeRect, Legende, Echelle } genre = Genre::DecoupeRonde;
+  std::string uuid, composant;   // composant suivi ; vide : élément fixe, placé en (dx, dy)
+  double dx = 0, dy = 0;         // décalage par rapport au composant (mm, repère de la carte, y vers le bas)
+  double diametre = 7, largeur = 10, hauteur = 5;  // découpes
+  std::string texte;
+  double taille = 3;             // légende : hauteur du texte
+  int graduations = 11;          // échelle : nombre de traits
+  double rayon = 10, angleDebut = 225, angleFin = -45, longueurTrait = 2;
+  friend bool operator==(const ElementFacade&, const ElementFacade&) = default;
+};
+struct Facade {
+  std::string uuid, nom = "Façade";
+  double ecartMin = 2;   // écart minimal entre deux découpes (mm)
+  double marge = 1.5;    // marge minimale au bord de la face (mm)
+  std::vector<ElementFacade> elements;
+  friend bool operator==(const Facade&, const Facade&) = default;
+};
+
 struct ConceptionElec {
   std::string uuid, nom = "Carte électronique";
   std::vector<ComposantElec> composants;
@@ -66,6 +100,11 @@ struct ConceptionElec {
   // Articles utilisés, figés dans le projet comme les symboles et les empreintes (4.2) : une mise à jour homonyme de
   // la bibliothèque ne les change pas sans qu'on l'accepte
   std::map<std::string, Article> articles;
+  std::map<std::string, Modele3D> modeles3D;  // modèles 3D exacts, par identifiant (6.2)
+  std::vector<Facade> facades;                // façades du boîtier (6.14)
+  // Esquisse qui pilote le contour (6.13, MEC-29) : boucle extérieure, découpes, cercles des trous de fixation ;
+  // texte JSON d'une esquisse (prom::Esquisse), nul sans esquisse
+  nlohmann::ordered_json esquisseContour;
   // Noms automatiques figés (EL-01) : « UUID du composant:numéro de broche » → nom donné à son réseau quand le
   // circuit a été mis à jour. Renommer R1 en R5, ajouter un composant ou poser une étiquette ne change plus le
   // réseau que portent les pistes : l'ancien nom reste un alias du réseau.

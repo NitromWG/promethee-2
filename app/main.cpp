@@ -3,9 +3,11 @@
 #include <clocale>
 #include <cstdlib>
 #include <cstring>
+#include <memory>
 
 #include <QApplication>
 #include <QDir>
+#include <QFile>
 #include <QSettings>
 #include <QLibraryInfo>
 #include <QTranslator>
@@ -24,6 +26,7 @@
 #include <cstdio>
 
 #include "Accueil.hpp"
+#include "ChienDeGarde.hpp"
 #include "Document.hpp"
 #include "EssaisInterface.hpp"
 #include "Journal.hpp"
@@ -37,6 +40,7 @@
 #include "DialogueComposant.hpp"
 #include "FenetrePrincipale.hpp"
 #include "Coquille.hpp"
+#include "Recuperation.hpp"
 #include "Icones.hpp"
 #include "Theme.hpp"
 #include "promethee/esquisse.hpp"
@@ -115,6 +119,8 @@ int main(int argc, char** argv) {
       std::fflush(stdout);
       return 0;
     }
+  // Mode portable (9.11) : avant le journal, pour que rien ne s'écrive dans le profil
+  portable::initialiser(argc > 0 ? argv[0] : nullptr);
   installerJournal();
   // Échelle de l'interface réglée dans Prométhée (2.31, ERG-36) : appliquée avant la création de l'application, par
   // QT_SCALE_FACTOR, sauf si l'environnement en impose une ou pendant les essais
@@ -122,9 +128,10 @@ int main(int argc, char** argv) {
     bool essais = false;
     for (int i = 1; i < argc; ++i) essais |= std::strncmp(argv[i], "--essais", 8) == 0;
     if (!essais && !qEnvironmentVariableIsSet("QT_SCALE_FACTOR")) {
-      const QSettings s(QStringLiteral("Prométhée"), QStringLiteral("Prométhée"));
+      const auto s = portable::actif() ? std::make_unique<QSettings>(portable::fichierReglages(), QSettings::IniFormat)
+                                       : std::make_unique<QSettings>(QStringLiteral("Prométhée"), QStringLiteral("Prométhée"));
       static const char* facteurs[] = {"1", "1.25", "1.5", "1.75", "2"};
-      const int i = std::clamp(s.value(QStringLiteral("apparence/echelleInterface"), 0).toInt(), 0, 4);
+      const int i = std::clamp(s->value(QStringLiteral("apparence/echelleInterface"), 0).toInt(), 0, 4);
       if (i > 0) qputenv("QT_SCALE_FACTOR", facteurs[i]);
     }
   }
@@ -165,6 +172,27 @@ int main(int argc, char** argv) {
   QCoreApplication::setApplicationName(QStringLiteral("Prométhée"));
   QCoreApplication::setOrganizationName(QStringLiteral("Prométhée"));
   QCoreApplication::setApplicationVersion(QString::fromLatin1(prom::infosVersion().version));
+  portable::appliquerReglages();
+  if (portable::actif()) journal("mode portable : données dans " + portable::dossier().toStdString());
+  // Chien de garde (9.10) : un blocage de plus de dix secondes laisse un rapport dans le dossier des rapports
+  chien::demarrer(QDir(Recuperation::dossierDonnees()).filePath(QStringLiteral("rapports")));
+  struct ArretChien {
+    ~ArretChien() { chien::arreter(); }
+  } arretChien;
+  // Essai du mode portable : réglage, copie de récupération et bibliothèque personnelle écrits, chemins affichés
+  if (app.arguments().contains(QStringLiteral("--essais-portable"))) {
+    QSettings().setValue(QStringLiteral("essai/portable"), true);
+    QSettings().sync();
+    QDir().mkpath(portable::dossierDonneesAppli());
+    QFile b(QDir(portable::dossierDonneesAppli()).filePath(QStringLiteral("bibliotheque-electronique.json")));
+    if (b.open(QIODevice::WriteOnly)) b.write("{}");
+    b.close();
+    QDir().mkpath(QDir(Recuperation::dossierDonnees()).filePath(QStringLiteral("recuperation")));
+    std::printf("portable %d\nreglages %s\ndonnees %s\nbibliotheques %s\n", portable::actif() ? 1 : 0, QSettings().fileName().toUtf8().constData(),
+                Recuperation::dossierDonnees().toUtf8().constData(), portable::dossierDonneesAppli().toUtf8().constData());
+    std::fflush(stdout);
+    return 0;
+  }
   // Essais : des réglages à part, neufs à chaque lancement (dernier atelier par fichier, récents, thème), pour qu'un
   // essai ne dépende jamais de ce qu'un lancement précédent a retenu
   for (const QString& a : app.arguments())

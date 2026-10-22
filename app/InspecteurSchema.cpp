@@ -10,6 +10,7 @@
 #include <QCheckBox>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFileDialog>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QGroupBox>
@@ -779,6 +780,40 @@ class PageComposant : public PageSchema {
     // Libellé court : un libellé long poussait le champ hors d'un inspecteur étroit
     fl->addRow(QStringLiteral("Hauteur"), ligneH);  // distincte de la hauteur par défaut de l'empreinte (T2)
     fl->addRow(aConfirmer);
+    // Modèle 3D exact (6.2) : il remplace la boîte du corps, et sa hauteur devient celle du composant
+    {
+      auto* ligneM = new QWidget;
+      auto* hM = new QHBoxLayout(ligneM);
+      hM->setContentsMargins(0, 0, 0, 0);
+      hM->setSpacing(2);
+      auto* nomModele = inspecteur::texte();
+      nomModele->setObjectName(QStringLiteral("nomModele3D"));
+      hM->addWidget(nomModele, 1);
+      auto* choisir = new QToolButton;
+      choisir->setObjectName(QStringLiteral("modele3D"));
+      choisir->setText(QStringLiteral("…"));
+      choisir->setToolTip(QStringLiteral("Associer un modèle 3D exact (STEP, IGES, BREP), calé sur l’empreinte"));
+      connect(choisir, &QToolButton::clicked, this, [this] {
+        const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Modèle 3D"), {}, QStringLiteral("Modèles 3D (*.step *.stp *.iges *.igs *.brep)"));
+        if (!f.isEmpty()) m_atelier.associerModele3D(idComposant(), f);
+      });
+      auto* retirer = new QToolButton;
+      retirer->setText(QStringLiteral("×"));
+      retirer->setToolTip(QStringLiteral("Retirer le modèle : la boîte de l’empreinte revient"));
+      connect(retirer, &QToolButton::clicked, this, [this] { modifierComposant([](ComposantElec& k) { k.modele3D.clear(); }); });
+      hM->addWidget(choisir);
+      hM->addWidget(retirer);
+      fl->addRow(QStringLiteral("Modèle 3D"), ligneM);
+      lier(nomModele, [this, nomModele, retirer] {
+        const ConceptionElec* c = conception();
+        const ComposantElec* x = composant();
+        if (!c || !x) return;
+        const auto it = x->modele3D.empty() ? c->modeles3D.end() : c->modeles3D.find(x->modele3D);
+        nomModele->setText(it == c->modeles3D.end() ? QStringLiteral("<span style='color:%1'>boîte de l’empreinte</span>").arg(teintes::secondaire())
+                                                     : QString::fromStdString(it->second.nom).toHtmlEscaped());
+        retirer->setVisible(it != c->modeles3D.end());
+      });
+    }
     lier(h, [this, h, provenance] {
       const ConceptionElec* c = conception();
       const ComposantElec* x = composant();
@@ -787,7 +822,7 @@ class PageComposant : public PageSchema {
       const double generique = de ? hauteurGenerique(*de) : 0;
       h->setSpecialValueText(generique > 0 ? QStringLiteral("%1 mm").arg(QLocale().toString(generique, 'f', 2)) : QStringLiteral("générique"));
       h->setValue(x->hauteur);
-      const HauteurComposant hc = hauteurComposant(x, de);
+      const HauteurComposant hc = hauteurComposant(*c, *x);
       const bool gris = hc.provenance == ProvenanceHauteur::Generique;
       provenance->setText(QStringLiteral("<span style='color:%1'>%2</span>").arg(gris ? teintes::secondaire() : teintes::succes(), QString::fromUtf8(nomProvenance(hc.provenance))));
       provenance->setToolTip(QString::fromStdString(hc.texte() + " — " + hc.source));

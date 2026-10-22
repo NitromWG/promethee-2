@@ -115,6 +115,53 @@ void AtelierElectronique::enregistrerCommandes() {
   c["circuit.aPlacer"] = [this] { montrerAPlacer(); };
   c["circuit.disposerCercle"] = [this] { disposerEnCercle(); };
   c["verification.rapport"] = [this] { ouvrirRapport(); };
+  c["carte.modelesDossier"] = [this] {
+    const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Dossier de modèles 3D"));
+    if (!d.isEmpty()) associerDossierModeles(d);
+  };
+  c["carte.exporterStep"] = [this] {
+    const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Carte équipée en STEP"), QStringLiteral("carte.step"), QStringLiteral("STEP (*.step *.stp)"));
+    if (!f.isEmpty()) exporterStepCarte(f);
+  };
+  c["carte.contourEsquisse"] = [this] { ouvrirContourEsquisse(); };
+  c["schema.repeterFeuille"] = [this] {
+    bool ok = false;
+    const int n = QInputDialog::getInt(this, QStringLiteral("Feuille de canal"), QStringLiteral("Nombre d’exemplaires de la feuille"), 4, 2, 64, 1, &ok);
+    if (ok) repeterFeuille(vueSchema()->feuille(), n);
+  };
+  c["schema.deplacerVersFeuille"] = [this] {
+    const prom::ecad::ConceptionElec* cc = conceptionCourante();
+    if (!cc) return;
+    QStringList noms;
+    for (const auto& f : cc->feuilles) noms << QString::fromStdString(f.nom);
+    bool ok = false;
+    const QString choix = QInputDialog::getItem(this, QStringLiteral("Déplacer vers la feuille"), QStringLiteral("Feuille"), noms, 0, false, &ok);
+    if (ok) deplacerVersFeuille(vueSchema()->selection(), static_cast<int>(noms.indexOf(choix)));
+  };
+  c["circuit.reproduireCanal"] = [this] {
+    const prom::ecad::ConceptionElec* cc = conceptionCourante();
+    if (!cc) return;
+    for (std::size_t i = 0; i < cc->feuilles.size(); ++i)
+      if (cc->feuilles[i].repetitions > 1) {
+        reproduireCanal(static_cast<int>(i));
+        return;
+      }
+    afficherMessage(QStringLiteral("Aucune feuille de canal : répète d’abord une feuille (Canal ×…)."));
+  };
+  c["boitier.facade"] = [this] { ouvrirFacade(); };
+  c["regles.contraintes"] = [this] { ouvrirContraintes(); };
+  c["circuit.routerComplet"] = [this] { routerAutomatiquement(true); };
+  c["fabrication.panneau"] = [this] { exporterPanneau(); };
+  c["fabrication.devis"] = [this] { ouvrirDevis(); };
+  c["fabrication.controler"] = [this] { controlerFichiersEcrits(); };
+  c["fabrication.visionneuse"] = [this] {
+    const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Visionneuse HTML"), QStringLiteral("visionneuse.html"), QStringLiteral("Pages (*.html)"));
+    if (!f.isEmpty()) exporterVisionneuse(f);
+  };
+  c["boitier.impression"] = [this] {
+    const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Dossier des fichiers STL"));
+    if (!d.isEmpty()) exporterImpression(d);
+  };
   c["schema.alimentation.gnd"] = alimentation("GND");
   c["schema.alimentation.5v"] = alimentation("+5V");
   c["schema.alimentation.3v3"] = alimentation("+3V3");

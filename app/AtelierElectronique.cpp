@@ -2,6 +2,7 @@
 // actions, bibliothèque et inspecteur. Le ruban (RubanElectronique.cpp), les exports (ExportsElectronique.cpp) et la
 // publication (PublicationElectronique.cpp) ont leurs fichiers (1.15, A1). Licence GPL-3.0-only.
 #include "AtelierElectronique.hpp"
+#include "ChienDeGarde.hpp"
 
 #include <algorithm>
 #include <array>
@@ -804,6 +805,8 @@ void AtelierElectronique::appliquerResultat(Resultat&& r) {
   }
   if (r.niveau == 2) {
     m_calculs.drc = std::move(r.calculs.drc);
+    // La carte dans le boîtier qu'elle pilote (6.4) : hauteur sous le couvercle, collisions
+    for (auto& v : prom::verifierCarteDansBoitier(m_doc->projet(), static_cast<std::size_t>(std::max(0, m_conception)))) m_calculs.drc.push_back(std::move(v));
     m_circuitPerime = false;
   }
   m_schema->setConnectivite(&m_calculs.k);
@@ -1519,7 +1522,7 @@ QString AtelierElectronique::cheminBibliothequePerso() {
   // Le dossier choisi au premier lancement (ERG-16)
   if (const QString d = QSettings().value(QStringLiteral("electronique/dossierBibliotheque")).toString(); !d.isEmpty())
     return QDir(d).filePath(QStringLiteral("bibliotheque-electronique.json"));
-  return QDir(QStandardPaths::writableLocation(QStandardPaths::AppDataLocation)).filePath(QStringLiteral("bibliotheque-electronique.json"));
+  return QDir(portable::dossierDonneesAppli()).filePath(QStringLiteral("bibliotheque-electronique.json"));
 }
 
 prom::ecad::LectureBibliotheque AtelierElectronique::lectureBibliothequePerso() {
@@ -1747,11 +1750,11 @@ void AtelierElectronique::creerComposant(const DefSymbole* base, bool remplacer)
   majPanneau();
 }
 
-void AtelierElectronique::routerAutomatiquement() {
+void AtelierElectronique::routerAutomatiquement(bool complet) {
   if (!conceptionCourante()) return;
   QApplication::setOverrideCursor(Qt::WaitCursor);
   BilanRoutage b;
-  modifierConception([&](ConceptionElec& c) { b = routerSimple(c); });
+  modifierConception([&](ConceptionElec& c) { b = complet ? routerComplet(c) : routerSimple(c); }, complet ? QStringLiteral("Routage complet") : QString());
   QApplication::restoreOverrideCursor();
   if (mode() == Schema) m_ruban->setCurrentIndex(Circuit);
   if (b.complet()) {
@@ -1766,9 +1769,11 @@ void AtelierElectronique::routerAutomatiquement() {
   d->setAttribute(Qt::WA_DeleteOnClose);
   d->setWindowTitle(QStringLiteral("Routage incomplet"));
   auto* col = new QVBoxLayout(d);
-  auto* t = new QLabel(QStringLiteral("<b>%1 liaison(s) n’ont pas été routées.</b> Le routeur automatique est une aide : il ne pose que des tracés directs "
-                                      "(droits, à 45°, en équerre, avec une via si besoin) qui respectent l’isolement, sans chercher de détour. "
-                                      "La carte n’est pas terminée tant que ces liaisons restent au chevelu.")
+  auto* t = new QLabel(((complet ? QStringLiteral("<b>%1 liaison(s) n’ont pas été routées.</b> Le routeur complet a cherché un chemin pour chacune, autour des obstacles "
+                                                 "et sur les deux faces, sans jamais passer sous l’isolement ; il n’en a pas trouvé pour celles-ci. ")
+                                : QStringLiteral("<b>%1 liaison(s) n’ont pas été routées.</b> Le routeur automatique est une aide : il ne pose que des tracés directs "
+                                                 "(droits, à 45°, en équerre, avec une via si besoin) qui respectent l’isolement, sans chercher de détour. ")) +
+                            QStringLiteral("La carte n’est pas terminée tant que ces liaisons restent au chevelu."))
                            .arg(b.restantes));
   t->setWordWrap(true);
   col->addWidget(t);

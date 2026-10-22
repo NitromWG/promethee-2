@@ -119,7 +119,7 @@ TEST_CASE("2.2 à 2.33 : les nouveaux champs du modèle se relisent à l'identiq
   c.symboles[d.id] = d;
   c.erc.gravites["ERC-31"] = GraviteReglee::Ignorer;
   c.erc.matrice["sortie/collecteur-ouvert"] = "avertissement";
-  c.erc.exclusions.push_back({"ERC-10", {"x"}, "broche laissée libre exprès", "Evan", "2026-10-22"});
+  c.erc.exclusions.push_back({"ERC-10", {"x"}, "broche laissée libre exprès", "Evan", "2026-10-22", {}});
   f.fils.push_back({nouvelUuid(), ptMm(10.16, 10.16), ptMm(20.32, 10.16), 2'540'000});  // fil courbe (2.19)
   const auto j = versJson(c);
   const ConceptionElec r = conceptionDepuisJson(j);
@@ -349,7 +349,7 @@ TEST_CASE("2.11 : gravités réglées et exclusions justifiées du projet", "[L2
   CHECK(compter(verifierERC(c, k, NiveauErc::Complet), "ERC-10") == 0);
   c.erc.gravites.erase("ERC-10");
   // Une exclusion vise les objets de la violation : les autres composants restent signalés
-  c.erc.exclusions.push_back({"ERC-10", {c.composants[0].uuid}, "laissée libre exprès", "Evan", "2026-10-22"});
+  c.erc.exclusions.push_back({"ERC-10", {c.composants[0].uuid}, "laissée libre exprès", "Evan", "2026-10-22", {}});
   v = verifierERC(c, k, NiveauErc::Complet);
   CHECK(compter(v, "ERC-10") == 4);
   int exclues = 0;
@@ -867,7 +867,7 @@ TEST_CASE("2.34 : un projet de la 0.31 écrit pour la 0.30 dit ce qu'elle n'appl
   p.sansCarte = true;
   ConceptionElec c = exempleElectronique();
   c.erc.gravites["DRC-43"] = GraviteReglee::Ignorer;
-  c.erc.exclusions.push_back({"ERC-26", {"x"}, "valeur au montage", "essai", "2026-10-22"});
+  c.erc.exclusions.push_back({"ERC-26", {"x"}, "valeur au montage", "essai", "2026-10-22", {}});
   SymbolePlace* s = nullptr;
   for (auto& f : c.feuilles)
     for (auto& x : f.symboles)

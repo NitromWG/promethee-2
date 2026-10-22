@@ -747,7 +747,7 @@ TEST_CASE("3.12 : pastille thermique d'un QFN sans broche au symbole : ERC-07 ; 
   CHECK(e07 == 1);
   CHECK(message.find("« 9 »") != std::string::npos);
   // Exclusion de la feuille entière, tous contrôles
-  c.erc.exclusions.push_back({"*", {c.feuilles[0].uuid}, "feuille d'essai", "Evan", "2026-10-22"});
+  c.erc.exclusions.push_back({"*", {c.feuilles[0].uuid}, "feuille d'essai", "Evan", "2026-10-22", {}});
   int restant = 0;
   for (const auto& v : verifierERC(c, connectivite(c), NiveauErc::Complet)) restant += v.feuille == c.feuilles[0].uuid;
   CHECK(restant == 0);

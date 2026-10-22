@@ -10,6 +10,7 @@
 
 #include "promethee/hauteurs.hpp"
 #include "promethee/modele.hpp"
+#include "promethee/verifs.hpp"
 
 namespace prom {
 
@@ -189,6 +190,33 @@ std::vector<std::string> appliquerCarteElectronique(Projet& p, std::size_t indic
     p.composants.push_back(m);
   }
   return alertes;
+}
+
+
+std::vector<ecad::Violation> verifierCarteDansBoitier(const Projet& p, std::size_t indice) {
+  std::vector<ecad::Violation> r;
+  if (indice >= p.electronique.size() || !p.electronique[indice].pilotageBoitier || p.sansCarte) return r;
+  const ecad::ConceptionElec& c = p.electronique[indice];
+  Projet q = p;
+  appliquerCarteElectronique(q, indice);
+  const Derive d = deriver(q);
+  for (const Probleme& x : verifier(q, d)) {
+    // Hauteur sous le couvercle (DRC-45) ; collisions avec les piliers, les parois, le fond (DRC-46)
+    const bool hauteur = x.code == "hauteur" || x.code == "levre" || x.code == "bouton_haut";
+    const bool collision = x.code == "pilier_dessous" || x.code == "dessous_fond" || x.code == "tete_vis";
+    if (!hauteur && !collision) continue;
+    ecad::Violation v;
+    v.code = hauteur ? "DRC-45" : "DRC-46";
+    v.gravite = x.sev == Severite::Erreur ? ecad::Gravite::Erreur : ecad::Gravite::Avertissement;
+    v.message = x.msg;
+    v.conseil = x.fix ? "Boîtier : " + x.fix->libelle + "." : "Abaisse le composant, déplace-le, ou ajuste le boîtier.";
+    for (const auto& id : x.ids)
+      if (c.composant(id)) v.objets.push_back(id);
+    for (const auto& e : c.circuit.empreintes)
+      if (!v.objets.empty() && e.composant == v.objets.front()) v.position = e.position;
+    r.push_back(v);
+  }
+  return r;
 }
 
 }  // namespace prom
