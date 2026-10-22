@@ -1,5 +1,9 @@
 // Prométhée : le document ouvert. Licence GPL-3.0-only.
 #include "Document.hpp"
+
+#include "promethee/collaboration.hpp"
+#include "promethee/historique_local.hpp"
+#include "promethee/fichiers.hpp"
 #include "ChienDeGarde.hpp"
 #include "promethee/synchronisation.hpp"
 #include "promethee/electronique.hpp"
@@ -12,6 +16,9 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QLockFile>
+#include <QTimer>
+#include <QSysInfo>
+#include <QSettings>
 #include <QUuid>
 
 #include "Journal.hpp"
@@ -48,7 +55,57 @@ struct Document::Pas {
   std::size_t octets() const { return commande ? commande->octets() : etat.size() + 64; }
 };
 
-Document::~Document() = default;
+Document::~Document() { leverVerrouPartage(); }
+
+QString Document::personne() {
+  const QString reglee = QSettings().value(QStringLiteral("identite/nom")).toString();
+  if (!reglee.isEmpty()) return reglee;
+  const QString u = qEnvironmentVariable("USER", qEnvironmentVariable("USERNAME"));
+  return u.isEmpty() ? QStringLiteral("utilisateur") : u;
+}
+QString Document::poste() { return QSysInfo::machineHostName(); }
+
+QString Document::dossierHistorique() const {
+  const QByteArray cle = QCryptographicHash::hash(cleFichier(m_chemin).toUtf8(), QCryptographicHash::Sha256).toHex().left(16);
+  return QDir(Recuperation::dossierDonnees()).filePath(QStringLiteral("historique/") + QString::fromLatin1(cle));
+}
+
+void Document::poserVerrouPartage(const QString& chemin) {
+  leverVerrouPartage();
+  m_tenuPar.clear();
+  prom::VerrouProjet tenu;
+  try {
+    if (!prom::poserVerrou(chemin.toStdString(), personne().toStdString(), poste().toStdString(), &tenu)) {
+      m_tenuPar = QString::fromStdString(prom::decrireVerrou(tenu));
+      return;
+    }
+  } catch (const std::exception&) {
+    return;  // dossier en lecture seule : pas de verrou partagé, le verrou local suffit
+  }
+  m_cheminVerrouPartage = chemin;
+  if (!m_vieVerrou) {
+    m_vieVerrou = new QTimer(this);
+    m_vieVerrou->setInterval(60'000);
+    connect(m_vieVerrou, &QTimer::timeout, this, [this] {
+      if (m_cheminVerrouPartage.isEmpty()) return;
+      try {
+        prom::renouvelerVerrou(m_cheminVerrouPartage.toStdString(), personne().toStdString(), poste().toStdString());
+      } catch (const std::exception&) {
+      }
+    });
+  }
+  m_vieVerrou->start();
+}
+
+void Document::leverVerrouPartage() {
+  if (m_vieVerrou) m_vieVerrou->stop();
+  if (m_cheminVerrouPartage.isEmpty()) return;
+  try {
+    prom::leverVerrou(m_cheminVerrouPartage.toStdString(), personne().toStdString(), poste().toStdString());
+  } catch (const std::exception&) {
+  }
+  m_cheminVerrouPartage.clear();
+}
 
 Document::Document(QObject* parent) : QObject(parent), m_id(QUuid::createUuid().toString(QUuid::WithoutBraces)) {
   // Au lancement : un projet vierge (sans carte), non modifié. L'exemple s'ouvre à la demande.
@@ -61,6 +118,11 @@ Document::Document(QObject* parent) : QObject(parent), m_id(QUuid::createUuid().
 }
 
 void Document::lacherFichier() {
+  leverVerrouPartage();
+  if (!m_tenuPar.isEmpty()) {
+    m_tenuPar.clear();
+    setConsultation(false);
+  }
   m_verrou.reset();
   m_disque = {};
   m_avertissements.clear();
@@ -720,13 +782,23 @@ const prom::Trou* Document::trouSelectionne() const {
 bool Document::modifie() const { return m_horsHistorique || etatCourant() != m_enregistre; }
 
 void Document::ouvrir(const QString& chemin, bool ignorerVerrou) {
-  auto verrou = verrouPour(chemin, ignorerVerrou);  // avant la lecture : on demande d'abord s'il faut l'ouvrir
+  // Le fichier déjà ouvert dans ce document, rouvert : son verrou local est le nôtre, il est repris tel quel
+  const bool memeFichier = m_verrou && !m_chemin.isEmpty() && cleFichier(chemin) == cleFichier(m_chemin);
+  auto verrou = memeFichier ? nullptr : verrouPour(chemin, ignorerVerrou);  // avant la lecture : on demande d'abord s'il faut l'ouvrir
   prom::RapportLecture rapport;
   prom::Projet p = prom::lireProjet(chemin.toStdString(), &rapport);
+  if (memeFichier) verrou = std::move(m_verrou);
+  lacherFichier();
   m_projet = std::move(p);
   m_instantane.reset();
   m_verrou = std::move(verrou);
   m_avertissements = rapport.avertissements;
+  // Verrou partagé : tenu, vivant, par un autre poste, le projet s'ouvre en consultation
+  poserVerrouPartage(chemin);
+  if (!m_tenuPar.isEmpty()) {
+    setConsultation(true);
+    m_avertissements.push_back(m_tenuPar.toStdString() + " : ouvert en consultation.");
+  }
   m_disque = prom::etatDisque(prom::cheminFichier(chemin.toStdString()));
   m_chemin = chemin;
   oublierHistorique();
@@ -759,11 +831,20 @@ void Document::enregistrer(const QString& chemin, bool forcer) {
     m_instantane.reset();
   }
   prom::ecrireProjet(m_projet, chemin.toStdString());
-  if (!memeFichier) m_verrou = std::move(nouveau);
+  if (!memeFichier) {
+    m_verrou = std::move(nouveau);
+    poserVerrouPartage(chemin);
+  }
   m_chemin = chemin;
   m_disque = prom::etatDisque(cible);
   m_enregistre = etatCourant();
   m_horsHistorique = false;
+  // Instantané de l'historique local (12.9) : le fichier tel qu'écrit, ses morceaux inchangés déjà rangés
+  try {
+    prom::HistoriqueLocal(dossierHistorique().toStdString()).enregistrer(prom::lireFichier(cible));
+  } catch (const std::exception&) {
+    // l'historique n'est qu'une aide : son échec n'empêche pas l'enregistrement
+  }
   journal("enregistrement de « " + nomFichier(chemin) + " »");
   emit etatChange();
 }

@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nitromwg.github.io/promethee/schemas/schema_projet.json",
-  "title": "Fichier de projet Prométhée (.prom), écrit par la 0.32",
+  "title": "Fichier de projet Prométhée (.prom), écrit par la 0.33",
   "description": "Le projet entier : carte et boîtier mécaniques, pièces, assemblages, conceptions électroniques (schema_conception.json), projets électriques, dispositions des panneaux. Les clés inconnues de premier niveau sont gardées et réécrites (ECH-11). La racine décrit le fichier de la 0.32 ; $defs/projet décrit la structure commune aux versions 0.28 à 0.32, que les schémas de docs/schemas restreignent.",
   "allOf": [{ "$ref": "#/$defs/projet" }],
   "properties": {
@@ -70,7 +70,8 @@
             "couvercle": { "$ref": "#/$defs/nombre" },
             "vis": { "type": "string" },
             "hauteurAuto": { "type": "boolean" },
-            "margeDebord": { "$ref": "#/$defs/nombre" }
+            "margeDebord": { "$ref": "#/$defs/nombre" },
+            "impression": { "type": "object", "description": "Impression 3D du boîtier (0.33) : matière, coques haute et basse, prix au kilogramme." }
           }
         },
         "kicad": {
@@ -98,6 +99,9 @@
           }
         },
         "pieces": { "type": "array", "items": { "type": "object" } },
+        "exigences": { "type": "array", "items": { "type": "object", "required": ["id"] }, "description": "Exigences du projet (0.33) : texte, source, méthode, valeur chiffrée vérifiée à chaque enregistrement, liens vers les objets." },
+        "ordresModification": { "type": "array", "items": { "type": "object" }, "description": "Ordres de modification (0.33) : relecteur, responsable, votes, révision visée." },
+        "liaisons": { "type": "array", "items": { "type": "object" }, "description": "Liaisons du schéma de système entre cartes (0.33) : connecteurs, câble, signaux." },
         "geometries": { "type": "object", "additionalProperties": { "type": "string" } }
       }
     }

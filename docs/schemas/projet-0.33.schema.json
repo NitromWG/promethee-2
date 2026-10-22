@@ -1,0 +1,7 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://nitromwg.github.io/promethee/schemas/schemas/projet-0.33.schema.json",
+  "title": "Projet Prométhée écrit par la 0.33",
+  "description": "Le format courant : voir ../schema_projet.json et ../schema_conception.json.",
+  "$ref": "../schema_projet.json"
+}

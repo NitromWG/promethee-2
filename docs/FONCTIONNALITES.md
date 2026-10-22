@@ -138,7 +138,7 @@ Liste de référence fournie par Evan le 4 octobre 2026 (dix domaines, à couvri
 | Import KiCad et mise à jour de la carte d'origine | Fait (0.4 à 0.7) |
 | Saisie de schéma, routage de PCB, fichiers de fabrication | Fait (0.24 à 0.26) |
 | Export KiCad (.kicad_pcb, liste de réseaux), IPC-D-356, .gbrjob, carte simple face et typon, symboles à plusieurs unités | Fait (0.26) |
-| Simulation SPICE | Prévu (lot 2.D) |
+| Simulation SPICE (ngspice installé sur le poste), Monte-Carlo, pire cas, balayage, assistants de calcul | Fait (0.33) |
 | Schémas électriques normalisés, borniers, câblage, armoires, faisceaux | Fait (0.27) |
 | Tableau de logement selon la NF C 15-100 (édition 2024) : circuits, différentiels, unifilaire, coffret | Fait (0.27) |
 | Calcul d'une installation basse tension (UTE C 15-105, NF C 15-100) : sections, chutes de tension, courts-circuits, protection des personnes, sélectivité, note de calcul | Fait (0.28) |
@@ -358,3 +358,35 @@ Référence complète des fonctions d'esquisse, avec leur état. Elle complète 
 | Interface | Plus de fenêtre modale dans l'atelier : saisie sur le folio (textes, potentiels), suppression annulable, logement type en ligne | Fait |
 | Grafcet | Étapes, transitions, actions continues, conditionnelles, mémorisées ; divergences et convergences OU et ET ; réceptivités lues au fil de la frappe (ET, OU, NON, fronts, temporisations) ; vérification ; simulation selon les cinq règles d'évolution ; folio dessiné d'office (PDF, DXF) ; texte structuré CEI 61131-3 | Fait |
 | Appareils personnels | « Mes appareils › Nouvel appareil… » : nom, lettre de repère (CEI 81346-2), marquage, bornes côté par côté ; symbole dessiné d'office (cadre CEI 60617, bornes sur la grille), aperçu et défauts au fil de la frappe ; fabricant, référence, prix, montage, dimensions et pertes repris par la nomenclature, l'implantation, le chiffrage et le bilan thermique ; porte des contacts posés ailleurs ; rangé dans le projet et dans la bibliothèque de l'utilisateur ; modifié, les appareils posés suivent | Fait |
+
+## Version 0.33 : électronique, lots L4 à L19 du plan de refonte
+
+Le détail par tâche, avec ce qui reste, est dans [REFONTE_ELECTRONIQUE.md](REFONTE_ELECTRONIQUE.md).
+
+| Domaine | Fonction | État |
+|---|---|---|
+| Bibliothèque | Articles du projet versionnés, héritage, mise à jour des composants ; recherche riche ; pose par « 10k 0603 » ; IPC-7351B nominal ; archives SnapEDA ; bibliothèques par variable ; standardisation | Fait |
+| Bibliothèque | Tableur de bibliothèque, générateurs IPC étendus, échange en masse, approvisionnement hors ligne | Prévu |
+| Circuit | Routeur qui contourne et pousse ; liaison routée d'office ou expliquée ; exclusions qui reviennent « à revoir » ; « À placer » ; couronne ; rapport HTML | Fait |
+| Circuit | Gestionnaire de contraintes complet, paires et accord de longueur, édition des pistes posées, placement assisté | Prévu |
+| Mécatronique | Modèles STEP exacts, carte équipée en STEP, contrôle dans le boîtier, façades, contour piloté par une esquisse, coques imprimables chiffrées | Fait |
+| Schéma | Bus, feuilles de canal répétées, polarité des électrolytiques, déplacement vers une feuille, congés et chanfreins au circuit | Fait |
+| Schéma | Hiérarchie complète, éditeurs graphiques de symboles et d'empreintes, textes riches | Prévu |
+| Fabrication | Panneau en languettes, routage complet, impédance IPC-2141, connectivité relue avant l'envoi, devis hors ligne, visionneuse HTML | Fait |
+| Performances | DRC de 2 000 composants en fond sous 10 s, 60 images par seconde au glisser, remplissage local, chien de garde, version portable | Fait |
+| Échanges | Netlist KiCad, DXF, Specctra (Freerouting), Gerber relus en carte, BoardView, IPC-2581 | Fait |
+| Échanges | Schémas KiCad, Altium, EAGLE, EasyEDA, PADS | Prévu |
+| Simulation | ngspice depuis le schéma, valeur réglée pendant le calcul, Monte-Carlo, pire cas, balayage, assistants (LED, diviseur, 555, RC, Sallen-Key) | Fait |
+| Simulation | Simulation continue, instruments, co-simulation de microcontrôleur | Prévu |
+| Travail à plusieurs | Variantes de montage, coût par palier, comparaison, fusion à trois voies, historique local, verrou, archive, notes, schéma de système | Fait |
+| Travail à plusieurs | Git intégré, rapports PDF de la vie du projet, bibliothèque d'équipe | Prévu |
+| Automatisation | Quinze commandes de `promethee`, jeux de sorties contrôlés, placement automatique, revue par règles, interface JSON-RPC locale | Fait |
+| Automatisation | Console Python, serveur MCP, assistant local | Prévu |
+| Logique | Simulation à quatre états, Verilog structurel, symbole de FPGA depuis son brochage | Fait |
+| Atelier | Gravure à l'anglaise, perçage, découpe et pochoir en G-code | Fait |
+| Atelier | Vue platine d'essai, salle de TP | Prévu |
+| Essais et fiabilité | Plan de mise sous tension, points de test et couverture, procès-verbal, contraintes d'emploi, durée de vie, MTBF, conformité | Fait |
+| Cartes rapides | Plan de référence sous les pistes, diaphonie, chute de tension, inductance de montage (formules fermées) | Fait |
+| Cartes rapides | Solveurs de champ (openEMS, Elmer, FastHenry), schéma de lignes | Prévu |
+| Entreprise | Équipe et rôles, cycle de vie, révisions, numéros internes, ordres de modification, exigences vérifiées | Fait |
+| Entreprise | Dépôts signés, PLM, ERP, faisceaux | Prévu |

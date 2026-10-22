@@ -200,6 +200,8 @@ class AtelierElectronique : public QWidget {
   bool ajouterCarteDepuisGerber(const QString& dossier);
   // ---------- Simulation (lot L11) ----------
   void ouvrirSimulation();
+  void ouvrirOutilsConception();  // outils des lots L12 à L19 (FenetreOutilsConception)
+  class FenetreOutilsConception* outilsConception() const;
   class FenetreSimulation* simulation() const;
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
   void creerEmpreinte(const std::string& composant);
@@ -346,6 +348,7 @@ class AtelierElectronique : public QWidget {
   QPointer<class GestionnaireContraintes> m_contraintes;
   QPointer<class FenetreDevis> m_devis;
   QPointer<class FenetreSimulation> m_simulation;
+  QPointer<class FenetreOutilsConception> m_outilsConception;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;
   class TableauChamps* m_tableauChamps = nullptr;

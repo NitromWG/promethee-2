@@ -353,6 +353,7 @@ void essaisElectroniqueL8(FenetrePrincipale& f, const std::function<void(bool, c
 void essaisElectroniqueL9(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL10(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL11(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void essaisElectroniqueL12(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void profilerClicsL9(FenetrePrincipale& f);
 void profilerGlisseL9(FenetrePrincipale& f);
 
@@ -547,6 +548,7 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
     if (lots.contains(QStringLiteral("L9"))) essaisElectroniqueL9(f, v);
     if (lots.contains(QStringLiteral("L10"))) essaisElectroniqueL10(f, v);
     if (lots.contains(QStringLiteral("L11"))) essaisElectroniqueL11(f, v);
+    if (lots.contains(QStringLiteral("L12"))) essaisElectroniqueL12(f, v);
     if (lots.contains(QStringLiteral("CLICS"))) profilerClicsL9(f);
     if (lots.contains(QStringLiteral("GLISSE"))) profilerGlisseL9(f);
     if (lots.contains(QStringLiteral("MESURES"))) mesurerAtelier(f);
@@ -1281,6 +1283,9 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
 
   // ---------- Lot L11 : simulation (EssaisElectroniqueL11.cpp) ----------
   essaisElectroniqueL11(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
+
+  // ---------- Lots L12 à L19 : outils de conception, interface JSON-RPC, verrou, historique (EssaisElectroniqueL12.cpp) ----------
+  essaisElectroniqueL12(f, [](bool ok, const std::string& quoi, const std::string& detail) { verifier(ok, quoi, detail); });
 
   // ---------- Mesures (1.1, Q5, ERG-10) : la carte de mesure de 300 composants dans l'atelier, par de vrais gestes ;
   // temps relevés à chaque construction (lignes « MESURE »), sans seuil avant le lot L9 ----------

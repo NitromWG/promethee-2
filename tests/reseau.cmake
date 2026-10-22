@@ -1,0 +1,22 @@
+# Lecture du source (décision D13 du plan de refonte) : aucun module du programme principal n'ouvre de connexion
+# réseau. Le seul canal autorisé est le canal local de l'interface de commandes (QLocalServer, tube nommé ou socket
+# Unix réservés à l'utilisateur), qui ne sort jamais du poste. L'échec nomme le fichier et la ligne.
+set(motif "(QTcpSocket|QTcpServer|QUdpSocket|QSslSocket|QNetworkAccessManager|QNetworkRequest|QDnsLookup|QWebSocket|WSAStartup|curl_easy_|socket[ \t]*\\([ \t]*AF_INET)")
+set(erreurs "")
+foreach(dossier ${DOSSIERS})
+  file(GLOB_RECURSE sources ${dossier}/*.cpp ${dossier}/*.hpp ${dossier}/*.h)
+  foreach(f ${sources})
+    file(STRINGS ${f} lignes REGEX "${motif}")
+    foreach(l ${lignes})
+      string(STRIP "${l}" l)
+      if(NOT l MATCHES "^//")
+        file(RELATIVE_PATH nom ${dossier}/.. ${f})
+        string(APPEND erreurs "D13 : ${nom} ouvre une connexion réseau : ${l}\n")
+      endif()
+    endforeach()
+  endforeach()
+endforeach()
+if(erreurs)
+  message(FATAL_ERROR "${erreurs}")
+endif()
+message(STATUS "Source conforme : aucune connexion réseau, seul le canal local de l'interface de commandes")

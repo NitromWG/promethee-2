@@ -20,8 +20,8 @@ import pathlib
 import subprocess
 import sys
 
-VERSIONS = ["0.31", "0.30", "0.29", "0.28"]
-COURANTE = "0.32"
+VERSIONS = ["0.32", "0.31", "0.30", "0.29", "0.28"]
+COURANTE = "0.33"
 ECHECS = []
 
 
@@ -103,7 +103,7 @@ def projets(outil, donnees, travail):
             echec(f"import de {k.name} : {texte}")
             continue
         l.append((sortie, True, {}))
-    # Le projet riche : ce que la 0.32 et la 0.31 ajoutent (réglages de l'ERC, champ bloqué, connecteur hors feuille), ce que la
+    # Le projet riche : ce que la 0.33, la 0.32 et la 0.31 ajoutent (réglages de l'ERC, champ bloqué, connecteur hors feuille), ce que la
     # 0.30 ajoutait (dispositions), ce que la 0.29 ajoutait (profil de fabricant personnalisé, brochage vérifié,
     # exclusion de la nomenclature), un texte de carte tourné
     j = json.loads((travail / "clignotant.prom").read_text(encoding="utf-8"))
@@ -132,12 +132,22 @@ def projets(outil, donnees, travail):
         for pa in d.get("pastilles", [])[:1]:
             pa["fab"] = "bga"
     c["circuit"]["volumes"] = [{"contour": [[0, 0], [5000000, 0], [5000000, 5000000]], "z0": 0, "z1": 2000000, "couleur": "#888888"}]
+    # Ce que la 0.33 ajoute : variantes de montage, notes attachées, jeux de sorties, dessins de carte ; au projet,
+    # exigences et réglages d'impression du boîtier
+    c["variantesMontage"] = [{"nom": "sans LED"}]
+    c["notes"] = [{"uuid": "note-essai", "genre": "commentaire", "texte": "essai de compatibilité"}]
+    c["jeuxSorties"] = [{"nom": "atelier", "dossier": "sorties/${PROJET}", "sorties": ["gerber", "percages"]}]
+    c["circuit"]["dessins"] = [{"uuid": "dessin-essai", "forme": "trait", "couche": "F.SilkS", "points": [[0, 0], [5000000, 0]], "epaisseur": 150000}]
+    j["exigences"] = [{"id": "EX-1", "texte": "coût pour 100 cartes", "grandeur": "cout", "seuil": "40"}]
+    j.setdefault("boitier", {})["impression"] = {"matiere": "PLA"}
     riche = travail / "riche.prom"
     riche.write_text(json.dumps(j, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     l32 = ["valeur calculée", "paramètre typé", "genre de", "de la simulation", "variable", "synchronisation sur confirmation", "corps d'empreinte",
            "propriété de fabrication", "volumes libres"]
     l31 = l32 + ["gravités réglées", "alerte exclue", "champ de symbole", "connecteur hors feuille"]
-    attendues = {"0.31": l32, "0.30": l31, "0.29": l31 + ["disposition des panneaux"], "0.28": l31 + ["disposition des panneaux", "profil de fabricant personnalisé", "brochage vérifié", "nomenclature"]}
+    l33 = ["variante de montage", "note attachée", "jeu de sorties", "dessin de carte", "exigence", "impression 3D"]
+    attendues = {"0.32": l33, "0.31": l32, "0.30": l31, "0.29": l31 + ["disposition des panneaux"],
+                 "0.28": l31 + ["disposition des panneaux", "profil de fabricant personnalisé", "brochage vérifié", "nomenclature"]}
     l.append((riche, True, attendues))
     return l
 

@@ -16,6 +16,7 @@
 #include "AtelierElectronique.hpp"
 #include "Document.hpp"
 #include "FenetreSimulation.hpp"
+#include "FenetreOutilsConception.hpp"
 #include "promethee/echanges_electronique.hpp"
 #include "promethee/fichiers.hpp"
 #include "promethee/modele.hpp"
@@ -121,6 +122,17 @@ bool AtelierElectronique::ajouterCarteDepuisGerber(const QString& dossier) {
 
 // ---------- Simulation (lot L11) ----------
 FenetreSimulation* AtelierElectronique::simulation() const { return m_simulation; }
+
+void AtelierElectronique::ouvrirOutilsConception() {
+  if (!conceptionCourante()) return;
+  if (!m_outilsConception) m_outilsConception = new FenetreOutilsConception(*this, this);
+  else m_outilsConception->refaire();
+  m_outilsConception->show();
+  m_outilsConception->raise();
+  m_outilsConception->activateWindow();
+}
+
+FenetreOutilsConception* AtelierElectronique::outilsConception() const { return m_outilsConception; }
 
 void AtelierElectronique::ouvrirSimulation() {
   if (!conceptionCourante()) return;

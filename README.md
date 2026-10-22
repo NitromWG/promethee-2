@@ -57,7 +57,13 @@ promethee exporter station.prom.json sortie  # boitier.step, boitier.stl, couver
 promethee fabrication projet.prom sortie     # dossier de fabrication de la carte (Gerber, perçages, placement, nomenclature), contrôlé
 promethee fabrication-exemple sortie         # la même chose pour la carte d'exemple
 python3 tests/verifier_fabrication.py sortie # relecture indépendante du dossier (format, unités, origine, couches, trous)
+promethee erc projet.prom --json             # ERC (aussi drc, revue, valider, exigences) ; code de sortie 1 s'il reste des erreurs
+promethee sorties projet.prom jlcpcb         # un jeu de sorties, contrôlé avant d'écrire
+promethee comparer a.prom b.prom             # différences par catégorie ; fusionner <ancêtre> <nous> <eux> <sortie>
+promethee api projet.prom sortie.prom < requetes.jsonl  # requêtes JSON-RPC 2.0, une par ligne
 ```
+
+L'application ouverte écoute aussi les mêmes requêtes JSON-RPC sur un canal local réservé à l'utilisateur (`promethee-<utilisateur>`, tube nommé sous Windows, socket Unix ailleurs), jamais sur un port réseau : chaque requête, ou chaque lot de requêtes, est un seul pas d'annulation. `promethee aide` liste toutes les commandes.
 
 Les fichiers `.prom.json` sont communs au prototype web et au logiciel natif.
 

@@ -351,6 +351,7 @@ void AtelierElectronique::enregistrerCommandes() {
     importerNetlist(f, csv);
   };
   c["simulation.ouvrir"] = [this] { ouvrirSimulation(); };
+  c["outils.conception"] = [this] { ouvrirOutilsConception(); };
   c["fabrication.gerberCarte"] = [this] {
     const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Dossier Gerber et perçages à relire en carte"));
     if (!d.isEmpty()) ajouterCarteDepuisGerber(d);

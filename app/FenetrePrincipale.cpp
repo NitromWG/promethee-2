@@ -3,6 +3,7 @@
 #include <QDir>
 #include <Standard_Version.hxx>
 #include "Journal.hpp"
+#include "ServeurApi.hpp"
 #include "promethee/structure.hpp"
 #include "promethee/version.hpp"
 #include "promethee/fichiers.hpp"
@@ -106,6 +107,12 @@ QLabel* etiquette(const QString& texte) {
 
 FenetrePrincipale::FenetrePrincipale(bool dansCoquille) : m_dansCoquille(dansCoquille), m_doc(new Document(this)) {
   setWindowIcon(iconeMarque());
+  // Interface JSON-RPC sur un canal local du poste (13.10) : un programme extérieur lit et modifie le projet ouvert
+  if (qEnvironmentVariable("PROMETHEE_API") != QLatin1String("0")) {
+    auto* api = new ServeurApi(m_doc, this);
+    api->setObjectName(QStringLiteral("serveurApi"));
+    api->demarrer();
+  }
   m_carte = new VueCarte(m_doc);
   m_vue3d = new Vue3D(m_doc);
   m_panneau = new Panneau(m_doc);

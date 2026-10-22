@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nitromwg.github.io/promethee/schemas/schema_conception.json",
-  "title": "Conception électronique de Prométhée, format 4 (fichiers de la 0.32)",
+  "title": "Conception électronique de Prométhée, format 5 (fichiers de la 0.33)",
   "description": "Une carte électronique dans le fichier de projet (.prom) : schéma, composants, définitions de symboles et d'empreintes figées, circuit imprimé. Coordonnées et longueurs en nanomètres entiers. Chaque objet peut porter des clés qu'il ne connaît pas (écrites par une version plus récente) : elles sont gardées et réécrites telles quelles (ECH-11). La racine décrit le fichier de la 0.32 ; $defs/conception décrit la structure commune aux versions 0.28 à 0.32, que les schémas de docs/schemas restreignent.",
   "allOf": [{ "$ref": "#/$defs/conception" }],
   "required": ["format", "formatElectronique"],
   "properties": {
-    "format": { "const": 4, "description": "Format de la conception (ECH-10) : 2 pour la 0.30, 3 pour la 0.31, 4 pour la 0.32." },
-    "formatElectronique": { "const": 4, "description": "Même format, sous le nom que lit la 0.29 : sans lui, elle prendrait la carte pour une carte de la 0.28." }
+    "format": { "const": 5, "description": "Format de la conception (ECH-10) : 2 pour la 0.30, 3 pour la 0.31, 4 pour la 0.32, 5 pour la 0.33." },
+    "formatElectronique": { "const": 5, "description": "Même format, sous le nom que lit la 0.29 : sans lui, elle prendrait la carte pour une carte de la 0.28." }
   },
   "$defs": {
     "nm": { "type": "integer", "description": "Longueur ou coordonnée en nanomètres." },
@@ -37,6 +37,30 @@
         "schemaSeul": { "type": "boolean", "description": "Schéma sans circuit imprimé (0.30)." },
         "synchroSurConfirmation": { "type": "boolean", "description": "Les écarts sans risque entre le schéma et le circuit attendent une confirmation au lieu de s'appliquer d'eux-mêmes (0.32)." },
         "variables": { "$ref": "#/$defs/chaines", "description": "Variables de la conception, utilisables dans les formules des valeurs (0.32) : nom → grandeur (« 5V »)." },
+        "articles": { "type": "array", "items": { "type": "object", "required": ["id"] }, "description": "Articles du projet (0.33) : symbole, empreinte, modèle 3D, sources et paramètres d'une pièce achetée, avec sa version, son état de cycle de vie (etatCycle) et son numéro interne (numeroInterne)." },
+        "modeles3D": {
+          "type": "array",
+          "description": "Modèles 3D exacts (0.33) : B-rep OpenCascade en texte (brep), boîte englobante en nm [x0, y0, z0, x1, y1, z1], quarts de tour et réglage [dx, dy, dz].",
+          "items": { "type": "object", "required": ["id", "nom", "boite", "brep"], "properties": { "id": { "type": "string" }, "nom": { "type": "string" }, "boite": { "type": "array", "minItems": 6, "maxItems": 6 }, "brep": { "type": "string" }, "quarts": { "type": "integer" }, "reglage": { "type": "array" } } }
+        },
+        "facades": {
+          "type": "array",
+          "description": "Façades du boîtier (0.33) : découpes rondes ou rectangulaires, légendes et échelles, chacune rattachée à un composant et décalée de lui (dx, dy).",
+          "items": { "type": "object", "required": ["uuid", "nom", "elements"], "properties": { "elements": { "type": "array", "items": { "type": "object", "required": ["uuid", "genre"], "properties": { "genre": { "enum": ["decoupeRonde", "decoupeRect", "legende", "echelle"] } } } } } }
+        },
+        "esquisseContour": { "type": "object", "description": "Esquisse paramétrique qui pilote le contour de la carte (0.33)." },
+        "variantesMontage": { "type": "array", "items": { "type": "object", "required": ["nom"], "properties": { "nom": { "type": "string" }, "description": { "type": "string" } } }, "description": "Variantes de montage (0.33) ; les surcharges sont portées par chaque composant (variantes)." },
+        "varianteActive": { "type": "string", "description": "Variante montrée et utilisée par les sorties (0.33) ; absente : la carte de base." },
+        "notes": {
+          "type": "array",
+          "description": "Notes attachées aux objets (0.33) : commentaires de revue, tâches et journal, en fil de discussion (parent).",
+          "items": { "type": "object", "required": ["uuid", "genre", "texte"], "properties": { "genre": { "enum": ["commentaire", "tache", "journal"] }, "objet": { "type": "string" }, "parent": { "type": "string" }, "close": { "type": "boolean" }, "priorite": { "type": "integer" } } }
+        },
+        "jeuxSorties": {
+          "type": "array",
+          "description": "Jeux de sorties enregistrés (0.33) : dossier à variables (${PROJET}, ${VARIANTE}, ${REVISION}), liste de sorties, variante, archive zip, contrôles avant publication.",
+          "items": { "type": "object", "required": ["nom", "dossier", "sorties"], "properties": { "nom": { "type": "string" }, "dossier": { "type": "string" }, "sorties": { "type": "array", "items": { "type": "string" } }, "variante": { "type": "string" }, "zip": { "type": "boolean" }, "controler": { "type": "boolean" } } }
+        },
         "erc": {
           "type": "object",
           "description": "Réglages de l'ERC et de la DRC propres au projet (0.31) : gravité réglée par code, matrice des liaisons, alertes exclues avec leur raison.",
@@ -53,7 +77,8 @@
                   "objets": { "type": "array", "items": { "type": "string" } },
                   "raison": { "type": "string" },
                   "auteur": { "type": "string" },
-                  "date": { "type": "string" }
+                  "date": { "type": "string" },
+                  "signature": { "type": "string", "description": "Empreinte des objets visés au moment de l'exclusion (0.33) : l'alerte revient « à revoir » si l'un d'eux bouge." }
                 }
               }
             }
@@ -127,6 +152,12 @@
         "genre": { "enum": ["standard", "mecanique", "graphique", "liaisonReseaux", "horsNomenclature", "cavalier"], "description": "Type de composant (0.32) ; absent : « standard »." },
         "horsSimulation": { "type": "boolean", "description": "Exclu de la simulation (0.32)." },
         "brochageVerifie": { "type": "string", "description": "Empreinte dont le brochage a été vérifié (0.29)." },
+        "article": { "type": "string", "description": "Article du projet dont le composant est tiré (0.33), avec sa version (versionArticle)." },
+        "versionArticle": { "type": "integer" },
+        "lcsc": { "type": "string", "description": "Code LCSC, repris dans la nomenclature (0.33)." },
+        "modele3D": { "type": "string", "description": "Identifiant du modèle 3D exact (0.33)." },
+        "modeleComposant": { "type": "string", "description": "Modèle SPICE propre au composant (0.33)." },
+        "variantes": { "type": "object", "description": "Surcharges par variante de montage (0.33) : montage (monte, nonMonte), valeur, article, empreinte.", "additionalProperties": { "type": "object", "properties": { "montage": { "enum": ["monte", "nonMonte"] }, "valeur": { "type": "string" }, "article": { "type": "string" }, "empreinte": { "type": "string" } } } },
         "horsNomenclature": { "type": "boolean", "description": "0.29" },
         "horsPlacement": { "type": "boolean", "description": "0.29" },
         "champs": { "$ref": "#/$defs/chaines" }
@@ -139,6 +170,9 @@
         "uuid": { "type": "string" },
         "nom": { "type": "string" },
         "format": { "type": "string", "description": "Format du papier : A4, A3…" },
+        "repetitions": { "type": "integer", "minimum": 2, "description": "Feuille de canal répétée N fois (0.33)." },
+        "modele": { "type": "string", "description": "Feuille modèle dont celle-ci est une instance (0.33), avec son numéro (instance)." },
+        "instance": { "type": "integer" },
         "symboles": { "type": "array", "items": { "$ref": "#/$defs/symbolePlace" } },
         "fils": {
           "type": "array",
@@ -392,7 +426,8 @@
               "p": { "$ref": "#/$defs/point" },
               "rot": { "type": "number" },
               "dessous": { "type": "boolean" },
-              "verrou": { "type": "boolean" }
+              "verrou": { "type": "boolean" },
+              "repere": { "$ref": "#/$defs/point", "description": "Position du repère de sérigraphie déplacé à la main (0.33)." }
             }
           }
         },

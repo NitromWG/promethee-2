@@ -16,6 +16,8 @@ add_test(NAME outil_conception_electronique
 # Lecture du source (ERG-17, ERG-18) : pointeur jamais déplacé, touches de l'atelier électronique par le registre
 add_test(NAME source_souris_et_pointeur COMMAND ${CMAKE_COMMAND} -DAPP=${PROJECT_SOURCE_DIR}/app -P ${CMAKE_CURRENT_SOURCE_DIR}/sources.cmake)
 # Aide de l'atelier électronique (2.11, 2.17, ERG-13) : chaque code de règle que le noyau rend a son explication
+add_test(NAME source_aucun_acces_reseau COMMAND ${CMAKE_COMMAND} "-DDOSSIERS=${PROJECT_SOURCE_DIR}/app;${PROJECT_SOURCE_DIR}/noyau;${PROJECT_SOURCE_DIR}/geometrie;${PROJECT_SOURCE_DIR}/outils"
+         -P ${CMAKE_CURRENT_SOURCE_DIR}/reseau.cmake)
 add_test(NAME aide_regles COMMAND ${CMAKE_COMMAND} -DNOYAU=${PROJECT_SOURCE_DIR}/noyau -DAPP=${PROJECT_SOURCE_DIR}/app -P ${CMAKE_CURRENT_SOURCE_DIR}/aide.cmake)
 find_package(Python3 COMPONENTS Interpreter QUIET)
 find_program(GERBV gerbv)

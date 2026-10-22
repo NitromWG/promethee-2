@@ -94,8 +94,10 @@ foreach ($f in "Promethee.exe", "platforms\qwindows.dll", "LICENSE", "TIERS.md",
 }
 if (-not (Get-ChildItem (Join-Path $Dossier "source") -Filter "*-source.zip" -ErrorAction SilentlyContinue)) { $defauts.Add("source correspondante absente (source\*-source.zip)") }
 Get-ChildItem $Dossier -Recurse -File -Include *.lib, *.exp, *.pdb, *.ilk, *.obj | ForEach-Object { $defauts.Add("fichier de développement dans le paquet : $($_.Name)") }
-# Prométhée ne se connecte à aucun réseau : ni Qt Network ni extensions TLS dans le paquet
-Get-ChildItem $Dossier -Recurse -File -Include Qt6Network*.dll | ForEach-Object { $defauts.Add("bibliothèque réseau inutile dans le paquet : $($_.Name)") }
+# Prométhée ne se connecte à aucun réseau : Qt6Network.dll ne sert qu'au canal local (tube nommé), et ni extension
+# TLS ni extension TUIO ne doit l'accompagner
+if (-not (Test-Path (Join-Path $Dossier "Qt6Network.dll"))) { $defauts.Add("Qt6Network.dll absente (canal local de l'interface de commandes)") }
+if (Test-Path (Join-Path $Dossier "generic\qtuiotouchplugin.dll")) { $defauts.Add("extension tactile TUIO (réseau) dans le paquet : generic\qtuiotouchplugin.dll") }
 foreach ($d in "tls", "networkinformation", "bearer") { if (Test-Path (Join-Path $Dossier $d)) { $defauts.Add("extensions réseau inutiles dans le paquet : $d\") } }
 
 # Version inscrite dans l'exécutable (propriétés du fichier) : celle du build.

@@ -81,6 +81,12 @@ public:
   // Mode consultation (2.29, ERG-33) : le projet se lit, se parcourt et se cherche ; toute modification est refusée
   // et dite (refus), jusqu'à ce que le mode soit quitté
   void setConsultation(bool oui);
+  // Projet tenu par un autre poste à l'ouverture (12.10) : « Tenu par Lou sur ATELIER-2 depuis … », vide sinon
+  QString tenuPar() const { return m_tenuPar; }
+  static QString personne();  // nom de l'utilisateur, pour les verrous et les notes
+  // Historique local du fichier ouvert (12.9) : un instantané à chaque enregistrement, rangé par contenu
+  QString dossierHistorique() const;
+  static QString poste();
   bool consultation() const { return m_consultation; }
   // Geste sur une conception électronique (glisser) : seule elle est photographiée ; finGeste en fait un pas, et
   // Ctrl+Z pendant le geste ne fait que l'annuler, sans toucher à l'historique (A15)
@@ -202,6 +208,12 @@ private:
   QString m_chemin;
   QString m_id;
   std::unique_ptr<QLockFile> m_verrou;     // tant que le fichier est ouvert ici
+  // Verrou partagé, en petit fichier à côté du projet (12.10) : un autre poste qui le tient vivant met le projet en
+  // consultation ; le nôtre est renouvelé chaque minute et levé à la fermeture
+  QString m_cheminVerrouPartage, m_tenuPar;
+  class QTimer* m_vieVerrou = nullptr;
+  void poserVerrouPartage(const QString& chemin);
+  void leverVerrouPartage();
   prom::EtatDisque m_disque;               // état du fichier à l'ouverture ou au dernier enregistrement
   std::vector<std::string> m_avertissements;
 };

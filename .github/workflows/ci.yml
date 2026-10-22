@@ -42,13 +42,13 @@ jobs:
           "$exe" -r compact > resultats.txt 2>&1 || true
           grep -E "failed|FAILED|error" resultats.txt | head -40 | while IFS= read -r l; do echo "::error::$l"; done
           { echo '### Tests en échec'; echo '```'; grep -E -B2 -A8 "failed|FAILED" resultats.txt | head -200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - name: Compatibilité avec la 0.31 (projet écrit pour elle et relu par elle - mêmes réseaux, pertes dites, schémas JSON)
+      - name: Compatibilité avec la 0.32 (projet écrit pour elle et relu par elle - mêmes réseaux, pertes dites, schémas JSON)
         run: |
-          git fetch --no-tags --depth 1 origin 7a6dcabfc3699f7e736d1540d2ac3d46bc731a39
-          git worktree add --detach ../promethee-0.31 FETCH_HEAD
-          cmake -S ../promethee-0.31 -B ../promethee-0.31/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPROMETHEE_TESTS=OFF -DPROMETHEE_APP=OFF
-          cmake --build ../promethee-0.31/build --target promethee
-          python3 outils/compatibilite.py version build/outils/promethee ../promethee-0.31/build/outils/promethee 0.31 docs tests/donnees compatibilite
+          git fetch --no-tags --depth 1 origin 6c0cbd8dcd785dd711a3b08ceb543be527d58f73
+          git worktree add --detach ../promethee-0.32 FETCH_HEAD
+          cmake -S ../promethee-0.32 -B ../promethee-0.32/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPROMETHEE_TESTS=OFF -DPROMETHEE_APP=OFF
+          cmake --build ../promethee-0.32/build --target promethee
+          python3 outils/compatibilite.py version build/outils/promethee ../promethee-0.32/build/outils/promethee 0.32 docs tests/donnees compatibilite
       - name: Essais de l'interface (clics réels dans la vue 3D, sous un écran virtuel)
         run: |
           sudo apt-get install -y --no-install-recommends xvfb

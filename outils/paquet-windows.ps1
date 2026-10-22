@@ -86,20 +86,19 @@ if ($env:PROMETHEE_CERTIFICAT_PFX) {
 $windeployqt = Join-Path $QtDir "bin\windeployqt.exe"
 & $windeployqt --release --no-compiler-runtime --translations fr $exe
 if ($LASTEXITCODE -ne 0) { throw "windeployqt a échoué" }
-# Prométhée ne fait aucun accès réseau : on retire les extensions réseau que windeployqt ajoute parfois.
+# Prométhée n'ouvre aucun port réseau. Qt6Network.dll reste dans le paquet : elle porte le canal local (tube nommé
+# réservé à l'utilisateur) par lequel un programme extérieur pilote l'atelier (interface JSON-RPC, lot L13).
+# Les extensions réseau que windeployqt ajoute parfois (TLS, état du réseau, porteuses) sont retirées.
 foreach ($d in "tls", "networkinformation", "bearer") {
   $p = Join-Path $dest $d
   if (Test-Path $p) { Remove-Item -Recurse -Force $p; Write-Host "retiré : $d\ (réseau inutilisé)" }
 }
 # Même chose pour l'extension tactile TUIO (generic\qtuiotouchplugin.dll), qui reçoit ses événements par le réseau :
-# le windeployqt de Qt 6.8 l'ajoute, et Qt6Network.dll avec elle (« Adding Qt6Network for qtuiotouchplugin.dll »).
-# Sans elle, plus rien n'importe Qt6Network, que la vérification du paquet refuse ; elle signale aussi toute autre
-# bibliothèque qui en aurait encore besoin.
+# le windeployqt de Qt 6.8 l'ajoute ; Prométhée ne s'en sert pas.
 $tuio = Join-Path $dest "generic\qtuiotouchplugin.dll"
 if (Test-Path $tuio) { Remove-Item -Force $tuio; Write-Host "retiré : generic\qtuiotouchplugin.dll (TUIO, réseau)" }
 $generic = Join-Path $dest "generic"
 if ((Test-Path $generic) -and -not (Get-ChildItem $generic)) { Remove-Item -Force $generic }
-Get-ChildItem $dest -File -Filter "Qt6Network*.dll" | ForEach-Object { Remove-Item -Force $_.FullName; Write-Host "retiré : $($_.Name) (réseau inutilisé)" }
 
 # 4. Bibliothèques d'exécution Visual C++ du compilateur utilisé (msvcp140, vcruntime140, vcruntime140_1…).
 $vs = Trouver-VisualStudio
