@@ -13,6 +13,7 @@
 #include <map>
 #include <set>
 
+#include "promethee/entier128.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/remplissage_local.hpp"
 #include "promethee/verification.hpp"
@@ -139,7 +140,7 @@ double ecart(const Objet& x, const Objet& y) {
 // Cuivre d'une zone (ou d'un îlot) prêt pour des mesures rapides : ses arêtes rangées dans un index spatial. La
 // distance d'un objet ne regarde que les arêtes proches, au lieu de tout le contour (qui fait des milliers de
 // sommets sur une grande carte).
-__extension__ typedef __int128 Grand;
+using Grand = Entier128;  // produits exacts de coordonnées de 64 bits (MSVC n'a pas __int128)
 class CuivreIndexe {
  public:
   explicit CuivreIndexe(const Polygones& p) : m_poly(p), m_index(NM_PAR_MM) {

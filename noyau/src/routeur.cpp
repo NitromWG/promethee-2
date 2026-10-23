@@ -1,5 +1,6 @@
 // Prométhée : routeur interactif, contourner et pousser (lot L5). Licence GPL-3.0-only.
 #include "promethee/routeur.hpp"
+#include "promethee/entier128.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -143,7 +144,7 @@ std::vector<Pt> sansAlignes(const std::vector<Pt>& p) {
     if (!r.empty() && r.back() == q) continue;
     while (r.size() >= 2) {
       const Pt u = r[r.size() - 2], v = r.back();
-      __extension__ typedef __int128 Grand;
+      using Grand = Entier128;
       const Grand croix = static_cast<Grand>(v.x - u.x) * (q.y - v.y) - static_cast<Grand>(v.y - u.y) * (q.x - v.x);
       const Grand sc = static_cast<Grand>(v.x - u.x) * (q.x - v.x) + static_cast<Grand>(v.y - u.y) * (q.y - v.y);
       if (croix == 0 && sc >= 0) r.pop_back();

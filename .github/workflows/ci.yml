@@ -133,8 +133,8 @@ jobs:
           cmake --build build --config Release -- /m 2>&1 | Tee-Object -FilePath compilation.log
           $code = $LASTEXITCODE
           if ($code -ne 0) {
-            # GitHub garde dix annotations d'erreur par étape : les dix premières erreurs distinctes
-            Select-String -Path compilation.log -Pattern "error C\d+|error LNK\d+|fatal error" | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique | Select-Object -First 10 | ForEach-Object { Write-Host "::error::$_" }
+            # GitHub garde dix annotations d'erreur par étape : la première erreur de chacun des dix premiers fichiers
+            Select-String -Path compilation.log -Pattern "error C\d+|error LNK\d+|fatal error" | ForEach-Object { $_.Line.Trim() } | Group-Object { ($_ -split '\(')[0] } | ForEach-Object { $_.Group[0] } | Select-Object -First 10 | ForEach-Object { Write-Host "::error::$_" }
             exit $code
           }
       - name: Tests

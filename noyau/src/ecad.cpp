@@ -1,6 +1,7 @@
 // Prométhée : socle de la CAO électronique (unités, identifiants, géométrie, polygones, index spatial).
 // Licence GPL-3.0-only.
 #include "promethee/ecad.hpp"
+#include "promethee/entier128.hpp"
 #include "promethee/hachage.hpp"
 
 #include <algorithm>
@@ -177,7 +178,7 @@ double aireMm2(const Polygones& p) {
 double aireMm2(const Polygone& p) { return p.size() < 3 ? 0 : std::abs(Area(enClipper(p))) * 1e-12; }
 
 namespace {
-__extension__ typedef __int128 Grand;
+using Grand = Entier128;  // produits exacts de coordonnées de 64 bits (MSVC n'a pas __int128)
 // Position d'un point par rapport à un polygone simple : -1 dehors, 0 sur le bord, 1 dedans. Arithmétique exacte, sans
 // allocation (9.2) : les tests d'inclusion se comptent par millions dans la DRC d'une grande carte.
 int positionPoint(const Polygone& p, Pt q) {
