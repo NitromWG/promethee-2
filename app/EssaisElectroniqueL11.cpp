@@ -6,6 +6,7 @@
 // Licence GPL-3.0-only.
 #include <chrono>
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <numbers>
 #include <string>
@@ -107,8 +108,11 @@ void essaisElectroniqueL11(FenetrePrincipale& f, const Verifier& verifier0) {
     if (!QApplication::activeWindow() && !QApplication::activeModalWidget()) reel::activer(&f);
   };
   Document* doc = f.document();
+  // Sans ngspice sur le poste (paquet Windows essayé par l'intégration continue), la simulation n'est pas
+  // essayée : c'est dit, sans compter comme un échec ; la CI Linux installe ngspice et fait tous ces essais
   if (!ngspiceDisponible()) {
-    verifier(false, "L11 : ngspice est installé sur le poste d'essai", "bibliothèque libngspice introuvable");
+    std::printf("SAUTÉ   L11 : ngspice n'est pas installé sur ce poste (bibliothèque libngspice introuvable) : essais de simulation non faits\n");
+    std::fflush(stdout);
     return;
   }
 

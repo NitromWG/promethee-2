@@ -22,7 +22,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends cmake ninja-build g++ libtbb-dev catch2 nlohmann-json3-dev \
-            libfontconfig-dev libx11-dev qt6-base-dev libgl-dev libglu1-mesa-dev xvfb xauth libgl1-mesa-dri gerbv python3 python3-pip \
+            libfontconfig-dev libx11-dev qt6-base-dev libgl-dev libglu1-mesa-dev xvfb xauth libgl1-mesa-dri gerbv python3 python3-pip libngspice0 \
             libocct-modeling-algorithms-dev libocct-modeling-data-dev libocct-data-exchange-dev libocct-foundation-dev libocct-visualization-dev
           # Troisième lecteur indépendant du dossier de fabrication (audit Q4) ; sans lui, l'essai le saute et le dit
           sudo python3 -m pip install --break-system-packages --quiet gerbonara || echo "gerbonara indisponible : troisième lecteur sauté"
@@ -127,7 +127,16 @@ jobs:
         shell: pwsh
         run: cmake -S . -B build -A x64 -DCMAKE_TOOLCHAIN_FILE="$env:RUNNER_TEMP\vcpkg\scripts\buildsystems\vcpkg.cmake" -DVCPKG_TARGET_TRIPLET=x64-windows -DVCPKG_MANIFEST_INSTALL=OFF -DVCPKG_INSTALLED_DIR="${{ github.workspace }}\vcpkg_installed" -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
       - name: Compilation
-        run: cmake --build build --config Release
+        shell: pwsh
+        run: |
+          # Les erreurs du compilateur deviennent des annotations du passage, lisibles sans télécharger le journal
+          cmake --build build --config Release -- /m 2>&1 | Tee-Object -FilePath compilation.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            # GitHub garde dix annotations d'erreur par étape : les dix premières erreurs distinctes
+            Select-String -Path compilation.log -Pattern "error C\d+|error LNK\d+|fatal error" | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique | Select-Object -First 10 | ForEach-Object { Write-Host "::error::$_" }
+            exit $code
+          }
       - name: Tests
         run: ctest --test-dir build -C Release --output-on-failure
       - name: Détail des tests en échec (visible sur la page du run, sans connexion)

@@ -6,7 +6,8 @@ if(WIN32)
   target_sources(promethee_tests PRIVATE ${PROJECT_SOURCE_DIR}/cmake/utf8.manifest)
 endif()
 include(Catch)
-catch_discover_tests(promethee_tests DISCOVERY_MODE PRE_TEST)
+# Un cas sauté (SKIP, par exemple sans ngspice sur le poste) rend 4 : CTest le dit sauté, pas en échec
+catch_discover_tests(promethee_tests DISCOVERY_MODE PRE_TEST PROPERTIES SKIP_RETURN_CODE 4)
 add_test(NAME outil_exemple_puis_export
   COMMAND ${CMAKE_COMMAND} -DOUTIL=$<TARGET_FILE:promethee> -DDOSSIER=${CMAKE_CURRENT_BINARY_DIR}/sortie_outil
           -P ${CMAKE_CURRENT_SOURCE_DIR}/outil.cmake)
