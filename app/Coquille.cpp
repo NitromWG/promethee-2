@@ -221,8 +221,13 @@ Coquille* Coquille::detacher(int index) {
       autre->m_geometrieNormale = droite;
       autre->setGeometry(droite);
     } else {
-      // Trop étroit pour deux fenêtres utilisables : la nouvelle en cascade, dans l'écran
-      const QRect decalee = r.adjusted(std::min(64, r.width() / 10), std::min(48, r.height() / 10), 0, 0);
+      // Trop étroit pour deux fenêtres utilisables : la nouvelle en cascade, dans l'écran ; le décalage cède devant
+      // la taille minimale de la fenêtre (petit écran : 1 024 × 768), pour qu'elle reste entière
+      const QSize mini = autre->minimumSizeHint().expandedTo(autre->minimumSize());
+      // (au moins un léger décalage, pour que les deux fenêtres se distinguent)
+      const int dx = std::clamp(r.width() - mini.width(), std::min(24, r.width() / 20), std::max(std::min(24, r.width() / 20), std::min(64, r.width() / 10)));
+      const int dy = std::clamp(r.height() - mini.height(), std::min(18, r.height() / 20), std::max(std::min(18, r.height() / 20), std::min(48, r.height() / 10)));
+      const QRect decalee = r.adjusted(dx, dy, 0, 0);
       autre->m_geometrieNormale = decalee;
       autre->setGeometry(decalee);
     }

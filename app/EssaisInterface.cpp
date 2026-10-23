@@ -2611,10 +2611,16 @@ void lancerEssaisOnglets(Coquille& c) {
     // Côte à côte quand l'écran tient deux fenêtres ; sinon la nouvelle en cascade, entière dans l'écran
     const QRect ecranUtile = c.screen() ? c.screen()->availableGeometry() : QRect();
     const bool deux = ecranUtile.width() >= 2 * std::max(c.minimumSizeHint().width(), k ? k->minimumSizeHint().width() : 0);
-    const bool cote = k && (QGuiApplication::screens().size() > 1 || (deux ? c.geometry().right() < k->geometry().left() : ecranUtile.contains(k->geometry()) && k->geometry() != c.geometry()));
+    // Une fenêtre dont la taille minimale dépasse l'écran ne peut y tenir entière : son coin est dans l'écran
+    const bool tropGrande = k && (k->minimumSizeHint().width() > ecranUtile.width() || k->minimumSizeHint().height() > ecranUtile.height());
+    const bool dansEcran = k && (tropGrande ? ecranUtile.contains(k->geometry().topLeft()) : ecranUtile.contains(k->geometry()));
+    const bool cote = k && (QGuiApplication::screens().size() > 1 || (deux ? c.geometry().right() < k->geometry().left() : dansEcran && k->geometry() != c.geometry()));
     verifier(k && k->isVisible() && k->nombreOnglets() == 1 && k->active() == f2 && c.nombreOnglets() == 1 && Coquille::fenetres().size() == 2 && cote,
              "un onglet détaché part dans sa fenêtre avec son projet ; les deux fenêtres se partagent l'écran",
-             k ? QStringLiteral("%1 | %2 ; visible %3, onglets %4 et %5, actif %6, fenêtres %7").arg(c.geometry().left()).arg(k->geometry().left()).arg(k->isVisible()).arg(k->nombreOnglets()).arg(c.nombreOnglets()).arg(k->active() == f2).arg(Coquille::fenetres().size()).toStdString() : std::string("pas détaché"));
+             k ? QStringLiteral("%1 | %2 ; visible %3, onglets %4 et %5, actif %6, fenêtres %7 ; écran %8×%9, fenêtre %10×%11 en %12,%13, minimum %14×%15")
+                     .arg(c.geometry().left()).arg(k->geometry().left()).arg(k->isVisible()).arg(k->nombreOnglets()).arg(c.nombreOnglets()).arg(k->active() == f2).arg(Coquille::fenetres().size())
+                     .arg(ecranUtile.width()).arg(ecranUtile.height()).arg(k->width()).arg(k->height()).arg(k->x()).arg(k->y()).arg(k->minimumSizeHint().width()).arg(k->minimumSizeHint().height()).toStdString()
+               : std::string("pas détaché"));
     verifier(k && k->active() && k->active()->document()->projet().nom == nom && !k->active()->document()->estVierge(), "le projet détaché garde son contenu", {});
     if (k) {
       repondre(QStringLiteral("Ne pas enregistrer"));
