@@ -289,7 +289,7 @@ TEST_CASE("12.4 · Archive du projet rouverte ailleurs à l'identique", "[L12][a
   const fs::path d = dossierEssai("archive");
   fs::create_directories(d / "source" / "modeles");
   {
-    std::ofstream(d / "source" / "modeles" / "diode.lib") << ".model DX D(IS=1e-14)\n";
+    std::ofstream(d / "source" / "modeles" / "diode.lib", std::ios::binary) << ".model DX D(IS=1e-14)\n";  // octets exacts, sans CRLF sous Windows
   }
   Projet p = projetVide();
   p.nom = "Archive";

@@ -108,8 +108,11 @@ jobs:
         uses: actions/cache/restore@v6
         with:
           path: ${{ github.workspace }}\vcpkg-cache
-          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
-          restore-keys: vcpkg-windows-
+          # Une clé par passage, retrouvée par son préfixe : ce qu'un passage recompile est gardé pour le suivant
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}
+          restore-keys: |
+            vcpkg-windows-${{ hashFiles('vcpkg.json') }}-
+            vcpkg-windows-
       - name: vcpkg à une version figée
         shell: pwsh
         run: |
@@ -120,14 +123,18 @@ jobs:
       - name: Dépendances (compile OpenCascade au premier passage, environ une heure)
         shell: pwsh
         run: |
-          & "$env:RUNNER_TEMP\vcpkg\vcpkg.exe" install --triplet x64-windows
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $avant = (Get-ChildItem "$env:VCPKG_DEFAULT_BINARY_CACHE" -Recurse -File -Filter *.zip -ErrorAction SilentlyContinue | Measure-Object).Count
+          & "$env:RUNNER_TEMP\vcpkg\vcpkg.exe" install --triplet x64-windows 2>&1 | Tee-Object -FilePath vcpkg.log
+          $code = $LASTEXITCODE
+          $repris = (Select-String -Path vcpkg.log -Pattern "Restored \d+ package" | Select-Object -First 1).Line
+          Write-Host "::notice::paquets vcpkg en cache : $avant ; $repris"
+          if ($code -ne 0) { exit $code }
       - name: Sauvegarde des paquets compilés, même en cas d'échec plus loin
         if: always() && steps.cache-vcpkg.outputs.cache-hit != 'true'
         uses: actions/cache/save@v6
         with:
           path: ${{ github.workspace }}\vcpkg-cache
-          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}
+          key: vcpkg-windows-${{ hashFiles('vcpkg.json') }}-${{ github.run_id }}
       - name: Qt
         uses: jurplel/install-qt-action@v4
         with:

@@ -158,6 +158,7 @@ ResultatJeu executerJeu(const ConceptionElec& c0, const JeuSorties& j, const std
   const ConceptionElec c = conceptionPourVariante(c0, j.variante);
   fs::path cible = cheminFichier(dossierDuJeu(j, c, projet, variables));
   if (cible.is_relative()) cible = cheminFichier(base) / cible;
+  cible.make_preferred();  // « sorties/x » écrit avec les séparateurs du système (\ sous Windows)
   res.dossier = utf8(cible) + (j.zip ? ".zip" : "");
   res.journal.push_back("Jeu « " + j.nom + " »" + (j.variante.empty() ? "" : ", variante « " + j.variante + " »") + " → " + res.dossier);
   if (j.controler) {
