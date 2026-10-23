@@ -13,6 +13,7 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <QDir>
+#include <QCoreApplication>
 #include <QDockWidget>
 #include <QEventLoop>
 #include <QFile>
@@ -192,7 +193,11 @@ void essaisElectroniqueL4(FenetrePrincipale& f, const Verifier& verifier0) {
   // ---------- 4.22 · Archive SnapEDA déposée : un seul article contrôlé, symbole, empreinte, modèle 3D ----------
   {
     FenetreChoixComposant* fc = a->choixComposant();
-    const QString zip = QDir(qEnvironmentVariable("PROMETHEE_DONNEES")).filePath(QStringLiteral("archives/ESP32-S3-WROOM-1-N8_SnapEDA.zip"));
+    // Données d'essai : la variable PROMETHEE_DONNEES, sinon le dépôt vu depuis l'exécutable (build/app) ou le dossier courant
+    QString donnees = qEnvironmentVariable("PROMETHEE_DONNEES");
+    for (const QString& essai : {QCoreApplication::applicationDirPath() + QStringLiteral("/../../tests/donnees"), QStringLiteral("tests/donnees")})
+      if (donnees.isEmpty() && QFileInfo::exists(essai + QStringLiteral("/archives/ESP32-S3-WROOM-1-N8_SnapEDA.zip"))) donnees = essai;
+    const QString zip = QDir(donnees).filePath(QStringLiteral("archives/ESP32-S3-WROOM-1-N8_SnapEDA.zip"));
     const std::string id = fc ? fc->importerArchive(zip) : std::string();
     attendre(200);
     const auto perso = AtelierElectronique::articlesPerso();
