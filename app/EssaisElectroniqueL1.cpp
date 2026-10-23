@@ -1660,11 +1660,33 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
         if (x->text() == QStringLiteral("Borgne") || x->text() == QStringLiteral("Enterrée") || x->text() == QStringLiteral("Micro-via")) autresGrisees &= !x->isEnabled();
       }
     // Clic droit court sur la piste gênante : son menu, « Supprimer la piste … sous le curseur »
-    reel::cliquer(vc, ecran(vc, milieu), Qt::RightButton);
-    attendre(80);
+    // Les bulles de message empilées sur le canevas (plus longues à s'effacer sur une machine lente) ne doivent pas
+    // recevoir le clic : la pile est cachée le temps du geste
+    const bool pileMontree = a->pileMessages()->isVisible();
+    a->pileMessages()->hide();
+    // Un point de la piste gênante que rien ne couvre : le cartouche du tracé, gardé dans la vue, peut se poser sur
+    // son milieu quand la fenêtre est petite
+    QPoint clic = ecran(vc, milieu);
+    for (const auto& t : conception(doc)->circuit.pistes)
+      if (t.uuid == gene)
+        for (const double f : {0.5, 0.35, 0.65, 0.25, 0.75, 0.15, 0.85}) {
+          const QPoint q = ecran(vc, Pt{t.a.x + static_cast<Nm>((t.b.x - t.a.x) * f), t.a.y + static_cast<Nm>((t.b.y - t.a.y) * f)});
+          reel::deplacer(vc, q);
+          if (QApplication::widgetAt(vc->mapToGlobal(q)) == vc) {
+            clic = q;
+            break;
+          }
+        }
+    const QWidget* sousClic = QApplication::widgetAt(vc->mapToGlobal(clic));
+    const std::string sousClicNom = sousClic ? sousClic->metaObject()->className() : "—";
+    reel::cliquer(vc, clic, Qt::RightButton);
+    // Le menu attendu jusqu'à une seconde : sur une machine chargée, il paraît après le traitement du relâché
     QMenu* menu = nullptr;
-    for (QWidget* w : QApplication::topLevelWidgets())
-      if (auto* m = qobject_cast<QMenu*>(w); m && m->isVisible() && m->objectName() == QStringLiteral("menuRoutage")) menu = m;
+    for (int essai = 0; essai < 50 && !menu; ++essai) {
+      attendre(20);
+      for (QWidget* w : QApplication::topLevelWidgets())
+        if (auto* m = qobject_cast<QMenu*>(w); m && m->isVisible() && m->objectName() == QStringLiteral("menuRoutage")) menu = m;
+    }
     QAction* supprimer = menu ? menu->findChild<QAction*>(QStringLiteral("supprimerPisteSous")) : nullptr;
     if (!supprimer && menu)
       for (QAction* x : menu->actions())
@@ -1675,6 +1697,7 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
       if (garde && garde->isVisible()) garde->close();
     }
     attendre(150);
+    if (pileMontree) a->pileMessages()->show();
     bool geneSupprimee = true;
     for (const auto& t : conception(doc)->circuit.pistes) geneSupprimee &= t.uuid != gene;
     const bool toujours = vc->outil() == VueCircuit::Outil::Router && vc->bandeau()->bouton(QStringLiteral("via")) != nullptr;
@@ -1710,7 +1733,7 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
     verifier(geneSupprimee && toujours && dessus && dessous05 && cc.vias.size() == vias1 + 2 && vc->paireCouches() == std::pair{Couche::CuivreDessus, Couche::CuivreDessous},
              "ERG-21 : pendant une piste, une piste gênante supprimée au menu du clic droit ; le tracé reprend au dernier coude, sur la paire choisie, à la largeur choisie",
              std::to_string(cc.vias.size() - vias1) + " via(s), menu " + std::to_string(menu != nullptr && supprimer != nullptr) + ", via au bandeau " + std::to_string(viaCliquee) +
-                 ", couche " + std::to_string(static_cast<int>(apresVia)));
+                 ", couche " + std::to_string(static_cast<int>(apresVia)) + ", sous le clic droit " + sousClicNom + ", gêne supprimée " + std::to_string(geneSupprimee));
     verifier(viaSuspend && reprise, "ERG-21 : un autre outil pendant la piste la suspend ; sa commande faite, la piste reprend", {});
     vc->echap();
     while (doc->positionHistorique() > pas1) {

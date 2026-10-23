@@ -313,9 +313,17 @@ TEST_CASE("4.16 : bibliothèques citées par ${BIBLIO_EQUIPE}, développées par
   std::vector<std::string> inconnues;
   CHECK(developperChemin("${BIBLIO_EQUIPE}/passifs.json", {{"BIBLIO_EQUIPE", "/srv/biblio"}}, &inconnues) == "/srv/biblio/passifs.json");
   CHECK(inconnues.empty());
+#ifdef _WIN32
+  _putenv_s("BIBLIO_EQUIPE", "/mnt/autre");
+#else
   setenv("BIBLIO_EQUIPE", "/mnt/autre", 1);
+#endif
   CHECK(developperChemin("${BIBLIO_EQUIPE}/passifs.json", {{"BIBLIO_EQUIPE", "/srv/biblio"}}) == "/mnt/autre/passifs.json");
+#ifdef _WIN32
+  _putenv_s("BIBLIO_EQUIPE", "");  // une valeur vide retire la variable
+#else
   unsetenv("BIBLIO_EQUIPE");
+#endif
   CHECK(developperChemin("${INCONNUE}/x", {}, &inconnues) == "${INCONNUE}/x");
   CHECK(inconnues == std::vector<std::string>{"INCONNUE"});
 }

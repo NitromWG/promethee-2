@@ -175,7 +175,10 @@ std::string dossierProgramme(const char* argv0) {
 #ifdef _WIN32
   wchar_t chemin[MAX_PATH];
   const DWORD n = GetModuleFileNameW(nullptr, chemin, MAX_PATH);
-  if (n > 0 && n < MAX_PATH) return fs::path(std::wstring(chemin, n)).parent_path().u8string();
+  if (n > 0 && n < MAX_PATH) {
+    const std::u8string u = fs::path(std::wstring(chemin, n)).parent_path().u8string();  // UTF-8, comme le reste
+    return std::string(u.begin(), u.end());
+  }
 #elif defined(__APPLE__)
   char chemin[4096];
   std::uint32_t taille = sizeof chemin;
