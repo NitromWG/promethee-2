@@ -60,10 +60,21 @@ jobs:
       - name: Atelier électronique par de vrais gestes, en 1 600 × 1 000, en 1 024 × 768 et dans la fenêtre à onglets
         shell: bash
         run: |
-          xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-electronique | tee essais-electronique.txt
-          xvfb-run -a -s "-screen 0 1024x768x24" build/app/Promethee --essais-electronique
-          xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-electronique --onglets
+          # Les trois configurations passent toutes ; chaque vérification en échec devient une annotation du passage
+          set +e
+          code=0
+          for config in "1600x1000x24|" "1024x768x24|" "1600x1000x24|--onglets"; do
+            ecran=${config%%|*}; option=${config#*|}
+            xvfb-run -a -s "-screen 0 $ecran" build/app/Promethee --essais-electronique $option > sortie.txt 2>&1; r=$?
+            cat sortie.txt
+            [ -z "$option" ] && [ "$ecran" = "1600x1000x24" ] && cp sortie.txt essais-electronique.txt
+            if [ $r -ne 0 ]; then
+              code=$r
+              grep -E "^ÉCHEC|^BOÎTE" sortie.txt | head -3 | while IFS= read -r l; do echo "::error::$ecran $option : ${l:0:600}"; done
+            fi
+          done
           { echo '### Mesures dans l’atelier (carte de 300 composants, vrais gestes)'; echo '```'; grep '^MESURE' essais-electronique.txt; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
+          exit $code
       - name: Parcours d'audit de l'interface électronique
         run: xvfb-run -a -s "-screen 0 1600x1000x24" build/app/Promethee --essais-audit
       - name: Atelier électrique (accueil, folios, contacts, fils, bornier, rapports, armoire, faisceau, logement, import QElectroTech)
