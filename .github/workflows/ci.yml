@@ -192,16 +192,20 @@ jobs:
           # livré (Mesa), que Prométhée reconnaît et partage entre Qt et OpenCascade.
           Copy-Item "$essai\opengl32sw.dll" "$essai\opengl32.dll"
           & "$essai\Promethee.exe" --version | Out-Host
+          # Tous les parcours passent ; les deux premières vérifications en échec de chacun deviennent des annotations
+          $echecs = @()
           foreach ($mode in "--essais-interface", "--essais-onglets", "--essais-electronique", "--essais-electrique") {
             $p = Start-Process -FilePath "$essai\Promethee.exe" -ArgumentList $mode -PassThru -NoNewWindow -RedirectStandardOutput "sortie$mode.txt" -RedirectStandardError "erreurs$mode.txt"
             $null = $p.Handle
-            if (-not $p.WaitForExit(900000)) { $p.Kill(); throw "$mode : délai dépassé" }
+            if (-not $p.WaitForExit(900000)) { $p.Kill(); Write-Host "::error::$mode : délai dépassé"; $echecs += $mode; continue }
             Get-Content "sortie$mode.txt"
             if ($p.ExitCode -ne 0) {
+              Select-String -Path "sortie$mode.txt" -Pattern "^(ÉCHEC|BOÎTE)" -Encoding utf8 | Select-Object -First 2 | ForEach-Object { $l = $_.Line; Write-Host "::error::$mode : $($l.Substring(0, [Math]::Min(600, $l.Length)))" }
               Get-Content "$env:TEMP\promethee-journal.txt" -ErrorAction SilentlyContinue | Select-Object -Last 60
-              throw "$mode : $($p.ExitCode) échec(s)"
+              $echecs += "$mode ($($p.ExitCode))"
             }
           }
+          if ($echecs.Count -gt 0) { throw "échecs : $($echecs -join ', ')" }
 
       # Chaque version a sa version préliminaire « v<version> » sur GitHub, avec son paquet et sa somme SHA-256 : on
       # essaie la nouvelle en gardant les anciennes, qui ne sont jamais retirées (les fichiers des Releases ne comptent
