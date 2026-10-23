@@ -1666,6 +1666,8 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
     a->pileMessages()->hide();
     // Un point de la piste gênante que rien ne couvre : le cartouche du tracé, gardé dans la vue, peut se poser sur
     // son milieu quand la fenêtre est petite
+    vc->centrerSur(milieu);  // loin des bords de la vue, où le cartouche, gardé dans la vue, se replie
+    attendre(50);
     QPoint clic = ecran(vc, milieu);
     for (const auto& t : conception(doc)->circuit.pistes)
       if (t.uuid == gene)
@@ -1678,7 +1680,9 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
           }
         }
     const QWidget* sousClic = QApplication::widgetAt(vc->mapToGlobal(clic));
-    const std::string sousClicNom = sousClic ? sousClic->metaObject()->className() : "—";
+    std::string sousClicNom = sousClic ? sousClic->metaObject()->className() : "—";
+    for (const QWidget* x = sousClic ? sousClic->parentWidget() : nullptr; x && x != vc && sousClicNom.size() < 200; x = x->parentWidget())
+      sousClicNom += std::string(" < ") + x->metaObject()->className() + (x->objectName().isEmpty() ? std::string() : ":" + x->objectName().toStdString());
     reel::cliquer(vc, clic, Qt::RightButton);
     // Le menu attendu jusqu'à une seconde : sur une machine chargée, il paraît après le traitement du relâché
     QMenu* menu = nullptr;
