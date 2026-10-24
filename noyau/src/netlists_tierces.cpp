@@ -132,10 +132,10 @@ NetlistLue lirePads(const std::string& t) {
       if (m.empty()) continue;
       ComposantNetlist* x = composant(n, m[0]);
       if (m.size() > 1) {
-        // « R1 R_0603@10k » chez certains outils : empreinte et valeur collées
+        // « R1 10k@R_0603 » : type de pièce (la valeur) et empreinte (decal) ; « R1 R_0603 » : l'empreinte seule
         const auto at = m[1].find('@');
-        x->empreinte = at == std::string::npos ? m[1] : m[1].substr(0, at);
-        if (at != std::string::npos) x->valeur = m[1].substr(at + 1);
+        x->empreinte = at == std::string::npos ? m[1] : m[1].substr(at + 1);
+        if (at != std::string::npos) x->valeur = m[1].substr(0, at);
       }
     } else if (partie == 2 && !reseau.empty())
       for (const auto& b : mots(l)) {

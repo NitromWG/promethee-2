@@ -7,7 +7,9 @@
 #include <set>
 
 #include "promethee/circuit_edition.hpp"
+#include "promethee/formats_cao.hpp"
 #include "promethee/import_eagle.hpp"
+#include "promethee/import_schemas.hpp"
 #include "promethee/kicad_electronique.hpp"
 #include "promethee/kicad_schema.hpp"
 
@@ -30,7 +32,7 @@ std::string baseDe(const std::string& n) {
 bool estXmlEagle(const std::string& t) { return t.find("<eagle") != std::string::npos && t.find("<drawing") != std::string::npos; }
 }  // namespace
 
-std::string filtreConceptionsTierces() { return "*.kicad_pcb *.kicad_sch *.kicad_pro *.sch *.brd"; }
+std::string filtreConceptionsTierces() { return "*.kicad_pcb *.kicad_sch *.kicad_pro *.sch *.brd *.asc *.txt *.pcb *.vsdx"; }
 
 std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichier, const std::string& contenu, const LecteurVoisin& lire, std::string* erreur) {
   const std::string ext = extensionDe(nomFichier), base = baseDe(nomFichier);
@@ -78,6 +80,56 @@ std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichie
       if (brd) r.fichiers.push_back(base + ".brd");
       r.alertes = re.alertes;
       if (!brd) r.conception.schemaSeul = true;
+    } else if (ext == "sch" && estSchemaKicad5(contenu)) {
+      // KiCad 5 : schéma au format d'avant la 6, symboles tirés du cache ; la carte voisine (.kicad_pcb) est reliée
+      r.logiciel = "KiCad 5";
+      RapportImportSchema rs;
+      r.conception = conceptionDepuisKicad5(contenu, base, [&](const std::string& f) { return lire ? lire(f) : std::nullopt; }, &rs);
+      r.fichiers.push_back(base + ".sch");
+      r.alertes = rs.alertes;
+      if (const auto pcb = voisin("kicad_pcb")) {
+        RapportImportKicad rk;
+        ConceptionElec carte = conceptionDepuisKicad(*pcb, base, &rk, voisin("pro").value_or(std::string()));
+        r.fichiers.push_back(base + ".kicad_pcb");
+        r.alertes.insert(r.alertes.end(), rk.alertes.begin(), rk.alertes.end());
+        const RapportLiaison l = relierCarteAuSchema(r.conception, carte);
+        for (const auto& x : l.carteSeule) r.alertes.push_back(x + " : posé sur la carte sans composant au schéma");
+        for (const auto& x : l.schemaSeul) r.alertes.push_back(x + " : au schéma, absent de la carte");
+        for (const auto& x : l.ecarts) r.alertes.push_back(x);
+        r.conception.schemaSeul = false;
+      }
+    } else if (estSchemaLtspice(contenu)) {
+      r.logiciel = "LTspice";
+      RapportImportSchema rs;
+      r.conception = conceptionDepuisLtspice(contenu, base, [&](const std::string& f) { return lire ? lire(f) : std::nullopt; }, &rs);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rs.alertes;
+      if (!rs.directives.empty()) r.alertes.push_back(std::to_string(rs.directives.size()) + " directive(s) SPICE gardée(s) pour la simulation");
+    } else if (ext == "vsdx") {
+      r.logiciel = "Visio";
+      RapportImportSchema rs;
+      r.conception = conceptionDepuisVisio(contenu, base, &rs);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rs.alertes;
+    } else if (estPadsAscii(contenu)) {
+      r.logiciel = "PADS";
+      const bool logique = contenu.find("*PADS-LOGIC") != std::string::npos || contenu.find("POWERLOGIC") != std::string::npos;
+      RapportLectureCao rl;
+      std::optional<std::string> autre;
+      for (const char* e : {"asc", "txt"})
+        if (!autre)
+          if (auto v = voisin(e); v && *v != contenu && estPadsAscii(*v)) autre = v;
+      const std::optional<std::string> logic = logique ? std::optional<std::string>(contenu) : (autre && autre->find("LOGIC") != std::string::npos ? autre : std::nullopt);
+      const std::optional<std::string> layout = !logique ? std::optional<std::string>(contenu) : (autre && autre->find("LOGIC") == std::string::npos ? autre : std::nullopt);
+      r.conception = conceptionDepuisPads(logic, layout, base, &rl);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rl.alertes;
+    } else if (estPcadAscii(contenu)) {
+      r.logiciel = "P-CAD";
+      RapportLectureCao rl;
+      r.conception = conceptionDepuisPcad(contenu, base, &rl);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rl.alertes;
     } else {
       if (erreur) *erreur = "Format de « " + nomFichier + " » non reconnu.";
       return std::nullopt;

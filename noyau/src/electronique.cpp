@@ -861,6 +861,14 @@ Connectivite connectivite(const ConceptionElec& c) {
         e.type = bp.broche->type;
         if (d->alimentation) e.nom = s.nomAlim.empty() ? d->nom : s.nomAlim;
         nouveau(e, bp.p);
+        // Broche cachée d'entrée d'alimentation (7.18, symboles repris de KiCad) : reliée au réseau de son nom
+        if (e.genre == Genre::Broche && bp.broche->cachee && bp.broche->type == TypeBroche::AlimEntree && !bp.broche->nom.empty()) {
+          Element a;
+          a.genre = Genre::Alim;
+          a.uuid = s.uuid;
+          a.nom = bp.broche->nom;
+          nouveau(a, bp.p);
+        }
       }
     }
     for (const auto& e : F.etiquettes) {

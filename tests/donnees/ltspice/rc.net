@@ -1,0 +1,8 @@
+* C:\essais\rc.asc
+V1 IN 0 PULSE(0 5 0 1n 1n 1m 2m)
+R1 OUT IN 1k
+C1 OUT 0 100n
+R2 OUT 0 10k
+.tran 10m
+.backanno
+.end

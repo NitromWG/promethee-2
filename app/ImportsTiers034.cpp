@@ -37,7 +37,9 @@
 #include "promethee/dessins_carte.hpp"
 #include "promethee/exports3d.hpp"
 #include "promethee/echanges_electronique.hpp"
+#include "promethee/archive.hpp"
 #include "promethee/fichiers.hpp"
+#include "promethee/formats_cao.hpp"
 #include "promethee/netlists_tierces.hpp"
 
 using namespace prom::ecad;
@@ -659,6 +661,40 @@ void AtelierElectronique::enregistrerCommandesL10() {
     } catch (const std::exception& e) {
       afficherMessage(QStringLiteral("DXF : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
     }
+  };
+  // Exports vers les autres outils de CAO (10.22) : chaque fichier dit ce qu'il ne porte pas
+  auto exporterCao = [this](const QString& titre, const QString& extension, const std::function<std::string(const ConceptionElec&, RapportEcritureCao&)>& produire) {
+    const ConceptionElec* x = conceptionCourante();
+    if (!x) return;
+    const QString chemin = QFileDialog::getSaveFileName(this, titre, q(x->nom) + extension, QStringLiteral("%1 (*%2)").arg(titre, extension));
+    if (chemin.isEmpty()) return;
+    RapportEcritureCao r;
+    try {
+      prom::ecrireFichierAtomique(prom::cheminFichier(chemin.toStdString()), produire(*x, r));
+    } catch (const std::exception& e) {
+      afficherMessage(QStringLiteral("%1 : %2").arg(titre, QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+      return;
+    }
+    afficherMessage(QStringLiteral("<b>%1</b> écrit : %2 composant(s), %3 réseau(x), %4 segment(s) de piste, %5 via(s).%6")
+                        .arg(titre)
+                        .arg(r.composants)
+                        .arg(r.reseaux)
+                        .arg(r.pistes)
+                        .arg(r.vias)
+                        .arg(r.nonEcrits.empty() ? QString() : QStringLiteral("<br><b>Non transmis</b> : ") + liste(r.nonEcrits, 8)),
+                    r.nonEcrits.empty() ? NiveauMessage::Succes : NiveauMessage::Avertissement);
+  };
+  c["fabrication.exporterPads"] = [exporterCao] {
+    exporterCao(QStringLiteral("Carte PADS ASCII"), QStringLiteral(".asc"), [](const ConceptionElec& x, RapportEcritureCao& r) { return padsAsciiCarte(x, &r); });
+  };
+  c["fabrication.exporterPadsLogic"] = [exporterCao] {
+    exporterCao(QStringLiteral("Schéma PADS Logic"), QStringLiteral(".txt"), [](const ConceptionElec& x, RapportEcritureCao& r) { return padsAsciiSchema(x, &r); });
+  };
+  c["fabrication.exporterPcad"] = [exporterCao] {
+    exporterCao(QStringLiteral("Carte P-CAD ASCII"), QStringLiteral(".pcb"), [](const ConceptionElec& x, RapportEcritureCao& r) { return pcadAsciiCarte(x, &r); });
+  };
+  c["fabrication.archiveAltium"] = [exporterCao] {
+    exporterCao(QStringLiteral("Archive pour Altium"), QStringLiteral(".zip"), [](const ConceptionElec& x, RapportEcritureCao& r) { return prom::zipStocke(archivePourAltium(x, &r)); });
   };
   // Exports 3D de la carte équipée (10.10, 10.24)
   c["carte.exporter3D"] = [this] {

@@ -74,7 +74,7 @@
         {"titre": "Dossier", "forme": "grand", "actions": ["fabrication.dossier"]},
         {"titre": "Dessins", "forme": "grand", "actions": ["fabrication.dessinSchema", "fabrication.typon", "fabrication.planMontage", "fabrication.pdfCouches", "fabrication.preparerSerigraphie"]},
         {"titre": "Listes", "forme": "grand", "actions": ["fabrication.nomenclature", "fabrication.reseaux", "fabrication.signauxXlsx"]},
-        {"titre": "Échanges", "forme": "grand", "actions": ["fabrication.kicad", "fabrication.netlistKicad", "fabrication.netlistTierce", "fabrication.ipc"]},
+        {"titre": "Échanges", "forme": "grand", "actions": ["fabrication.kicad", "fabrication.netlistKicad", "fabrication.netlistTierce", "fabrication.exporterPads", "fabrication.exporterPadsLogic", "fabrication.exporterPcad", "fabrication.archiveAltium", "fabrication.ipc"]},
         {"titre": "Autres logiciels", "forme": "grille", "actions": ["fabrication.importerNetlist", "fabrication.dsn", "fabrication.ses", "fabrication.dxfMeca", "fabrication.boardview", "fabrication.ipc2581", "fabrication.gerberCarte"]},
         {"titre": "Boîtier", "forme": "grand", "actions": ["fabrication.boitier"]},
         {"titre": "Fabricant", "forme": "grille", "actions": ["fabrication.panneau", "fabrication.devis", "fabrication.controler", "fabrication.visionneuse"]}

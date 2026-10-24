@@ -282,6 +282,10 @@ RegistreActions::RegistreActions() {
   ajouter("composants.nomenclatureEntree", QStringLiteral("Nomenclature en entrée (CSV, XLSX)"), P::Atelier, {});
   ajouter("carte.importerDansCarte", QStringLiteral("Ajouter à la carte une carte d'un autre logiciel"), P::Atelier, {});
   ajouter("fabrication.netlistTierce", QStringLiteral("Netlist pour un autre logiciel (OrCAD, PADS, Allegro, CADSTAR, EDIF, SPICE, gEDA, TinyCAD, gabarit)"), P::Atelier, {});
+  ajouter("fabrication.exporterPads", QStringLiteral("Exporter la carte en PADS ASCII"), P::Atelier, {});
+  ajouter("fabrication.exporterPadsLogic", QStringLiteral("Exporter le schéma en PADS Logic"), P::Atelier, {});
+  ajouter("fabrication.exporterPcad", QStringLiteral("Exporter la carte en P-CAD ASCII"), P::Atelier, {});
+  ajouter("fabrication.archiveAltium", QStringLiteral("Archive pour Altium (KiCad, PADS, EDIF)"), P::Atelier, {});
   ajouter("carte.importerDessin", QStringLiteral("Poser un dessin DXF, SVG ou DWG sur une couche de la carte"), P::Atelier, {});
   ajouter("carte.exporterDxfCouches", QStringLiteral("DXF des couches de la carte (jeux enregistrés, miroir)"), P::Atelier, {});
   ajouter("carte.exporter3D", QStringLiteral("Exporter la carte en 3D (GLB, VRML, STL, COLLADA, AMF, OpenSCAD, XAO, STEP compressé)"), P::Atelier, {});
@@ -543,6 +547,10 @@ RegistreActions::RegistreActions() {
       {"composants.nomenclatureEntree", "Nomenclature en entrée…", "composants", "valeurs, fabricants, MPN et codes LCSC d’une nomenclature CSV ou XLSX, la liste des changements d’abord"},
       {"carte.importerDansCarte", "Ajouter une carte tierce…", "importer-cao", "carte KiCad ou EAGLE ajoutée à la carte ouverte : couches associées, repères renumérotés, un seul Ctrl+Z"},
       {"fabrication.netlistTierce", "Netlist tierce…", "fil", "OrCAD PCB II, PADS, Allegro, CADSTAR, EDIF, SPICE, gEDA, TinyCAD ou gabarit maison"},
+      {"fabrication.exporterPads", "PADS ASCII…", "exporter", "carte pour PADS Layout et KiCad 10 ; ce qui ne passe pas est listé"},
+      {"fabrication.exporterPadsLogic", "PADS Logic…", "exporter", "pièces et signaux du schéma"},
+      {"fabrication.exporterPcad", "P-CAD ASCII…", "exporter", "carte au format ACCEL_ASCII"},
+      {"fabrication.archiveAltium", "Pour Altium…", "exporter", "archive KiCad, PADS et EDIF que l’assistant d’import d’Altium lit"},
       {"carte.importerDessin", "Dessin DXF, SVG…", "dxf", "logo ou marquage sur la couche choisie, à la largeur voulue, discontinuités réparées"},
       {"carte.exporterDxfCouches", "DXF des couches…", "dxf", "un calque par couche, cotes comprises, jeux enregistrés avec leur miroir"},
       {"carte.exporter3D", "Export 3D…", "exporter", "GLB, VRML, STL, COLLADA, AMF, OpenSCAD, XAO ou STEP compressé, couleurs par face"},

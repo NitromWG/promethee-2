@@ -128,6 +128,36 @@ void essaisElectronique034L10(FenetrePrincipale& f, const Verifier& verifier) {
     verifier(ok && relies && a && a->mode() == AtelierElectronique::Circuit, "10.5 : projet EAGLE ouvert d'un geste, schéma et carte reliés (OUT sur IC1.1 et R3.1, sur deux feuilles)", detail);
   }
 
+  // ---------- 10.14 · Schéma KiCad 5 et circuit LTspice ouverts : réseaux de leurs propres netlists ----------
+  {
+    auto partition = [](const NetlistLue& n) {
+      std::set<std::set<std::string>> p;
+      for (const auto& [nom, noeuds] : n.reseaux) {
+        std::set<std::string> e;
+        for (const auto& [r, b] : noeuds) e.insert(r + "." + b);
+        if (e.size() > 1) p.insert(e);
+      }
+      return p;
+    };
+    std::string detail;
+    bool kicad5 = false, ltspice = false;
+    if (f.importerConceptionTierce(d + QStringLiteral("/kicad5/filtre.sch"), 0, false)) {
+      attendre(400);
+      const ConceptionElec& c = doc->projet().electronique.back();
+      const NetlistLue attendue = lireNetlist(prom::lireFichier(prom::cheminFichier((d + QStringLiteral("/kicad5/filtre.net")).toStdString())));
+      kicad5 = c.feuilles.size() == 2 && c.composants.size() == 5 && partition(netlistDe(c)) == partition(attendue);
+      detail += "KiCad 5 : " + std::to_string(c.composants.size()) + " composant(s), " + std::to_string(c.feuilles.size()) + " feuille(s) ; ";
+    }
+    if (f.importerConceptionTierce(d + QStringLiteral("/ltspice/rc.asc"), 0, false)) {
+      attendre(400);
+      const ConceptionElec& c = doc->projet().electronique.back();
+      const NetlistLue attendue = lireNetlist(prom::lireFichier(prom::cheminFichier((d + QStringLiteral("/ltspice/rc.net")).toStdString())));
+      ltspice = c.composants.size() == 4 && partition(netlistDe(c)) == partition(attendue) && c.extensions.count("directivesSpice") == 1;
+      detail += "LTspice : " + std::to_string(c.composants.size()) + " composant(s)";
+    }
+    verifier(kicad5 && ltspice, "10.14 : schéma KiCad 5 (cache et feuille fille) et circuit LTspice ouverts, réseaux identiques aux netlists que ces logiciels écrivent", detail);
+  }
+
   // ---------- 10.12 · Carte KiCad de quatre couches ajoutée à la carte ouverte, un seul Ctrl+Z la retire ----------
   {
     AtelierElectronique* a = ouvrir(f, carteDeMesure(20, false));

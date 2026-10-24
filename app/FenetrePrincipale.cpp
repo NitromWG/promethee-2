@@ -512,7 +512,7 @@ FenetrePrincipale::FenetrePrincipale(bool dansCoquille) : m_dansCoquille(dansCoq
   });
   m_importKicadMeca->setObjectName(QStringLiteral("menu:importKicadMeca"));
   // 0.34 (10.5, 10.12) : projets, schémas et cartes des autres logiciels, avec le tableau des couches
-  QAction* importTiers = fichier->addAction(QStringLiteral("Importer d’un autre logiciel (KiCad, EAGLE)…"), this, [this] {
+  QAction* importTiers = fichier->addAction(QStringLiteral("Importer d’un autre logiciel (KiCad, EAGLE, PADS, LTspice, Visio…)…"), this, [this] {
     const QString chemin = QFileDialog::getOpenFileName(this, QStringLiteral("Importer d’un autre logiciel"), QString(),
                                                         QStringLiteral("Projets, schémas et cartes (%1)").arg(QString::fromStdString(prom::ecad::filtreConceptionsTierces())));
     if (!chemin.isEmpty()) importerConceptionTierce(chemin, 1);

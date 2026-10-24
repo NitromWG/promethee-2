@@ -424,3 +424,235 @@ TEST_CASE("10.21 · DXF de toutes les couches et des cotes, un calque par couche
   CHECK(xmaxTout > 0);
   CHECK(xmaxDessous <= 1e-6);
 }
+
+#include "promethee/formats_cao.hpp"
+#include "promethee/import_commun.hpp"
+#include "promethee/kicad_electronique.hpp"
+
+namespace {
+using Paires = std::set<std::string>;
+// Réseau de chaque pastille posée, aux noms près : partition des pastilles par réseau
+std::set<std::set<std::string>> partitionPastilles(const ConceptionElec& c) {
+  std::map<std::string, std::set<std::string>> m;
+  const Connectivite k = connectivite(c);
+  for (const auto& p : pastilles(c, k))
+    if (!p.reseau.empty() && !p.numero.empty()) m[p.reseau].insert(p.reference + "." + p.numero);
+  std::set<std::set<std::string>> r;
+  for (const auto& [n, e] : m)
+    if (e.size() > 1) r.insert(e);
+  return r;
+}
+}  // namespace
+
+TEST_CASE("10.22 · carte exportée en PADS ASCII puis relue : mêmes réseaux et mêmes pistes, zones manquantes listées", "[034][L10][10.22][10.17]") {
+  const ConceptionElec c = exempleElectronique();
+  RapportEcritureCao r;
+  const std::string asc = padsAsciiCarte(c, &r);
+  CHECK(asc.rfind("!PADS-POWERPCB", 0) == 0);
+  CHECK(r.composants == static_cast<int>(c.circuit.empreintes.size()));
+  CHECK(std::count_if(r.nonEcrits.begin(), r.nonEcrits.end(), [](const std::string& x) { return x.rfind("zone de cuivre", 0) == 0; }) == static_cast<long>(c.circuit.zones.size()));
+  RapportLectureCao l;
+  const ConceptionElec relue = conceptionDepuisPads(std::nullopt, asc, "Relue", &l);
+  for (const auto& a : l.alertes) UNSCOPED_INFO(a);
+  CHECK(relue.circuit.empreintes.size() == c.circuit.empreintes.size());
+  CHECK(partitionPastilles(relue) == partitionPastilles(c));
+  std::size_t segments = 0;
+  for (const auto& p : c.circuit.pistes) segments += segmentsPiste(p, 20'000).size();
+  CHECK(relue.circuit.pistes.size() == segments);
+  CHECK(relue.circuit.vias.size() == c.circuit.vias.size());
+  // Mêmes pistes : chaque segment relu existe dans la carte d'origine, sur la même couche et le même réseau
+  int retrouvees = 0;
+  const Connectivite kr = connectivite(relue);
+  for (const auto& t : relue.circuit.pistes)
+    for (const auto& o : c.circuit.pistes)
+      if (o.couche == t.couche && distance(o.a, t.a) < 1000 && distance(o.b, t.b) < 1000) ++retrouvees;
+  CHECK(retrouvees == static_cast<int>(segments));
+  // Schéma en PADS Logic, relu seul
+  const std::string logic = padsAsciiSchema(c);
+  const ConceptionElec schema = conceptionDepuisPads(logic, std::nullopt, "Schéma");
+  CHECK(schema.schemaSeul);
+  // Par la chaîne d'import commune, le fichier est reconnu à son contenu
+  const auto imp = importerConceptionTierce("carte.asc", asc, {});
+  REQUIRE(imp);
+  CHECK(imp->logiciel == "PADS");
+}
+
+TEST_CASE("10.22 · P-CAD ASCII écrit puis relu ; archive pour Altium aux formats KiCad et PADS", "[034][L10][10.22][10.18]") {
+  const ConceptionElec c = exempleElectronique();
+  RapportEcritureCao r;
+  const std::string pcad = pcadAsciiCarte(c, &r);
+  CHECK(estPcadAscii(pcad));
+  CHECK(!r.nonEcrits.empty());
+  RapportLectureCao l;
+  const ConceptionElec relue = conceptionDepuisPcad(pcad, "Relue", &l);
+  for (const auto& a : l.alertes) UNSCOPED_INFO(a);
+  CHECK(relue.circuit.empreintes.size() == c.circuit.empreintes.size());
+  CHECK(partitionPastilles(relue) == partitionPastilles(c));
+  CHECK(relue.circuit.vias.size() == c.circuit.vias.size());
+  CHECK(relue.circuit.contour.libre.size() >= 4);
+  // Archive Altium : la carte KiCad qu'elle porte se relit aux mêmes réseaux
+  RapportEcritureCao ra;
+  const auto f = archivePourAltium(c, &ra);
+  REQUIRE(f.size() == 5);
+  const auto pcb = std::find_if(f.begin(), f.end(), [](const auto& x) { return x.first.size() > 10 && x.first.substr(x.first.size() - 10) == ".kicad_pcb"; });
+  REQUIRE(pcb != f.end());
+  CHECK(partitionPastilles(conceptionDepuisKicad(pcb->second, "Altium")) == partitionPastilles(c));
+  CHECK(!ra.nonEcrits.empty());
+}
+
+#include "promethee/import_schemas.hpp"
+#include "promethee/fichiers.hpp"
+
+namespace {
+std::string donnee14(const std::string& f) { return prom::lireFichier(prom::cheminFichier(std::string(PROMETHEE_DONNEES) + "/" + f)); }
+LecteurFichier lecteurDe(const std::string& dossier) {
+  return [dossier](const std::string& f) -> std::optional<std::string> {
+    try {
+      return donnee14(dossier + "/" + f);
+    } catch (const std::exception&) {
+      return std::nullopt;
+    }
+  };
+}
+std::string nomSansChemin(std::string n) {
+  const auto p = n.find_last_of('/');
+  return p == std::string::npos ? n : n.substr(p + 1);
+}
+// Réseau qui porte cette broche : son nom
+std::string reseauDe(const NetlistLue& n, const std::string& ref, const std::string& broche) {
+  for (const auto& [nom, noeuds] : n.reseaux)
+    for (const auto& [r, b] : noeuds)
+      if (r == ref && b == broche) return nom;
+  return {};
+}
+}  // namespace
+
+TEST_CASE("10.14 · projet KiCad 5 (.sch et cache .lib, feuille hiérarchique) : réseaux identiques à la netlist de KiCad 5", "[034][L10][10.14]") {
+  const std::string sch = donnee14("kicad5/filtre.sch");
+  REQUIRE(estSchemaKicad5(sch));
+  RapportImportSchema r;
+  const ConceptionElec c = conceptionDepuisKicad5(sch, "filtre", lecteurDe("kicad5"), &r);
+  for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+  CHECK(r.alertes.empty());
+  CHECK(r.feuilles == 2);
+  CHECK(r.blocs == 1);
+  CHECK(c.feuilles.size() == 2);
+  CHECK(c.feuilles.front().blocs.size() == 1);
+  CHECK(c.composants.size() == 5);
+  REQUIRE(c.parReference("R2"));
+  CHECK(c.parReference("R2")->valeur == "4k7");
+  CHECK(c.parReference("U1")->empreinte == "Package_SO:SOIC-14_3.9x8.7mm_P1.27mm");
+  const NetlistLue attendue = lireNetlist(donnee14("kicad5/filtre.net"));
+  REQUIRE(attendue.erreurs.empty());
+  const NetlistLue lue = netlistDe(c);
+  for (const auto& [nom, noeuds] : lue.reseaux) {
+    std::string x = nom + " :";
+    for (const auto& [ref, b] : noeuds) x += " " + ref + "." + b;
+    UNSCOPED_INFO(x);
+  }
+  CHECK(partitionDe(lue) == partitionDe(attendue));
+  // Noms donnés par les alimentations (broches cachées comprises) et les étiquettes
+  CHECK(reseauDe(lue, "U1", "7") == "GND");
+  CHECK(reseauDe(lue, "U1", "14") == "VCC");
+  CHECK(reseauDe(lue, "J1", "3") == "VCC");
+  CHECK(reseauDe(lue, "U1", "1") == "OUT");
+  CHECK(nomSansChemin(reseauDe(lue, "J1", "1")) == nomSansChemin(reseauDe(attendue, "J1", "1")));
+  CHECK(nomSansChemin(reseauDe(lue, "J1", "4")) == nomSansChemin(reseauDe(attendue, "J1", "4")));
+  // Par la chaîne commune : « .sch » de KiCad 5 reconnu à son contenu (EAGLE écrit du XML sous la même extension)
+  const auto imp = importerConceptionTierce("filtre.sch", sch, lecteurDe("kicad5"));
+  REQUIRE(imp);
+  CHECK(imp->logiciel == "KiCad 5");
+  CHECK(partitionDe(netlistDe(imp->conception)) == partitionDe(attendue));
+}
+
+TEST_CASE("10.14 · circuit LTspice (.asc) : réseaux identiques à la netlist d'LTspice, directive SPICE gardée", "[034][L10][10.14]") {
+  const std::string asc = donnee14("ltspice/rc.asc");
+  REQUIRE(estSchemaLtspice(asc));
+  RapportImportSchema r;
+  const ConceptionElec c = conceptionDepuisLtspice(asc, "rc", lecteurDe("ltspice"), &r);
+  for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+  CHECK(r.alertes.empty());
+  CHECK(c.composants.size() == 4);
+  REQUIRE(r.directives.size() == 1);
+  CHECK(r.directives.front() == ".tran 10m");
+  REQUIRE(c.extensions.count("directivesSpice"));
+  CHECK(c.extensions.at("directivesSpice").size() == 1);
+  CHECK(c.parReference("V1")->valeur == "PULSE(0 5 0 1n 1n 1m 2m)");
+  const NetlistLue attendue = lireNetlist(donnee14("ltspice/rc.net"));
+  const NetlistLue lue = netlistDe(c);
+  for (const auto& [nom, noeuds] : lue.reseaux) {
+    std::string x = nom + " :";
+    for (const auto& [ref, b] : noeuds) x += " " + ref + "." + b;
+    UNSCOPED_INFO(x);
+  }
+  CHECK(partitionDe(lue) == partitionDe(attendue));
+  CHECK(reseauDe(lue, "C1", "2") == "GND");
+  CHECK(reseauDe(lue, "R2", "2") == "GND");
+  CHECK(reseauDe(lue, "R1", "1") == "OUT");
+  CHECK(reseauDe(lue, "V1", "1") == "IN");
+  // Un symbole sans .asy connu est signalé, pas inventé
+  RapportImportSchema r2;
+  conceptionDepuisLtspice("Version 4\nSHEET 1 880 680\nSYMBOL Opamps\\\\LT1001 96 96 R0\nSYMATTR InstName U1\n", "x", {}, &r2);
+  CHECK(r2.alertes.size() == 1);
+  const auto imp = importerConceptionTierce("rc.asc", asc, lecteurDe("ltspice"));
+  REQUIRE(imp);
+  CHECK(imp->logiciel == "LTspice");
+}
+
+TEST_CASE("10.14 · synoptique Visio (.vsdx) : formes en blocs, connecteurs en liaisons du schéma fonctionnel", "[034][L10][10.14]") {
+  const std::string ns = R"( xmlns="http://schemas.microsoft.com/office/visio/2012/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships")";
+  auto forme = [](int id, double x, double y, const std::string& texte) {
+    return "<Shape ID=\"" + std::to_string(id) + "\" NameU=\"Process\" Type=\"Shape\" Master=\"2\"><Cell N=\"PinX\" V=\"" + std::to_string(x) + "\"/><Cell N=\"PinY\" V=\"" + std::to_string(y) +
+           "\"/><Cell N=\"Width\" V=\"1.5\"/><Cell N=\"Height\" V=\"0.75\"/><Text><cp IX=\"0\"/>" + texte + "</Text></Shape>";
+  };
+  auto connecteur = [](int id, const std::string& texte) {
+    return "<Shape ID=\"" + std::to_string(id) + "\" NameU=\"Dynamic connector\" Type=\"Shape\" Master=\"5\"><Cell N=\"BeginX\" V=\"0\"/><Cell N=\"EndX\" V=\"1\"/>" + (texte.empty() ? "" : "<Text>" + texte + "</Text>") + "</Shape>";
+  };
+  auto lien = [](int de, int debut, int fin) {
+    return "<Connect FromSheet=\"" + std::to_string(de) + "\" FromCell=\"BeginX\" FromPart=\"9\" ToSheet=\"" + std::to_string(debut) + "\" ToCell=\"PinX\" ToPart=\"3\"/><Connect FromSheet=\"" + std::to_string(de) +
+           "\" FromCell=\"EndX\" FromPart=\"12\" ToSheet=\"" + std::to_string(fin) + "\" ToCell=\"PinX\" ToPart=\"3\"/>";
+  };
+  const std::string page = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<PageContents" + ns + " xml:space=\"preserve\"><Shapes>" + forme(1, 2, 8, "Alimentation") + forme(2, 5, 8, "Microcontrôleur") + forme(3, 5, 5, "Capteurs") +
+                           connecteur(4, "5 V") + connecteur(5, "") + "</Shapes><Connects>" + lien(4, 1, 2) + lien(5, 2, 3) + "</Connects></PageContents>";
+  const std::string vsdx = prom::zipStocke({{"[Content_Types].xml", "<?xml version=\"1.0\"?><Types xmlns=\"http://schemas.openxmlformats.org/package/2006/content-types\"/>"},
+                                            {"visio/document.xml", "<?xml version=\"1.0\"?><VisioDocument" + ns + "/>"},
+                                            {"visio/pages/pages.xml", "<?xml version=\"1.0\"?><Pages" + ns + "><Page ID=\"0\" NameU=\"Page-1\"/></Pages>"},
+                                            {"visio/pages/page1.xml", page}});
+  RapportImportSchema r;
+  const ConceptionElec c = conceptionDepuisVisio(vsdx, "synoptique", &r);
+  for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+  CHECK(r.alertes.empty());
+  REQUIRE(c.feuilles.size() == 1);
+  const Feuille& f = c.feuilles.front();
+  REQUIRE(f.blocs.size() == 3);
+  CHECK(f.blocs[0].nom == "Alimentation");
+  CHECK(f.blocs[1].nom == "Microcontrôleur");
+  CHECK(r.liaisons == 2);
+  // Alimentation à gauche du microcontrôleur : port à droite de l'une, à gauche de l'autre, nommé du texte du
+  // connecteur ; les capteurs dessous : port en bas du microcontrôleur, en haut des capteurs
+  REQUIRE(f.blocs[0].ports.size() == 1);
+  CHECK(f.blocs[0].ports[0].cote == 1);
+  CHECK(f.blocs[0].ports[0].nom == "5 V");
+  REQUIRE(f.blocs[1].ports.size() == 2);
+  CHECK(f.blocs[1].ports[0].cote == 0);
+  CHECK(f.blocs[1].ports[1].cote == 3);
+  CHECK(f.blocs[2].ports.at(0).cote == 2);
+  // Chaque liaison est un chemin de fils continu d'un port à l'autre
+  auto relies = [&](Pt a, Pt b) {
+    std::set<std::pair<Nm, Nm>> atteints{{a.x, a.y}};
+    for (bool change = true; change;) {
+      change = false;
+      for (const auto& w : f.fils) {
+        const bool ia = atteints.count({w.a.x, w.a.y}), ib = atteints.count({w.b.x, w.b.y});
+        if (ia != ib) atteints.insert(ia ? std::pair{w.b.x, w.b.y} : std::pair{w.a.x, w.a.y}), change = true;
+      }
+    }
+    return atteints.count({b.x, b.y}) == 1;
+  };
+  CHECK(relies(f.blocs[0].ports[0].p, f.blocs[1].ports[0].p));
+  CHECK(relies(f.blocs[1].ports[1].p, f.blocs[2].ports[0].p));
+  CHECK(!relies(f.blocs[0].ports[0].p, f.blocs[2].ports[0].p));
+  const auto imp = importerConceptionTierce("synoptique.vsdx", vsdx, {});
+  REQUIRE(imp);
+  CHECK(imp->logiciel == "Visio");
+}

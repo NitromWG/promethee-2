@@ -1,0 +1,77 @@
+EESchema Schematic File Version 4
+EELAYER 30 0
+EELAYER END
+$Descr A4 11693 8268
+encoding utf-8
+Sheet 2 2
+Title ""
+Date ""
+Rev ""
+Comp ""
+Comment1 ""
+Comment2 ""
+Comment3 ""
+Comment4 ""
+$EndDescr
+Text HLabel 2000 2000 0    50   Input ~ 0
+E
+Wire Wire Line
+	2000 2000 2300 2000
+$Comp
+L Device:R R2
+U 1 1 5F8E7B01
+P 2450 2000
+AR Path="/5F8E7A10/5F8E7B01" Ref="R2"  Part="1" 
+F 0 "R2" V 2243 2000 50  0000 C CNN
+F 1 "4k7" V 2334 2000 50  0000 C CNN
+F 2 "Resistor_SMD:R_0805_2012Metric" V 2380 2000 50  0001 C CNN
+F 3 "~" H 2450 2000 50  0001 C CNN
+	1    2450 2000
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	2600 2000 2800 2000
+Wire Wire Line
+	2800 2000 3000 2000
+Connection ~ 2800 2000
+Text HLabel 3000 2000 2    50   Output ~ 0
+S
+Wire Wire Line
+	2800 2000 2800 2150
+$Comp
+L Device:C C1
+U 1 1 5F8E7B02
+P 2800 2300
+AR Path="/5F8E7A10/5F8E7B02" Ref="C1"  Part="1" 
+F 0 "C1" H 2915 2346 50  0000 L CNN
+F 1 "100n" H 2915 2255 50  0000 L CNN
+F 2 "Capacitor_SMD:C_0805_2012Metric" H 2838 2150 50  0001 C CNN
+F 3 "~" H 2800 2300 50  0001 C CNN
+	1    2800 2300
+	1    0    0    -1  
+$EndComp
+$Comp
+L power:GND #PWR03
+U 1 1 5F8E7B03
+P 2800 2450
+F 0 "#PWR03" H 2800 2200 50  0001 C CNN
+F 1 "GND" H 2805 2277 50  0000 C CNN
+F 2 "" H 2800 2450 50  0001 C CNN
+F 3 "" H 2800 2450 50  0001 C CNN
+	1    2800 2450
+	1    0    0    -1  
+$EndComp
+Wire Wire Line
+	2800 2450 3100 2450
+$Comp
+L power:PWR_FLAG #FLG01
+U 1 1 5F8E7B04
+P 3100 2450
+F 0 "#FLG01" H 3100 2525 50  0001 C CNN
+F 1 "PWR_FLAG" H 3100 2623 50  0000 C CNN
+F 2 "" H 3100 2450 50  0001 C CNN
+F 3 "~" H 3100 2450 50  0001 C CNN
+	1    3100 2450
+	1    0    0    -1  
+$EndComp
+$EndSCHEMATC
