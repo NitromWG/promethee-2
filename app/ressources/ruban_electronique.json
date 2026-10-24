@@ -7,7 +7,7 @@
       "titre": "Schéma",
       "groupes": [
         {"titre": "Composant", "forme": "grand", "actions": ["schema.choisirComposant", "bibliotheque.articles", "composant.creer"]},
-        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats"]},
+        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats", "bibliotheque.importerAutres", "composants.nomenclatureEntree"]},
         {"titre": "Fil", "forme": "grand", "actions": ["schema.fil"]},
         {"titre": "Étiquette", "forme": "grand", "actions": ["schema.etiquette", "schema.etiquetteGlobale"]},
         {"titre": "Alimentation", "forme": "grand", "actions": ["schema.alimentation.gnd", "schema.alimentation.5v", "schema.alimentation.3v3", "schema.alimentation.12v", "schema.alimentation.vcc", "schema.drapeauAlimentation"]},
@@ -50,7 +50,7 @@
         {"titre": "Grille et unité", "forme": "controle", "actions": ["circuit.grilleUnite"]},
         {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes", "regles.signauxSerie", "regles.gabaritInterface", "regles.profilImpedance"]},
         {"titre": "Réseaux", "forme": "grand", "actions": ["vue.reseaux"]},
-        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf"]}
+        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf", "carte.importerDansCarte", "carte.exporter3D", "carte.idxEnvoyer", "carte.idxRecevoir", "carte.idxHistorique"]}
       ]
     },
     {

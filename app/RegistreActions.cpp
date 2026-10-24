@@ -278,6 +278,13 @@ RegistreActions::RegistreActions() {
   ajouter("fabrication.signauxXlsx", QStringLiteral("Récapitulatif des signaux (XLSX)"), P::Atelier, {});
   ajouter("fabrication.preparerSerigraphie", QStringLiteral("Préparer la sérigraphie pour la fabrication"), P::Atelier, {});
   ajouter("regles.signauxSerie", QStringLiteral("Signaux à travers les composants série"), P::Atelier, {});
+  ajouter("bibliotheque.importerAutres", QStringLiteral("Importer des bibliothèques d'autres logiciels (KiCad, EAGLE)"), P::Atelier, {});
+  ajouter("composants.nomenclatureEntree", QStringLiteral("Nomenclature en entrée (CSV, XLSX)"), P::Atelier, {});
+  ajouter("carte.importerDansCarte", QStringLiteral("Ajouter à la carte une carte d'un autre logiciel"), P::Atelier, {});
+  ajouter("carte.exporter3D", QStringLiteral("Exporter la carte en 3D (GLB, VRML, STL, COLLADA, AMF, OpenSCAD, XAO, STEP compressé)"), P::Atelier, {});
+  ajouter("carte.idxEnvoyer", QStringLiteral("Envoyer la carte à la mécanique (IDX)"), P::Atelier, {});
+  ajouter("carte.idxRecevoir", QStringLiteral("Recevoir une proposition de la mécanique (IDX)"), P::Atelier, {});
+  ajouter("carte.idxHistorique", QStringLiteral("Historique des échanges IDX"), P::Atelier, {});
   ajouter("regles.gabaritInterface", QStringLiteral("Gabarit d'interface (USB, HDMI, PCIe, DDR…)"), P::Atelier, {});
   ajouter("regles.profilImpedance", QStringLiteral("Profil d'impédance d'une classe"), P::Atelier, {});
   ajouter("circuit.routerStrategies", QStringLiteral("Routage par stratégies comparées"), P::Atelier, {});
@@ -529,6 +536,13 @@ RegistreActions::RegistreActions() {
       {"fabrication.signauxXlsx", "Signaux (XLSX)…", "exporter", "signaux, paires et groupes d’accord avec leurs longueurs et retards"},
       {"fabrication.preparerSerigraphie", "Préparer la sérigraphie…", "texte", "traits rognés autour des pastilles, repères écartés, hors carte supprimé ; la liste d’abord"},
       {"regles.signauxSerie", "Signaux série", "fil", "un signal suivi à travers les résistances, condensateurs et ferrites série"},
+      {"bibliotheque.importerAutres", "Bibliothèques tierces…", "importer-cao", "KiCad (.kicad_sym, .pretty) et EAGLE (.lbr) vers la bibliothèque personnelle ou d’équipe, avec un rapport par objet"},
+      {"composants.nomenclatureEntree", "Nomenclature en entrée…", "composants", "valeurs, fabricants, MPN et codes LCSC d’une nomenclature CSV ou XLSX, la liste des changements d’abord"},
+      {"carte.importerDansCarte", "Ajouter une carte tierce…", "importer-cao", "carte KiCad ou EAGLE ajoutée à la carte ouverte : couches associées, repères renumérotés, un seul Ctrl+Z"},
+      {"carte.exporter3D", "Export 3D…", "exporter", "GLB, VRML, STL, COLLADA, AMF, OpenSCAD, XAO ou STEP compressé, couleurs par face"},
+      {"carte.idxEnvoyer", "Envoyer en IDX…", "exporter", "ligne de base pour la mécanique : contour, trous, composants, zones, cuivre au choix"},
+      {"carte.idxRecevoir", "Recevoir un IDX…", "importer-cao", "proposition de la mécanique : chaque changement accepté ou refusé, une commande"},
+      {"carte.idxHistorique", "Échanges IDX", "rapport", "envois et propositions reçues, avec ce qui a été accepté"},
       {"regles.gabaritInterface", "Gabarit d’interface…", "contraintes", "USB, HDMI, PCIe, MIPI, Ethernet, DDR3, DDR4 : signaux, paires, classes et règles d’un geste"},
       {"regles.profilImpedance", "Profil d’impédance…", "calcul", "largeur par couche pour une impédance visée, suivie par le routeur au changement de couche"},
       {"circuit.routerStrategies", "Router par stratégies…", "piste", "deux stratégies essayées sur une copie, la meilleure appliquée en une commande"},

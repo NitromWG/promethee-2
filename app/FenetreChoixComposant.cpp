@@ -6,6 +6,7 @@
 #include <QCheckBox>
 #include <QDragEnterEvent>
 #include <QDropEvent>
+#include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QFormLayout>
@@ -27,6 +28,7 @@
 #include "ZoneMessages.hpp"
 #include "promethee/articles.hpp"
 #include "promethee/fichiers.hpp"
+#include "promethee/import_easyeda.hpp"
 
 using namespace prom::ecad;
 
@@ -136,7 +138,8 @@ FenetreChoixComposant::FenetreChoixComposant(AtelierElectronique& a, QWidget* pa
   connect(m_semblables, &QPushButton::clicked, this, [this] { semblables(); });
   connect(m_generique, &QPushButton::clicked, this, [this] { poserGenerique(); });
   connect(archive, &QPushButton::clicked, this, [this] {
-    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Archive d’un portail"), {}, QStringLiteral("Archives (*.zip)"));
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Archive d’un portail ou composant LCSC"), {},
+                                                   QStringLiteral("Archives et composants (*.zip *.json);;Archives des portails (*.zip);;Composants EasyEDA et LCSC (*.json)"));
     if (!f.isEmpty()) importerArchive(f);
   });
   connect(standard, &QPushButton::clicked, this, [this] { m_atelier.ouvrirStandardisation(); });
@@ -262,7 +265,25 @@ std::string FenetreChoixComposant::importerArchive(const QString& chemin) {
                               NiveauMessage::Erreur);
     return {};
   }
-  const ImportArchive imp = importerArchiveComposant(contenu, QFileInfo(chemin).fileName().toStdString());
+  ImportArchive imp;
+  if (chemin.endsWith(QStringLiteral(".json"), Qt::CaseInsensitive)) {
+    // Composant EasyEDA ou LCSC (10.6) : le modèle 3D enregistré à côté, nommé d'après son identifiant, le code LCSC
+    // ou le fichier JSON
+    const QFileInfo i(chemin);
+    const QString uuid = q(uuidModeleEasyEda(contenu));
+    std::string modele, nomModele;
+    for (const QFileInfo& m : i.dir().entryInfoList({QStringLiteral("*.obj"), QStringLiteral("*.step"), QStringLiteral("*.stp")}, QDir::Files)) {
+      if (m.completeBaseName() != i.completeBaseName() && (uuid.isEmpty() || m.completeBaseName() != uuid)) continue;
+      try {
+        modele = prom::lireFichier(prom::cheminFichier(m.filePath().toStdString()));
+        nomModele = m.fileName().toStdString();
+        break;
+      } catch (const std::exception&) {
+      }
+    }
+    imp = importerComposantEasyEda(contenu, modele, nomModele);
+  } else
+    imp = importerArchiveComposant(contenu, QFileInfo(chemin).fileName().toStdString());
   if (imp.symboles.empty() || !imp.empreinte) {
     QStringList raisons;
     for (const auto& x : imp.alertes) raisons << q(x).toHtmlEscaped();
@@ -286,7 +307,7 @@ std::string FenetreChoixComposant::importerArchive(const QString& chemin) {
 void FenetreChoixComposant::dragEnterEvent(QDragEnterEvent* e) {
   if (e->mimeData()->hasUrls())
     for (const QUrl& u : e->mimeData()->urls())
-      if (u.isLocalFile() && u.toLocalFile().endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive)) {
+      if (u.isLocalFile() && (u.toLocalFile().endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive) || u.toLocalFile().endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))) {
         e->acceptProposedAction();
         return;
       }
@@ -294,6 +315,6 @@ void FenetreChoixComposant::dragEnterEvent(QDragEnterEvent* e) {
 
 void FenetreChoixComposant::dropEvent(QDropEvent* e) {
   for (const QUrl& u : e->mimeData()->urls())
-    if (u.isLocalFile() && u.toLocalFile().endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive)) importerArchive(u.toLocalFile());
+    if (u.isLocalFile() && (u.toLocalFile().endsWith(QStringLiteral(".zip"), Qt::CaseInsensitive) || u.toLocalFile().endsWith(QStringLiteral(".json"), Qt::CaseInsensitive))) importerArchive(u.toLocalFile());
   e->acceptProposedAction();
 }

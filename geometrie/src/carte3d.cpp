@@ -1,5 +1,7 @@
 // Prométhée : vue 3D d'une carte électronique. Licence GPL-3.0-only.
 #include "promethee/carte3d.hpp"
+
+#include <TopExp_Explorer.hxx>
 #include "promethee/derive.hpp"
 #include "promethee/fichiers.hpp"
 #include "promethee/hauteurs.hpp"
@@ -200,6 +202,19 @@ std::vector<PieceNommee> piecesCarte(const ConceptionElec& c) {
     x.forme = s;
     couleurDe(d->corps.couleur, x.r, x.g, x.b);
     r.push_back(x);
+  }
+  return r;
+}
+
+std::vector<PieceNommee> piecesCarteCouleurs(const ConceptionElec& c) {
+  std::vector<PieceNommee> r = piecesCarte(c);
+  if (r.empty()) return r;
+  const Carte3D m = construireCarte3D(c, false);
+  r.front().forme = m.forme;
+  for (const auto& [forme, couleur] : m.couleurs) {
+    std::array<double, 3> rgb{};
+    couleurDe(couleur, rgb[0], rgb[1], rgb[2]);
+    for (TopExp_Explorer ex(forme, TopAbs_FACE); ex.More(); ex.Next()) r.front().couleursFaces.push_back({ex.Current(), rgb});
   }
   return r;
 }

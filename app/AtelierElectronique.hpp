@@ -141,6 +141,11 @@ class AtelierElectronique : public QWidget {
   std::vector<prom::ecad::Article> articlesDisponibles() const;
   void armerArticle(const prom::ecad::Article& a);  // pose armée au schéma, la feuille reste utilisable
   void rangerArchive(const prom::ecad::ImportArchive& imp);  // symbole, empreinte, modèle 3D et article rangés
+  // Imports des autres logiciels (0.34, lot L10) : bibliothèques avec le rapport par objet, nomenclature en entrée
+  class DialogueImportBibliotheques* importBibliotheques();
+  class DialogueNomenclatureEntree* nomenclatureEntree();
+  // Proposition IDX de la mécanique (10.24) : le dialogue des changements ; sans dialogue, tous acceptés
+  bool recevoirIdx(const QString& chemin, bool dialogue = true);
   void ouvrirChoixComposant(const QString& recherche = {});
   class FenetreChoixComposant* choixComposant() const;
   void ouvrirChoixEmpreinte(std::vector<std::string> composants = {});
@@ -364,6 +369,9 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandes();
   void enregistrerCommandesCuivre();  // commandes du cuivre et de la carte (lot L5, OutilsCuivre.cpp)
   void enregistrerCommandesL8();      // fabrication, signaux, impédance, routage par stratégies (0.34, OutilsFabrication034.cpp)
+  void enregistrerCommandesL10();     // imports des autres logiciels (0.34, ImportsTiers034.cpp)
+  QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
+  QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
   QWidget* controleCouches();
   QWidget* controleGrille();
   std::map<std::string, std::function<void()>, std::less<>> m_commandes;

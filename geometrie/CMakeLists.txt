@@ -1,4 +1,4 @@
-add_library(promethee_geometrie src/geometrie.cpp src/echanges.cpp src/construction.cpp src/dessin.cpp src/assemblage.cpp src/fabrication.cpp src/carte3d.cpp src/mince.cpp src/tolerie.cpp src/import_cao.cpp src/mesure.cpp src/cotes_modele.cpp src/distances3d.cpp src/rendu_carte.cpp)
+add_library(promethee_geometrie src/geometrie.cpp src/echanges.cpp src/construction.cpp src/dessin.cpp src/assemblage.cpp src/fabrication.cpp src/carte3d.cpp src/mince.cpp src/tolerie.cpp src/import_cao.cpp src/mesure.cpp src/cotes_modele.cpp src/distances3d.cpp src/rendu_carte.cpp src/exports3d.cpp)
 add_library(Promethee::geometrie ALIAS promethee_geometrie)
 target_include_directories(promethee_geometrie PUBLIC include)
 target_include_directories(promethee_geometrie SYSTEM PUBLIC ${OpenCASCADE_INCLUDE_DIR})

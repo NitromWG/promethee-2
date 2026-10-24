@@ -105,6 +105,11 @@ private:
   // Import électrique d'une carte KiCad (EL-36) : empreintes, cuivre, réseaux, règles du .kicad_pro voisin ;
   // dans un nouveau projet, ou ajoutée au projet ouvert. Rend faux si rien n'a été importé.
   bool importerKicadElectronique(const QString& chemin, bool nouveauProjet);
+  // Import d'un autre logiciel (0.34, 10.5, 10.12 ; ImportsTiers034.cpp) : projet, schéma ou carte KiCad ou EAGLE ;
+  // le dialogue montre le tableau des couches, les repères renumérotés et les réseaux homonymes ; « cible » : 0
+  // nouveau projet, 1 ajoutée au projet, 2 dans la carte ouverte (une seule modification annulable). Sans dialogue
+  // (essais), les propositions sont retenues telles quelles.
+  bool importerConceptionTierce(const QString& chemin, int cible, bool dialogue = true);
  private:
   void suivreConceptionsElec();
   class BarreTitre* m_barreTitre = nullptr;

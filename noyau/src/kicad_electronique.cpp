@@ -512,6 +512,10 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
   if (const Expr* ls = racine.enfant("layers"))
     for (const auto& l : ls->elements)
       if (l.liste && l.valeur(1).size() > 3 && l.valeur(1).compare(l.valeur(1).size() - 3, 3, ".Cu") == 0) ++cuivres;
+  // Noms donnés aux couches dans KiCad (« (0 "F.Cu" signal "Dessus") ») : gardés pour le tableau d'association (10.12)
+  if (const Expr* ls = racine.enfant("layers"))
+    for (const auto& l : ls->elements)
+      if (l.liste && !l.valeur(3).empty() && coucheDepuisCode(l.valeur(1))) c.extensions["importCouches"][l.valeur(1)] = l.valeur(1) + " « " + l.valeur(3) + " »";
   // Toutes les couches de cuivre (0.34 : jusqu'à 32)
   c.circuit.empilage.couchesCuivre = std::clamp(cuivres, 1, 32);
   r.couchesCuivre = cuivres;

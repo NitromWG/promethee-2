@@ -23,6 +23,8 @@ Carte3D modele3DCarte(const ecad::ConceptionElec& c);
 // Pièces de la carte équipée (6.9, MEC-07, T10) : la carte (plaque et cuivre), puis un produit par composant, nommé de
 // son repère et de sa valeur, à sa couleur ; un modèle exact remplace la boîte
 std::vector<PieceNommee> piecesCarte(const ecad::ConceptionElec& c);
+// Mêmes pièces, la carte avec ses couleurs par face (vernis, pastilles, sérigraphie) : exports 3D de 10.10
+std::vector<PieceNommee> piecesCarteCouleurs(const ecad::ConceptionElec& c);
 void exporterStepCarte(const ecad::ConceptionElec& c, const std::string& chemin, const OptionsStep& options = {});
 // Corps d'un composant posé, dans le repère de la carte : son modèle exact s'il en a un, calé et réglé, sinon sa boîte
 TopoDS_Shape corpsComposant(const ecad::ConceptionElec& c, const ecad::EmpreintePlacee& e);

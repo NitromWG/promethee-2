@@ -80,6 +80,7 @@
 #include "promethee/import_cao.hpp"
 #include "promethee/kicad.hpp"
 #include "promethee/kicad_electronique.hpp"
+#include "promethee/import_commun.hpp"
 #include "promethee/placement.hpp"
 
 using namespace prom;
@@ -510,6 +511,13 @@ FenetrePrincipale::FenetrePrincipale(bool dansCoquille) : m_dansCoquille(dansCoq
     if (!chemin.isEmpty()) importerKicadElectronique(chemin, false);
   });
   m_importKicadMeca->setObjectName(QStringLiteral("menu:importKicadMeca"));
+  // 0.34 (10.5, 10.12) : projets, schémas et cartes des autres logiciels, avec le tableau des couches
+  QAction* importTiers = fichier->addAction(QStringLiteral("Importer d’un autre logiciel (KiCad, EAGLE)…"), this, [this] {
+    const QString chemin = QFileDialog::getOpenFileName(this, QStringLiteral("Importer d’un autre logiciel"), QString(),
+                                                        QStringLiteral("Projets, schémas et cartes (%1)").arg(QString::fromStdString(prom::ecad::filtreConceptionsTierces())));
+    if (!chemin.isEmpty()) importerConceptionTierce(chemin, 1);
+  });
+  importTiers->setObjectName(QStringLiteral("menu:importTiers"));
   m_importKicadElec->setObjectName(QStringLiteral("menu:importKicadElec"));
   m_actionsMeca << m_importKicadMeca;
   fichier->addAction(icone(QStringLiteral("cablage")), QStringLiteral("Importer un projet QElectroTech (.qet)…"), this, [this] {

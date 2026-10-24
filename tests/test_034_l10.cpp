@@ -544,3 +544,111 @@ TEST_CASE("10.6 · nomenclature CSV en entrée : plages de repères, champs reco
   CHECK(c.composants[4].lcsc == "C14663");
   CHECK(r.changements.size() == apercu.changements.size());
 }
+
+#include "promethee/import_commun.hpp"
+
+namespace {
+const char* const CARTE_4_COUCHES = R"((kicad_pcb (version 20221018) (generator pcbnew)
+  (general (thickness 1.6))
+  (layers (0 "F.Cu" signal) (1 "In1.Cu" signal "Masse") (2 "In2.Cu" signal) (31 "B.Cu" signal) (36 "B.SilkS" user) (37 "F.SilkS" user) (44 "Edge.Cuts" user))
+  (net 0 "") (net 1 "GND") (net 2 "SIG")
+  (gr_rect (start 0 0) (end 30 20) (layer "Edge.Cuts") (width 0.1))
+  (footprint "Resistor_SMD:R_0603_1608Metric" (layer "F.Cu") (at 10 10)
+    (property "Reference" "R1") (property "Value" "10k")
+    (pad "1" smd roundrect (at -0.8 0) (size 0.8 0.95) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.25) (net 1 "GND"))
+    (pad "2" smd roundrect (at 0.8 0) (size 0.8 0.95) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.25) (net 2 "SIG")))
+  (footprint "Resistor_SMD:R_0603_1608Metric" (layer "F.Cu") (at 20 10)
+    (property "Reference" "R2") (property "Value" "10k")
+    (pad "1" smd roundrect (at -0.8 0) (size 0.8 0.95) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.25) (net 2 "SIG"))
+    (pad "2" smd roundrect (at 0.8 0) (size 0.8 0.95) (layers "F.Cu" "F.Paste" "F.Mask") (roundrect_rratio 0.25) (net 1 "GND")))
+  (segment (start 10.8 10) (end 12 10) (width 0.25) (layer "F.Cu") (net 2))
+  (via (at 12 10) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu") (net 2))
+  (segment (start 12 10) (end 18 10) (width 0.25) (layer "In1.Cu") (net 2))
+  (via (at 18 10) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu") (net 2))
+  (segment (start 18 10) (end 19.2 10) (width 0.25) (layer "F.Cu") (net 2))
+  (segment (start 5 15) (end 25 15) (width 0.5) (layer "In2.Cu") (net 1))
+)
+)";
+}  // namespace
+
+TEST_CASE("10.12 · carte KiCad de quatre couches ajoutée à une carte de 20 composants : couches associées sans retouche, aucun repère en double", "[034][L10][10.12]") {
+  ConceptionElec ouverte = carteDeMesure(20, false);
+  const std::size_t n0 = ouverte.composants.size();
+  REQUIRE(n0 >= 20);
+  REQUIRE(ouverte.circuit.empilage.couchesCuivre == 2);
+  ConceptionElec ajout = conceptionDepuisKicad(CARTE_4_COUCHES, "Ajout");
+  REQUIRE(ajout.circuit.empilage.couchesCuivre == 4);
+  // Tableau des couches : proposé sans retouche, noms d'origine montrés, quatre cuivres demandés
+  const AssociationCouches a = proposerAssociation("KiCad", ajout, ouverte.circuit.empilage.couchesCuivre);
+  CHECK(a.cuivresNecessaires == 4);
+  std::map<std::string, std::string> vu;
+  for (const auto& l : a.lignes) vu[l.origine] = l.cible ? codeCouche(*l.cible) : "";
+  CHECK(vu["F.Cu"] == "F.Cu");
+  CHECK(vu["In1.Cu « Masse »"] == "In1.Cu");
+  CHECK(vu["In2.Cu"] == "In2.Cu");
+  CHECK(vu["B.Cu"] == "B.Cu");
+  CHECK(appliquerAssociation(ajout, a) == 0);
+  // L'association gardée pour KiCad l'emporte à l'import suivant : In2.Cu ignorée
+  auto gardee = associationAGarder(a);
+  gardee["In2.Cu"] = "";
+  ConceptionElec ajout2 = ajout;
+  const AssociationCouches a2 = proposerAssociation("KiCad", ajout2, 2, gardee);
+  CHECK(appliquerAssociation(ajout2, a2) == 1);
+  CHECK(ajout2.circuit.pistes.size() == ajout.circuit.pistes.size() - 1);
+  // Aperçu puis fusion : R1 et R2 renumérotés, GND homonyme montré, carte posée à droite
+  const RapportFusion apercu = apercuFusion(ouverte, ajout);
+  CHECK(apercu.renumerotes.size() == 2);
+  CHECK(std::find(apercu.homonymes.begin(), apercu.homonymes.end(), "GND") != apercu.homonymes.end());
+  const std::size_t pistesAvant = ouverte.circuit.pistes.size();
+  const RapportFusion r = fusionnerConception(ouverte, ajout);
+  CHECK(r.renumerotes == apercu.renumerotes);
+  CHECK(ouverte.composants.size() == n0 + 2);
+  std::set<std::string> refs;
+  for (const auto& x : ouverte.composants) CHECK(refs.insert(x.reference).second);
+  CHECK(ouverte.circuit.empilage.couchesCuivre == 4);
+  CHECK(ouverte.circuit.pistes.size() == pistesAvant + 4);
+  CHECK(std::count_if(ouverte.circuit.pistes.begin(), ouverte.circuit.pistes.end(), [](const Piste& p) { return p.couche == Couche::CuivreInt1; }) == 1);
+  CHECK(std::count_if(ouverte.circuit.pistes.begin(), ouverte.circuit.pistes.end(), [](const Piste& p) { return p.couche == Couche::CuivreInt2; }) == 1);
+  // Les pastilles des résistances ajoutées gardent leurs réseaux, et le cuivre ajouté ne court-circuite rien
+  const Connectivite k = connectivite(ouverte);
+  for (const auto& [ancien, nouveau] : r.renumerotes) {
+    const ComposantElec* x = ouverte.parReference(nouveau);
+    REQUIRE(x);
+    CHECK(!k.nom(x->uuid, "1").empty());
+  }
+  const auto v = verifierDRC(ouverte, k, remplirZones(ouverte, k));
+  CHECK(std::none_of(v.begin(), v.end(), [](const Violation& x) { return x.code == "DRC-21"; }));
+}
+
+TEST_CASE("10.12 · schéma et carte KiCad lus séparément puis reliés par les repères, le cuivre suit les noms du schéma", "[034][L10][10.12]") {
+  std::string sch = "(kicad_sch (version 20230121) (generator eeschema)\n  (uuid 33333333-3333-3333-3333-333333333333)\n  (paper \"A4\")\n" + std::string(LIB_KICAD);
+  const std::string chemin = "/33333333-3333-3333-3333-333333333333";
+  sch += symboleKicad("Device:R", "R1", "1k", 100, 50, 0, chemin, nouvelUuid());
+  sch += symboleKicad("Device:R", "R2", "2k", 120, 50, 0, chemin, nouvelUuid());
+  sch += "  (symbol (lib_id \"power:+5V\") (at 100 40 0) (unit 1) (in_bom yes) (on_board yes) (uuid " + nouvelUuid() +
+         ")\n    (property \"Reference\" \"#PWR01\" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))\n    (property \"Value\" \"+5V\" (at 0 0 0) (effects (font (size 1.27 1.27)))))\n";
+  sch += "  (symbol (lib_id \"power:GND\") (at 120 60 0) (unit 1) (in_bom yes) (on_board yes) (uuid " + nouvelUuid() +
+         ")\n    (property \"Reference\" \"#PWR02\" (at 0 0 0) (effects (font (size 1.27 1.27)) hide))\n    (property \"Value\" \"GND\" (at 0 0 0) (effects (font (size 1.27 1.27)))))\n";
+  sch += fil(100, 40, 100, 46.19) + fil(100, 53.81, 110, 53.81) + fil(110, 53.81, 110, 46.19) + fil(110, 46.19, 120, 46.19) + fil(120, 53.81, 120, 60) + ")\n";
+  ConceptionElec schema = conceptionDepuisSchemaKicad(sch, "Projet", [](const std::string&) { return std::optional<std::string>(); });
+  REQUIRE(schema.composants.size() == 2);
+  std::string pcb = CARTE_4_COUCHES;
+  // Sur la carte, le réseau du milieu porte le nom automatique de KiCad
+  for (std::size_t p; (p = pcb.find("\"SIG\"")) != std::string::npos;) pcb.replace(p, 5, "\"Net-(R1-Pad2)\"");
+  for (std::size_t p; (p = pcb.find("(net 1 \"GND\"))")) != std::string::npos;) pcb.replace(p, 14, "(net 3 \"+5V\"))");
+  pcb.replace(pcb.find("(net 2 \"Net-(R1-Pad2)\")"), 0, "(net 3 \"+5V\") ");
+  const ConceptionElec carte = conceptionDepuisKicad(pcb, "Projet");
+  const RapportLiaison r = relierCarteAuSchema(schema, carte);
+  CHECK(r.relies == 2);
+  CHECK(r.carteSeule.empty());
+  CHECK(r.schemaSeul.empty());
+  CHECK(schema.circuit.empreintes.size() == 2);
+  CHECK(schema.circuit.empilage.couchesCuivre == 4);
+  const Connectivite k = connectivite(schema);
+  const std::string milieu = k.nom(schema.parReference("R1")->uuid, "2");
+  CHECK(milieu == k.nom(schema.parReference("R2")->uuid, "1"));
+  CHECK(k.nom(schema.parReference("R1")->uuid, "1") == "+5V");
+  // Les pistes du réseau du milieu portent le nom du schéma
+  CHECK(std::count_if(schema.circuit.pistes.begin(), schema.circuit.pistes.end(), [&](const Piste& p) { return p.reseau == milieu; }) == 3);
+  CHECK(std::count_if(schema.circuit.vias.begin(), schema.circuit.vias.end(), [&](const Via& v) { return v.reseau == milieu; }) == 2);
+}

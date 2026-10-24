@@ -495,6 +495,20 @@ ConceptionElec conceptionDepuisEagle(const std::optional<std::string>& schema, c
       if (n >= 2) cuivres = n % 2 ? n + 1 : n;
     }
     c.circuit.empilage.couchesCuivre = std::clamp(cuivres, 2, 16);
+    // Noms d'origine des couches, pour le tableau d'association (10.12)
+    if (const NoeudXml* ls = chemin(racine, {"drawing", "layers"}))
+      for (const auto* l : ls->tous("layer")) {
+        const int num = static_cast<int>(reel(l->attr("number")));
+        std::optional<Couche> k;
+        if (num >= 1 && num <= 16) k = coucheCuivreEagle(num, c.circuit.empilage.couchesCuivre);
+        else if (num == 20) k = Couche::Contour;
+        else if (num == 21 || num == 22) k = num == 21 ? Couche::SerigraphieDessus : Couche::SerigraphieDessous;
+        else if (num == 29 || num == 30) k = num == 29 ? Couche::VernisDessus : Couche::VernisDessous;
+        else if (num == 31 || num == 32) k = num == 31 ? Couche::PateDessus : Couche::PateDessous;
+        else if (num == 35 || num == 36) k = num == 35 ? Couche::ColleDessus : Couche::ColleDessous;
+        else if (num == 51 || num == 52) k = num == 51 ? Couche::FabricationDessus : Couche::FabricationDessous;
+        if (k && (num < 2 || num > 15 || l->attr("active", "yes") == "yes")) c.extensions["importCouches"][codeCouche(*k)] = std::to_string(num) + " " + l->attr("name");
+      }
     std::map<std::string, Bibliotheque> bibsCarte;
     for (const auto* l : enfants(brd->enfant("libraries"), "library")) bibsCarte[l->attr("name")] = lireBibliotheque(*l);
     // Contour : traits de la couche Dimension (20)

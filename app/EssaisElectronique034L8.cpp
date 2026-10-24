@@ -3,6 +3,7 @@
 // stratégies en une commande annulable (8.28). Chaque essai passe par la commande du ruban et ses boîtes de dialogue.
 // Licence GPL-3.0-only.
 #include <algorithm>
+#include <cstdio>
 #include <functional>
 #include <string>
 
@@ -22,6 +23,7 @@
 #include <QTimer>
 
 #include "AtelierElectronique.hpp"
+#include "EssaisReponses034.hpp"
 #include "Document.hpp"
 #include "FenetrePrincipale.hpp"
 #include "VueCircuit.hpp"
@@ -34,6 +36,7 @@
 
 using namespace prom::ecad;
 using Verifier = std::function<void(bool, const std::string&, const std::string&)>;
+using namespace essais034;
 
 namespace {
 void attendre(int ms) {
@@ -79,42 +82,6 @@ std::string derniersMessages(AtelierElectronique* a, int n = 2) {
   }
   return r;
 }
-// Les boîtes de dialogue modales ouvertes par une commande, dans l'ordre : chaque réponse attend la suivante
-struct Reponse {
-  enum class Genre { Saisie, Question, Fichier } genre;
-  std::function<void(QInputDialog*)> saisie;
-  bool oui = true;
-  QString fichier;
-};
-void repondreDans(const std::vector<Reponse>& suite, std::size_t i = 0, int essais = 0) {
-  if (i >= suite.size() || essais > 80) return;
-  QTimer::singleShot(100, [suite, i, essais] {
-    QWidget* w = QApplication::activeModalWidget();
-    const Reponse& r = suite[i];
-    bool fait = false;
-    if (r.genre == Reponse::Genre::Saisie)
-      if (auto* d = qobject_cast<QInputDialog*>(w)) {
-        if (r.saisie) r.saisie(d);
-        d->accept();
-        fait = true;
-      }
-    if (r.genre == Reponse::Genre::Question)
-      if (auto* m = qobject_cast<QMessageBox*>(w)) {
-        m->done(r.oui ? QMessageBox::Yes : QMessageBox::No);
-        fait = true;
-      }
-    if (r.genre == Reponse::Genre::Fichier)
-      if (auto* d = qobject_cast<QFileDialog*>(w)) {
-        d->selectFile(r.fichier);
-        static_cast<QDialog*>(d)->accept();  // protégé dans QFileDialog, public dans QDialog
-        fait = true;
-      }
-    repondreDans(suite, fait ? i + 1 : i, fait ? 0 : essais + 1);
-  });
-}
-Reponse saisie(std::function<void(QInputDialog*)> f) { return {Reponse::Genre::Saisie, std::move(f), true, {}}; }
-Reponse oui() { return {Reponse::Genre::Question, {}, true, {}}; }
-Reponse fichier(const QString& f) { return {Reponse::Genre::Fichier, {}, true, f}; }
 int compter(const ConceptionElec& c, const std::string& code) {
   const Connectivite k = connectivite(c);
   const auto v = verifierDRC(c, k, remplirZones(c, k));
@@ -196,7 +163,8 @@ void essaisElectronique034L8(FenetrePrincipale& f, const Verifier& verifier) {
       repondreDans({fichier(xlsx)});
       a->executerAction("fabrication.signauxXlsx");
       attendre(400);
-      xlsxOk = QFileInfo(xlsx).size() > 1000 && lireXlsx(prom::lireFichier(prom::cheminFichier(xlsx.toStdString()))).size() == 2;
+      // En-tête, le signal, la ligne des totaux
+      xlsxOk = QFileInfo(xlsx).size() > 1000 && lireXlsx(prom::lireFichier(prom::cheminFichier(xlsx.toStdString()))).size() == 3;
       detail += xlsxOk ? ", classeur écrit" : ", classeur absent";
     }
     verifier(pdfOk, "8.29 : PDF du circuit par couches depuis le ruban, une page et un signet par couche", detail);

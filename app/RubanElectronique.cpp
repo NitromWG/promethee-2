@@ -459,6 +459,7 @@ void AtelierElectronique::enregistrerCommandes() {
   };
   enregistrerCommandesCuivre();  // lot L5 (OutilsCuivre.cpp)
   enregistrerCommandesL8();      // 0.34, lot L8 (OutilsFabrication034.cpp)
+  enregistrerCommandesL10();     // 0.34, lot L10 (ImportsTiers034.cpp)
 }
 
 // Couche active, couches visibles et opacité des cuivres inactifs (EL-25)
