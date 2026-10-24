@@ -15,6 +15,7 @@
 
 #include "promethee/entier128.hpp"
 #include "promethee/electronique.hpp"
+#include "promethee/drc_avancee.hpp"
 #include "promethee/remplissage_local.hpp"
 #include "promethee/verification.hpp"
 
@@ -22,8 +23,11 @@ namespace prom::ecad {
 
 namespace {
 struct Objet {
-  enum class Type { Pastille, Piste, Via } type = Type::Piste;
+  // Région (0.34) : cuivre polygonal qui n'est pas une pastille — segment effilé ou à bouts carrés (indice : la piste),
+  // région de cuivre pleine, goutte, cuivre propre à la carte (region : rang dans circuit.regions)
+  enum class Type { Pastille, Piste, Via, Region } type = Type::Piste;
   int indice = 0;
+  int region = -1;
   std::string reseau;
   Couches couches = 0;
   Polygone forme;  // pastille
@@ -62,20 +66,41 @@ std::vector<Objet> objetsCuivre(const ConceptionElec& c, const std::vector<Pasti
     o.empreinte = pp[i].empreinte;
     r.push_back(std::move(o));
   }
+  const int nc = c.circuit.empilage.couchesCuivre;
   for (std::size_t i = 0; i < c.circuit.pistes.size(); ++i) {
     const Piste& p = c.circuit.pistes[i];
-    Objet o;
-    o.type = Objet::Type::Piste;
-    o.indice = static_cast<int>(i);
-    o.reseau = k.canonique(p.reseau);
-    o.couches = bit(p.couche);
-    o.a = p.a;
-    o.b = p.b;
-    o.largeur = p.largeur;
-    o.boite.etendre(p.a);
-    o.boite.etendre(p.b);
-    o.boite = o.boite.gonflee(p.largeur / 2);
-    r.push_back(std::move(o));
+    if (!p.milieu && (p.largeurFin > 0 || p.boutsCarres)) {
+      // Segment effilé ou à bouts carrés (5.22) : son contour exact
+      const Polygones f = formePiste(p);
+      if (f.empty()) continue;
+      Objet o;
+      o.type = Objet::Type::Region;
+      o.indice = static_cast<int>(i);
+      o.reseau = k.canonique(p.reseau);
+      o.couches = bit(p.couche);
+      o.forme = f.front();
+      o.a = p.a;
+      o.b = p.b;
+      o.largeur = std::max(p.largeur, p.largeurFin);
+      o.boite = boite(o.forme);
+      r.push_back(std::move(o));
+      continue;
+    }
+    // Un arc de piste (8.4) compte comme ses cordes, à 2 µm de l'arc vrai
+    for (const auto& [a, b] : segmentsPiste(p)) {
+      Objet o;
+      o.type = Objet::Type::Piste;
+      o.indice = static_cast<int>(i);
+      o.reseau = k.canonique(p.reseau);
+      o.couches = bit(p.couche);
+      o.a = a;
+      o.b = b;
+      o.largeur = p.largeur;
+      o.boite.etendre(a);
+      o.boite.etendre(b);
+      o.boite = o.boite.gonflee(p.largeur / 2);
+      r.push_back(std::move(o));
+    }
   }
   for (std::size_t i = 0; i < c.circuit.vias.size(); ++i) {
     const Via& v = c.circuit.vias[i];
@@ -83,11 +108,36 @@ std::vector<Objet> objetsCuivre(const ConceptionElec& c, const std::vector<Pasti
     o.type = Objet::Type::Via;
     o.indice = static_cast<int>(i);
     o.reseau = k.canonique(v.reseau);
-    o.couches = cuivres;
+    // Via borgne, enterrée ou micro-via (8.22) : seulement les cuivres qu'elle relie ; couronnes non fonctionnelles
+    // retirées (8.23) : les couches internes où aucune piste de son réseau n'arrive
+    o.couches = couchesVia(v, nc) & cuivres;
+    if (v.retirerCouronnes) {
+      Couches utiles = bit(Couche::CuivreDessus) | bit(Couche::CuivreDessous);
+      for (const auto& p : c.circuit.pistes)
+        if (p.reseau == v.reseau && (distance(p.a, v.p) <= static_cast<double>(v.diametre) / 2 || distance(p.b, v.p) <= static_cast<double>(v.diametre) / 2)) utiles |= bit(p.couche);
+      for (const auto& z : c.circuit.zones)
+        if (z.reseau == v.reseau) utiles |= bit(z.couche);
+      o.couches &= utiles;
+    }
     o.a = o.b = v.p;
     o.largeur = v.diametre;
     o.boite.etendre(v.p);
     o.boite = o.boite.gonflee(v.diametre / 2);
+    r.push_back(std::move(o));
+  }
+  // Régions de cuivre pleines (gouttes, cuivre propre, logos de cuivre)
+  for (std::size_t i = 0; i < c.circuit.regions.size(); ++i) {
+    const RegionCuivre& g = c.circuit.regions[i];
+    if (g.forme.size() < 3 || !(bit(g.couche) & cuivres)) continue;
+    Objet o;
+    o.type = Objet::Type::Region;
+    o.indice = -1;
+    o.region = static_cast<int>(i);
+    o.reseau = k.canonique(g.reseau);
+    o.couches = bit(g.couche);
+    o.forme = orienter(g.forme);
+    o.boite = boite(o.forme);
+    o.a = o.b = o.boite.centre();
     r.push_back(std::move(o));
   }
   // Textes posés sur une couche de cuivre (C20) : chaque trait de la police est du cuivre sans réseau
@@ -112,6 +162,7 @@ std::vector<Objet> objetsCuivre(const ConceptionElec& c, const std::vector<Pasti
 
 Polygone contourObjet(const Objet& o, Nm marge) {
   switch (o.type) {
+    case Objet::Type::Region:
     case Objet::Type::Pastille: {
       const Polygones g = gonfler({o.forme}, marge);
       return g.empty() ? o.forme : g.front();
@@ -125,6 +176,17 @@ Polygone contourObjet(const Objet& o, Nm marge) {
 // Distance bord à bord (0 s'ils se touchent)
 double ecart(const Objet& x, const Objet& y) {
   using T = Objet::Type;
+  // Une région se mesure comme une pastille : par son contour
+  auto polygonal = [](const Objet& o) { return o.type == T::Pastille || o.type == T::Region; };
+  if (polygonal(x) || polygonal(y)) {
+    const Objet& p = polygonal(x) ? x : y;
+    const Objet& q = polygonal(x) ? y : x;
+    double d = 0;
+    if (polygonal(q)) d = distancePolygones(p.forme, q.forme);
+    else if (q.type == T::Piste) d = distancePolygoneSegment(p.forme, q.a, q.b) - static_cast<double>(q.largeur) / 2;
+    else d = distancePolygoneSegment(p.forme, q.a, q.a) - static_cast<double>(q.largeur) / 2;
+    return std::max(0.0, d);
+  }
   const Objet& a = x.type <= y.type ? x : y;
   const Objet& b = x.type <= y.type ? y : x;
   double d = 0;
@@ -212,6 +274,7 @@ class CuivreIndexe {
     for (int e : m_index.chercher(o.boite.gonflee(portee + 1))) {
       const auto& [a, b] = m_aretes[static_cast<std::size_t>(e)];
       switch (o.type) {
+        case Objet::Type::Region:
         case Objet::Type::Pastille: d = std::min(d, distancePolygoneSegment(o.forme, a, b)); break;
         case Objet::Type::Piste: d = std::min(d, distanceSegments(a, b, o.a, o.b) - static_cast<double>(o.largeur) / 2); break;
         case Objet::Type::Via: d = std::min(d, distancePointSegment(o.a, a, b) - static_cast<double>(o.largeur) / 2); break;
@@ -237,6 +300,7 @@ std::string decrire(const Objet& o, const std::vector<PastillePlacee>& pp) {
     case Objet::Type::Pastille: return "pastille " + pp[static_cast<std::size_t>(o.indice)].reference + "." + pp[static_cast<std::size_t>(o.indice)].numero + r;
     case Objet::Type::Piste: return o.texte ? "texte de cuivre « " + o.libelle + " »" : "piste" + r;
     case Objet::Type::Via: return "via" + r;
+    case Objet::Type::Region: return (o.region >= 0 ? std::string("région de cuivre") : std::string("piste")) + r;
   }
   return {};
 }
@@ -298,6 +362,64 @@ Polygones ouverture(const Polygones& f, Nm r) {
 }
 }  // namespace
 
+namespace {
+// Demi-plan des points plus proches de « a » que de « b », coupé dans un polygone convexe (Sutherland-Hodgman)
+Polygone couperDemiPlan(const Polygone& convexe, Pt a, Pt b) {
+  const double mx = (static_cast<double>(a.x) + static_cast<double>(b.x)) / 2, my = (static_cast<double>(a.y) + static_cast<double>(b.y)) / 2;
+  const double nx = static_cast<double>(a.x - b.x), ny = static_cast<double>(a.y - b.y);
+  auto cote = [&](Pt p) { return (static_cast<double>(p.x) - mx) * nx + (static_cast<double>(p.y) - my) * ny; };
+  Polygone r;
+  for (std::size_t i = 0; i < convexe.size(); ++i) {
+    const Pt p = convexe[i], q = convexe[(i + 1) % convexe.size()];
+    const double cp = cote(p), cq = cote(q);
+    if (cp >= 0) r.push_back(p);
+    if ((cp >= 0) != (cq >= 0)) {
+      const double t = cp / (cp - cq);
+      r.push_back({static_cast<Nm>(std::llround(static_cast<double>(p.x) + t * static_cast<double>(q.x - p.x))), static_cast<Nm>(std::llround(static_cast<double>(p.y) + t * static_cast<double>(q.y - p.y)))});
+    }
+  }
+  return r;
+}
+// Plans partagés (5.25, CUI-17) : la part de la couche qui revient à un réseau, partition de Voronoi de ses pastilles
+// et vias contre celles des autres réseaux du même plan
+Polygones celluleVoronoi(const std::vector<Pt>& siens, const std::vector<Pt>& autres, const Boite& cadre) {
+  Polygones cellules;
+  const Polygone base{{cadre.x0, cadre.y0}, {cadre.x1, cadre.y0}, {cadre.x1, cadre.y1}, {cadre.x0, cadre.y1}};
+  for (const Pt& a : siens) {
+    Polygone cel = base;
+    for (const Pt& b : autres) {
+      if (cel.size() < 3) break;
+      if (a != b) cel = couperDemiPlan(cel, a, b);
+    }
+    if (cel.size() >= 3) cellules.push_back(orienter(cel));
+  }
+  return unir(cellules);
+}
+// Remplissage hachuré (5.11, CUI-04) : grille de traits de « largeur » espacés de « ecart » sous l'angle donné, bordure
+// pleine de la même largeur, et cuivre plein autour des pastilles du réseau pour qu'elles restent reliées
+Polygones hachurer(const Polygones& plein, const Zone& z, const Polygones& raccords) {
+  if (plein.empty()) return plein;
+  const Boite b = boite(plein);
+  const Nm l = std::max<Nm>(z.hachureLargeur, 50'000), pas = l + std::max<Nm>(z.hachureEcart, 50'000);
+  const double diag = std::hypot(static_cast<double>(b.largeur()), static_cast<double>(b.hauteur())) + 2.0 * static_cast<double>(pas);
+  const Pt centre = b.centre();
+  Polygones traits;
+  for (double angle : {z.hachureAngle, z.hachureAngle + 90}) {
+    const int n = static_cast<int>(diag / static_cast<double>(pas)) + 2;
+    for (int i = -n / 2; i <= n / 2; ++i) {
+      const Pt d = tournerDegres({0, static_cast<Nm>(i) * pas}, angle);
+      traits.push_back(rectangle(centre + d, static_cast<Nm>(diag), l, angle));
+    }
+  }
+  Polygones r = intersecter(plein, unir(traits));
+  const Polygones bord = soustraire(plein, gonfler(plein, -l));
+  r.insert(r.end(), bord.begin(), bord.end());
+  const Polygones autour = intersecter(plein, raccords);
+  r.insert(r.end(), autour.begin(), autour.end());
+  return unir(r);
+}
+}  // namespace
+
 Remplissages remplirZones(const ConceptionElec& c, const Connectivite& k) {
   Remplissages r;
   const auto pp = pastilles(c, k);
@@ -329,17 +451,56 @@ Remplissages remplirZones(const ConceptionElec& c, const Connectivite& k) {
   };
   std::vector<Retire> retires;
   for (const Zone* z : zones) {
-    if (z->contour.size() < 3) { r[z->uuid] = {}; continue; }
-    const Polygones base = intersecter({orienter(z->contour)}, interieur);
+    // Zone mise de côté : pas de cuivre ; figée : son cuivre gardé tel quel (5.26)
+    if (z->etat == EtatZone::MiseDeCote) { r[z->uuid] = {}; continue; }
+    if (z->etat == EtatZone::Figee && !z->remplissageFige.empty()) { r[z->uuid] = z->remplissageFige; continue; }
     const Nm isoZone = isolementZone(*z);
+    // Anneau de garde (5.25, CUI-18) : le contour suit le cuivre du réseau gardé, refait à chaque remplissage
+    Polygone contourZone = z->contour;
+    if (!z->garde.empty()) {
+      Polygones garde;
+      for (const auto& p : c.circuit.pistes)
+        if (p.couche == z->couche && k.canonique(p.reseau) == k.canonique(z->garde))
+          for (auto& x : formePiste(p)) garde.push_back(std::move(x));
+      for (const auto& p : pp)
+        if (p.reseau == k.canonique(z->garde) && (p.couches & bit(z->couche))) garde.push_back(p.forme);
+      const Polygones exterieur = gonfler(unir(garde), isoZone + MARGE_REMPLISSAGE + 2 * std::max<Nm>(z->largeurRayon, 250'000));
+      if (!exterieur.empty()) contourZone = exterieur.front();
+    }
+    if (contourZone.size() < 3) { r[z->uuid] = {}; continue; }
+    Polygones base = intersecter({orienter(contourZone)}, interieur);
+    // Plan partagé (5.25) : la cellule de Voronoi de son réseau parmi les zones de la même partition
+    if (!z->partition.empty()) {
+      std::vector<Pt> siens, autres;
+      std::set<std::string> reseauxPartition;
+      for (const Zone* y : zones)
+        if (y->partition == z->partition && y->couche == z->couche) reseauxPartition.insert(y->reseau);
+      for (const auto& p : pp)
+        if ((p.couches & bit(z->couche)) && reseauxPartition.count(p.reseau)) (p.reseau == z->reseau ? siens : autres).push_back(p.pastille.position);
+      for (const auto& v : c.circuit.vias)
+        if (reseauxPartition.count(k.canonique(v.reseau))) (k.canonique(v.reseau) == z->reseau ? siens : autres).push_back(v.p);
+      if (!siens.empty() && !autres.empty()) base = intersecter(base, celluleVoronoi(siens, autres, boite(base).gonflee(NM_PAR_MM)));
+    }
     const Boite bz = boite(base).gonflee(std::max<Nm>(5 * NM_PAR_MM, isoMax + MARGE_REMPLISSAGE));
     Polygones autres, anneaux, rayons;
     std::vector<const Objet*> memeReseau;
     for (const Objet& o : objets) {
       if (!(o.couches & bit(z->couche)) || !o.boite.touche(bz)) continue;
       if (!z->reseau.empty() && o.reseau == z->reseau) {
+        // Raccord de la pastille (5.11, 5.25) : le sien, sinon celui de la zone ; liaisons thermiques réservées aux
+        // traversants au choix ; « aucune » l'isole de la zone comme un cuivre étranger
+        ConnexionZone cx = ConnexionZone::Heritee;
+        if (o.type == Objet::Type::Pastille) {
+          const Pastille& pa = pp[static_cast<std::size_t>(o.indice)].pastille;
+          cx = pa.connexion;
+          if (cx == ConnexionZone::Heritee) cx = (z->thermique && (!z->thermiquesTraversantsSeuls || pa.type == TypePastille::Traversante)) ? ConnexionZone::Thermique : ConnexionZone::Pleine;
+        }
+        if (cx == ConnexionZone::Aucune) {
+          autres.push_back(contourObjet(o, isoZone + MARGE_REMPLISSAGE));
+          continue;
+        }
         memeReseau.push_back(&o);
-        if (o.type == Objet::Type::Pastille && z->thermique) {
+        if (o.type == Objet::Type::Pastille && cx == ConnexionZone::Thermique) {
           for (auto& x : gonfler({o.forme}, z->ecartThermique)) anneaux.push_back(x);
           const Pastille& pa = pp[static_cast<std::size_t>(o.indice)].pastille;
           const Nm longueur = std::max(o.boite.largeur(), o.boite.hauteur()) + 2 * z->ecartThermique + 2 * z->epaisseurMin;
@@ -393,8 +554,16 @@ Remplissages remplirZones(const ConceptionElec& c, const Connectivite& k) {
         const auto it = r.find(y->uuid);
         relie = it != r.end() && !it->second.empty() && boite(it->second).gonflee(PORTEE_CONTACT).touche(bi) && !intersecter(gonfler(ilp, PORTEE_CONTACT), it->second).empty();
       }
+      // Îlot relié mais plus petit que l'aire minimale de la zone : retiré (5.11, îlots et cols)
+      if (relie && z->aireIlotMin > 0 && aireMm2(ilp) < z->aireIlotMin) continue;
       if (relie) garde.insert(garde.end(), ilp.begin(), ilp.end());
       else retires.push_back({z, ilp});
+    }
+    if (z->remplissage == RemplissageZone::Hachure && !garde.empty()) {
+      Polygones raccords;
+      for (const Objet* o : memeReseau)
+        if (o->type == Objet::Type::Pastille || o->type == Objet::Type::Via) raccords.push_back(contourObjet(*o, z->ecartThermique + std::max<Nm>(z->hachureLargeur, 50'000)));
+      garde = hachurer(garde, *z, raccords);
     }
     r[z->uuid] = garde;
   }
@@ -564,6 +733,23 @@ EtatRoutage etatRoutage(const ConceptionElec& c, const Connectivite& k, const Re
         if (u.racine(static_cast<int>(liste[x])) == u.racine(static_cast<int>(liste[y]))) continue;
         aretes.push_back({distance(objets[liste[x]].a, objets[liste[y]].a), liste[x], liste[y]});
       }
+    // Ordre de raccordement imposé (8.26) : chaîne, fly-by, étoile ou T d'un signal ; ses liaisons passent avant
+    // l'arbre couvrant, dans l'ordre donné, et le chevelu les suit
+    for (const auto& sig : c.circuit.regles.avancees.signaux) {
+      if (sig.topologie == TopologieSignal::Libre || sig.ordre.size() < 2) continue;
+      std::vector<std::size_t> rangees;
+      for (const auto& broche : sig.ordre)
+        for (std::size_t x : liste)
+          if (pp[static_cast<std::size_t>(objets[x].indice)].reference + "." + pp[static_cast<std::size_t>(objets[x].indice)].numero == broche) {
+            rangees.push_back(x);
+            break;
+          }
+      const bool etoile = sig.topologie == TopologieSignal::Etoile || sig.topologie == TopologieSignal::T;
+      for (std::size_t r = 1; r < rangees.size(); ++r) {
+        const std::size_t a = etoile ? rangees.front() : rangees[r - 1], b = rangees[r];
+        if (u.racine(static_cast<int>(a)) != u.racine(static_cast<int>(b))) aretes.push_back({-1.0 - static_cast<double>(rangees.size() - r), a, b});
+      }
+    }
     std::sort(aretes.begin(), aretes.end(), [](const Arete& p, const Arete& q) { return p.d < q.d; });
     Unions groupes = u;
     for (const Arete& a : aretes)
@@ -680,8 +866,13 @@ RemplissageLocal::RemplissageLocal(const ConceptionElec& c, const Connectivite& 
       D.boitesObstacles.push_back(boite(x));
       D.obstacles.push_back(std::move(x));
     }
-  for (const auto& y : zs) {
-    if (y.uuid == D.z.uuid || y.couche != D.z.couche || y.reseau == D.z.reseau || y.priorite <= D.z.priorite) continue;
+  // Zones remplies avant celle-ci, comme dans remplirZones : priorité plus haute, ou égale et plus tôt dans la liste
+  std::size_t rangZone = zs.size();
+  for (std::size_t i = 0; i < zs.size(); ++i)
+    if (zs[i].uuid == D.z.uuid) rangZone = i;
+  for (std::size_t iy = 0; iy < zs.size(); ++iy) {
+    const Zone& y = zs[iy];
+    if (y.uuid == D.z.uuid || y.couche != D.z.couche || y.reseau == D.z.reseau || y.priorite < D.z.priorite || (y.priorite == D.z.priorite && iy > rangZone)) continue;
     const auto f = remplis.find(y.uuid);
     if (f == remplis.end() || f->second.empty()) continue;
     const Nm requis = std::max({D.isoZone, y.isolement > 0 ? y.isolement : R.isolement, isolementEntre(R, D.z.reseau, y.reseau)});
@@ -821,6 +1012,8 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
             case Objet::Type::Pastille: return pp[static_cast<std::size_t>(o.indice)].composant;
             case Objet::Type::Piste: return c.circuit.pistes[static_cast<std::size_t>(o.indice)].uuid;
             case Objet::Type::Via: return c.circuit.vias[static_cast<std::size_t>(o.indice)].uuid;
+            case Objet::Type::Region:
+              return o.region >= 0 ? c.circuit.regions[static_cast<std::size_t>(o.region)].uuid : c.circuit.pistes[static_cast<std::size_t>(o.indice)].uuid;
           }
           return {};
         };
@@ -876,7 +1069,8 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     // Couronne des pastilles traversantes métallisées (comme celle des vias)
     if (p.pastille.type == TypePastille::Traversante && p.pastille.percage > 0) {
       const Nm couronne = (std::min(p.pastille.largeur, p.pastille.hauteur) - p.pastille.percage) / 2;
-      if (couronne < R.anneauMin)
+      // Sans aucune couronne, c'est la pastille entière qui est fausse : DRC-71 le dit (une violation par défaut)
+      if (couronne < R.anneauMin && couronne > 0)
         ajouter(Gravite::Erreur, "DRC-11", "Couronne de la pastille " + p.reference + "." + p.numero + " trop fine : " + mmTexte(static_cast<double>(couronne)) + " (minimum " +
                                               mmTexte(static_cast<double>(R.anneauMin)) + ")",
                 "Agrandis la pastille ou réduis son perçage : le foret pourrait la couper.", p.pastille.position);
@@ -980,6 +1174,7 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     double d = 1e18;
     for (const auto& [a, b] : aretesCarte) {
       switch (o.type) {
+        case Objet::Type::Region:
         case Objet::Type::Pastille: d = std::min(d, distancePolygoneSegment(o.forme, a, b)); break;
         case Objet::Type::Piste: d = std::min(d, distanceSegments(a, b, o.a, o.b) - static_cast<double>(o.largeur) / 2); break;
         case Objet::Type::Via: d = std::min(d, distancePointSegment(o.a, a, b) - static_cast<double>(o.largeur) / 2); break;
@@ -997,6 +1192,8 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
   }
   std::set<int> empreintesHors;
   for (const Objet& o : objets) {
+    // Pastille crénelée (8.12, EMP-27) : coupée par le contour exprès, elle n'est ni hors de la carte ni trop près du bord
+    if (o.type == Objet::Type::Pastille && pp[static_cast<std::size_t>(o.indice)].pastille.fabrication == "castellee") continue;
     // Hors de la carte, ou dans une découpe : le centre d'abord, puis la forme entière quand elle touche un bord
     bool horsMatiere = !dansCarte(o.a) || !dansCarte(o.b);
     const double d = horsMatiere ? 0.0 : distanceAuBord(o);
@@ -1323,18 +1520,21 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
       const std::string ref = x ? x->reference : std::string("?");
       if (!x || !auSchema.count(e.composant)) {
         // Une carte importée sans schéma (composants sans symbole) n'est pas en défaut
-        if (!x || !x->symbole.empty())
+        if (!x || (!x->symbole.empty() && !x->carteSeule))
           ajouter(Gravite::Erreur, "DRC-39", ref + " est sur le circuit mais plus dans le schéma", "Lance « Mettre à jour depuis le schéma » (F8) pour la retirer, ou remets le composant au schéma.", e.position, {e.composant});
         continue;
       }
-      if (!x->empreinte.empty() && x->empreinte != e.empreinte)
+      if (!x->empreinte.empty() && x->empreinte != e.empreinte && x->empreinte != e.copieLocale)
         ajouter(Gravite::Erreur, "DRC-40", ref + " : empreinte « " + e.empreinte + " » sur le circuit, « " + x->empreinte + " » au schéma",
                 "Lance « Mettre à jour depuis le schéma » (F8) : l’empreinte du circuit suivra celle du schéma.", e.position, {e.composant});
       if (x->horsCarte)
         ajouter(Gravite::Avertissement, "DRC-41", ref + " est déclaré hors carte mais posé sur le circuit", "Retire-le par la mise à jour (F8), ou décoche « hors carte ».", e.position, {e.composant});
     }
     std::set<std::string> orphelins;
-    auto reseauConnu = [&](const std::string& n) { return n.empty() || k.indice(k.canonique(n)) >= 0; };
+    // Réseaux des pastilles de la carte seule (5.17) : connus sans schéma
+    std::set<std::string> deLaCarte;
+    for (const auto& p : pp) deLaCarte.insert(p.reseau);
+    auto reseauConnu = [&](const std::string& n) { return n.empty() || k.indice(k.canonique(n)) >= 0 || deLaCarte.count(n); };
     for (const auto& p : c.circuit.pistes)
       if (!reseauConnu(p.reseau) && orphelins.insert(p.reseau).second)
         ajouter(Gravite::Avertissement, "DRC-42", "Cuivre du réseau « " + p.reseau + " », qui n’existe plus dans le schéma", "Supprime ce cuivre, ou rends son réseau au schéma (étiquette du même nom).",
@@ -1346,6 +1546,8 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
       if (!reseauConnu(z.reseau) && orphelins.insert(z.reseau).second)
         ajouter(Gravite::Avertissement, "DRC-42", "Zone du réseau « " + z.reseau + " », qui n’existe plus dans le schéma", "Choisis un réseau existant pour la zone.", z.contour.empty() ? Pt{} : z.contour.front(), {z.uuid});
   }
+  // Contrôles de la 0.34 : zones de règles, contraintes, quinze contrôles nouveaux, paires, accords, proximité
+  verifierDRCAvancee(c, k, remplis, pp, v);
   std::stable_sort(v.begin(), v.end(), [](const Violation& a, const Violation& b) { return a.gravite < b.gravite; });
   return v;
 }

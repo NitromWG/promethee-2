@@ -1,5 +1,6 @@
 // Prométhée : jeux de sorties (lot L13). Licence GPL-3.0-only.
 #include "promethee/sorties.hpp"
+#include "promethee/sorties_fabricant.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -76,6 +77,15 @@ const std::vector<std::pair<std::string, std::string>>& sortiesConnues() {
       {"placement-en", "Fichier de placement (en-têtes des assembleurs)"},
       {"nomenclature", "Nomenclature CSV"},
       {"nomenclature-jlcpcb", "Nomenclature au format JLCPCB"},
+      {"nomenclature-pcbway", "Nomenclature au format PCBWay"},
+      {"placement-jlcpcb", "Placement JLCPCB, rotations corrigées"},
+      {"placement-pcbway", "Placement PCBWay, rotations corrigées"},
+      {"placement-openpnp", "Placement OpenPnP"},
+      {"placement-neoden", "Placement Neoden"},
+      {"placement-charmhigh", "Placement Charmhigh"},
+      {"placement-macrofab", "Placement MacroFab (XYRS)"},
+      {"recapitulatif", "Récapitulatif de fabrication"},
+      {"statistiques", "Statistiques de fabrication (JSON)"},
       {"ipc356", "Liste de réseaux IPC-D-356A"},
       {"ipc2581", "IPC-2581"},
       {"netlist", "Liste de réseaux KiCad"},
@@ -238,6 +248,27 @@ ResultatJeu executerJeu(const ConceptionElec& c0, const JeuSorties& j, const std
         t += champCsv(l.valeur) + "," + champCsv(refs) + "," + champCsv(l.empreinte) + "," + champCsv(l.lcsc) + "\n";
       }
       ecrire("Assemblage/" + nom + "-nomenclature-jlcpcb.csv", t);
+    } else if (s == "nomenclature-pcbway") {
+      ecrire("Assemblage/" + nom + "-BOM-PCBWay.csv", csvNomenclatureFormat(c, optionsNomenclature("pcbway")));
+    } else if (s.rfind("placement-", 0) == 0 && s != "placement-en") {
+      // Gabarit de colonnes du fabricant ou de la machine ; corrections de rotation du profil de l'assembleur
+      std::string machine = s.substr(10);
+      const std::map<std::string, std::string> noms = {{"jlcpcb", "JLCPCB"}, {"pcbway", "JLCPCB"}, {"openpnp", "OpenPnP"}, {"neoden", "Neoden"}, {"charmhigh", "Charmhigh"}, {"macrofab", "MacroFab"}};
+      const auto it = noms.find(machine);
+      if (it == noms.end()) {
+        res.journal.push_back("sortie inconnue ignorée : « " + s + " »");
+        continue;
+      }
+      OptionsPositions op;
+      op.profil = machine == "jlcpcb" || machine == "pcbway" ? machine : std::string();
+      const GabaritPositions g = *gabaritPositions(it->second);
+      ecrire("Assemblage/" + nom + "-" + (machine == "jlcpcb" || machine == "pcbway" ? std::string("CPL") : "placement") + "-" + it->second + "." + g.extension,
+             ecrirePositions(positions(c, op), g, static_cast<double>(boite(c.circuit.contour.polygone()).largeur()) * 1e-6));
+    } else if (s == "statistiques") {
+      ecrire(nom + "-statistiques.json", statistiquesJson(statistiquesFabrication(c)));
+    } else if (s == "recapitulatif") {
+      // Écrit en dernier : il liste les fichiers du dossier
+      continue;
     } else if (s == "ipc356")
       ecrire("Test/" + nom + "-netlist.ipc", ipcD356(c, connexe()));
     else if (s == "ipc2581")
@@ -284,6 +315,12 @@ ResultatJeu executerJeu(const ConceptionElec& c0, const JeuSorties& j, const std
       ecrire(nom + ".conception.json", versJson(c0).dump(2) + "\n");
     else
       res.journal.push_back("sortie inconnue ignorée : « " + s + " »");
+  }
+  if (std::find(j.sorties.begin(), j.sorties.end(), "recapitulatif") != j.sorties.end()) {
+    std::string fabricant = j.nom.rfind("Archive ", 0) == 0 ? j.nom.substr(8) : j.nom;
+    std::vector<std::string> liste = res.fichiers;
+    liste.push_back("LISEZMOI-fabrication.txt");
+    ecrire("LISEZMOI-fabrication.txt", recapitulatifFabrication(c, statistiquesFabrication(c), fabricant, liste));
   }
   // Livraison : l'archive, ou le dossier préparé à la place de l'ancien (gardé en « .precedent »)
   if (j.zip) {

@@ -20,6 +20,12 @@ const char* codeTypeBroche(TypeBroche t);  // « entree »… (fichiers)
 const char* nomTypeBroche(TypeBroche t);   // « Entrée »… (interface)
 TypeBroche typeBrocheDepuis(const std::string& code);
 
+// Fonction alternative d'une broche (7.7, SYM-07, EMB-01) : « PA2 » peut être « USART2_TX » ou « ADC1_IN2 »
+struct FonctionBroche {
+  std::string nom;
+  TypeBroche type = TypeBroche::Bidirectionnelle;
+  friend bool operator==(const FonctionBroche&, const FonctionBroche&) = default;
+};
 // Broche : « extremite » est le point de connexion, en coordonnées du symbole ; le trait part de l'extrémité vers
 // le corps selon « direction » (0 : +x, 1 : +y, 2 : −x, 3 : −y), sur « longueur ».
 struct Broche {
@@ -30,11 +36,24 @@ struct Broche {
   Nm longueur = 2'540'000;
   bool nomVisible = true, numeroVisible = true;
   int unite = 0;  // symbole à plusieurs unités : 0 commune à toutes, k ≥ 1 propre à l'unité k (A, B…)
+  // 0.34 (7.7, 7.18, 7.20) : style de la broche et signes qualificatifs de la CEI 60617-12 (« », « inversee »,
+  // « horloge », « horlogeInversee », « entreeBasse », « sortieBasse », « horlogeBasse », « nonLogique »,
+  // « hysteresis », « collecteurOuvert », « emetteurOuvert », « troisEtats ») ; section, groupe et rang pour le
+  // générateur de symboles ; fonctions alternatives ; broche cachée reliée par son nom (alimentation implicite) ; vue
+  // (0 : toutes les vues, 1 ou 2 : corps normal ou De Morgan)
+  std::string style, section, groupe;
+  int rang = 0;
+  std::vector<FonctionBroche> alternatives;
+  bool cachee = false;
+  int vue = 0;
   friend bool operator==(const Broche&, const Broche&) = default;
 };
 
 struct Trace {
-  enum class Forme : std::uint8_t { Polyligne, Rectangle, Cercle, Arc, Texte } forme = Forme::Polyligne;
+  // Formes du symbole et des dessins du schéma (7.19, 7.20) : la 0.34 ajoute l'ellipse (centre, « rayon » en x,
+  // « rayonY »), la courbe de Bézier (départ, deux points de contrôle, arrivée), l'image (position, « texte » :
+  // fichier ou données) et le cadre de texte (deux coins, « texte » au-dedans)
+  enum class Forme : std::uint8_t { Polyligne, Rectangle, Cercle, Arc, Texte, Ellipse, Bezier, Image, CadreTexte } forme = Forme::Polyligne;
   std::vector<Pt> points;     // polyligne : sommets ; rectangle : deux coins ; cercle, arc : centre ; texte : position
   Nm rayon = 0;
   double debut = 0, fin = 0;  // arc : angles en degrés, sens direct à l'écran
@@ -42,8 +61,16 @@ struct Trace {
   std::string texte;
   Nm taille = 1'270'000;
   int unite = 0;  // 0 : dessiné dans toutes les unités
+  // 0.34 : rayon en y d'une ellipse, coins arrondis d'un rectangle (« arrondi »), épaisseur, style du trait
+  // (« », « tirets », « points », « mixte »), couleur, flèches (1 au départ, 2 à l'arrivée), vue (0 : toutes)
+  Nm rayonY = 0, arrondi = 0, epaisseur = 0;
+  std::string style, couleur;
+  int fleches = 0;
+  int vue = 0;
   friend bool operator==(const Trace&, const Trace&) = default;
 };
+// Contour d'une forme en segments (ellipses, arcs, cercles et courbes de Bézier découpés), dans son repère
+std::vector<Pt> contourTrace(const Trace& t, int pas = 32);
 
 // Provenance de la hauteur d'un composant (3.4, MEC-02) : générique (corps de l'empreinte), saisie (tapée, non
 // confirmée), fiche (confirmée sur la fiche technique), modèle exact (boîte du modèle 3D associé)
@@ -82,6 +109,12 @@ struct DefSymbole {
   // Données propres à un métier, écrites seulement si présentes (appareil électrique personnel : marquage,
   // dimensions, montage, pertes, prix indicatif)
   std::map<std::string, std::string> proprietes;
+  // 0.34 (7.7, 7.20) : symbole dérivé d'un parent dont il garde le dessin et les broches, champs propres écrits ici ;
+  // style du dessin (« CEI », « ANSI », « GOST ») ; vues alternatives (2 : corps De Morgan) ; groupes de broches
+  // reliées à l'intérieur du composant
+  std::string parent, style;
+  int vues = 1;
+  std::vector<std::vector<std::string>> brochesReliees;
   friend bool operator==(const DefSymbole&, const DefSymbole&) = default;
 };
 const std::vector<DefSymbole>& bibliothequeSymboles();
@@ -194,6 +227,8 @@ struct ComposantElec {
   int versionArticle = 0;
   std::string lcsc;
   std::map<std::string, SurchargeVariante> variantes;  // nom de la variante → ce qu'elle change (12.1)
+  // Posé sur la carte sans schéma (5.17, CAR-24) : la synchronisation le garde, ses réseaux viennent des pistes
+  bool carteSeule = false;
   friend bool operator==(const ComposantElec&, const ComposantElec&) = default;
 };
 
@@ -217,6 +252,11 @@ struct SymbolePlace {
   std::map<std::string, std::string> numeros;
   // Places propres du repère et de la valeur ; absentes, celles de la définition, tournées avec le symbole
   std::optional<ChampPlace> champReference, champValeur;
+  // 0.34 : vue posée (7.7, De Morgan), fonction retenue de chaque broche (numéro → nom de fonction, 7.7, 15.2),
+  // noms des broches masqués sur ce composant (7.18)
+  int vue = 1;
+  std::map<std::string, std::string> fonctions;
+  bool nomsMasques = false;
   friend bool operator==(const SymbolePlace&, const SymbolePlace&) = default;
 };
 // Repère réel d'une broche de cette pose
@@ -245,8 +285,10 @@ struct NonConnexion {
   friend bool operator==(const NonConnexion&, const NonConnexion&) = default;
 };
 // Locale : la feuille ; globale : tout le projet ; connecteur hors feuille : comme une globale, mais dessiné en
-// flèche selon le sens du signal, comme un renvoi de folio (SAI-31)
-enum class TypeEtiquette : std::uint8_t { Locale, Globale, HorsFeuille };
+// flèche selon le sens du signal, comme un renvoi de folio (SAI-31). 0.34 : hiérarchique (relie la feuille fille au
+// port de même nom de son bloc, 7.2) et directive (7.14 : ne relie rien, pose une classe ou des règles sur le réseau
+// qu'elle touche)
+enum class TypeEtiquette : std::uint8_t { Locale, Globale, HorsFeuille, Hierarchique, Directive };
 enum class SensSignal : std::uint8_t { Aucun, Entree, Sortie, Bidirectionnel, TroisEtats, Passif };
 const char* codeSensSignal(SensSignal s);  // « entree »… (fichiers)
 SensSignal sensSignalDepuis(const std::string& code);
@@ -256,6 +298,9 @@ struct Etiquette {
   int rotation = 0;
   TypeEtiquette type = TypeEtiquette::Locale;
   SensSignal sens = SensSignal::Aucun;  // dessiné sur la globale et le connecteur hors feuille (SAI-11)
+  // Directive (7.14) : classe de réseaux posée sur le réseau touché, et règles écrites (« isolement=3mm »,
+  // « largeur=0,15/0,2 », « paire=USB », « impedance=90 »)
+  std::map<std::string, std::string> proprietes;
   friend bool operator==(const Etiquette&, const Etiquette&) = default;
 };
 struct TexteSchema {
@@ -264,6 +309,67 @@ struct TexteSchema {
   Nm taille = 1'800'000;
   int rotation = 0;  // quarts de tour, sens direct (EL-21)
   friend bool operator==(const TexteSchema&, const TexteSchema&) = default;
+};
+// Bloc de feuille (7.2, STR-02) : rectangle posé sur une feuille, qui désigne sa feuille fille ; chaque port porte le
+// nom d'une étiquette hiérarchique de la fille et se relie au fil qui le touche. Paramètres propres à l'instance
+// (7.15), lien au fichier d'une feuille réutilisée (7.16).
+struct PortBloc {
+  std::string uuid, nom;
+  Pt p;              // point de connexion, sur le bord du bloc
+  int cote = 0;      // 0 gauche, 1 droite, 2 haut, 3 bas
+  SensSignal sens = SensSignal::Aucun;
+  friend bool operator==(const PortBloc&, const PortBloc&) = default;
+};
+struct BlocFeuille {
+  std::string uuid, nom, feuille;  // nom de l'instance ; UUID de la feuille fille
+  Pt position;                     // coin haut gauche
+  Nm largeur = 20'320'000, hauteur = 15'240'000;
+  std::vector<PortBloc> ports;
+  std::map<std::string, std::string> parametres;  // repris par les valeurs de la feuille fille (« ${GAIN} »)
+  std::string fichier;  // feuille réutilisée depuis un fichier (7.16) ; vide : feuille du projet
+  std::string couleur;
+  friend bool operator==(const BlocFeuille&, const BlocFeuille&) = default;
+};
+// Forme dessinée sur la feuille (7.19) : la même géométrie que les traits des symboles, dans le repère de la feuille,
+// sur un calque de notes (0 : dessin, 1 à 7 : calques, que le PDF peut omettre), avec son rang de superposition
+struct FormeSchema {
+  std::string uuid;
+  Trace trace;
+  int calque = 0, ordre = 0;
+  friend bool operator==(const FormeSchema&, const FormeSchema&) = default;
+};
+// Tableau posé sur la feuille (7.6, 7.19) : cellules en lignes, largeurs des colonnes, bordure
+struct TableauSchema {
+  std::string uuid;
+  Pt p;
+  std::vector<std::vector<std::string>> cellules;
+  std::vector<Nm> largeurs;
+  Nm hauteurLigne = 3'810'000, taille = 1'270'000;
+  bool bordure = true;
+  friend bool operator==(const TableauSchema&, const TableauSchema&) = default;
+};
+// Image posée sur la feuille (7.6) : fichier du projet (chemin relatif) ou données PNG en base 64, échelle
+struct ImageSchema {
+  std::string uuid, fichier, donnees;
+  Pt p;
+  double echelle = 1;
+  friend bool operator==(const ImageSchema&, const ImageSchema&) = default;
+};
+// Zone de règles du schéma (7.14) : ce qu'elle entoure reçoit une classe ou des règles ; « masque » retire son
+// contenu de l'ERC et du passage au circuit
+struct ZoneRegleSchema {
+  std::string uuid, nom;
+  Polygone contour;
+  std::map<std::string, std::string> proprietes;  // comme une directive : « classe », règles
+  bool masque = false;
+  friend bool operator==(const ZoneRegleSchema&, const ZoneRegleSchema&) = default;
+};
+// Groupe d'objets de la feuille (7.6) : il se sélectionne et se déplace d'un bloc
+struct GroupeSchema {
+  std::string uuid, nom;
+  std::vector<std::string> membres;
+  bool verrou = false;
+  friend bool operator==(const GroupeSchema&, const GroupeSchema&) = default;
 };
 struct Feuille {
   std::string uuid, nom = "Feuille 1", format = "A4";
@@ -278,11 +384,54 @@ struct Feuille {
   std::vector<NonConnexion> nonConnexions;
   std::vector<Etiquette> etiquettes;
   std::vector<TexteSchema> textes;
+  // 0.34 (lot L7) : blocs de feuilles filles, formes, tableaux, images, zones de règles, groupes ; numéro de page
+  // libre (vide : automatique) ; format libre (« libre » : largeur et hauteur ci-dessous) ; variables propres à la
+  // feuille (elles priment sur celles du projet) ; modèle de feuille appliqué ; calques de notes masqués ; fichier
+  // de la feuille réutilisée et sa révision (7.16)
+  std::vector<BlocFeuille> blocs;
+  std::vector<FormeSchema> formes;
+  std::vector<TableauSchema> tableaux;
+  std::vector<ImageSchema> images;
+  std::vector<ZoneRegleSchema> zonesRegles;
+  std::vector<GroupeSchema> groupes;
+  std::string page;
+  Nm largeurLibre = 0, hauteurLibre = 0;
+  std::map<std::string, std::string> variables;
+  std::string modeleFeuille;
+  std::vector<int> calquesMasques;
+  std::string fichier, revisionFichier;
   friend bool operator==(const Feuille&, const Feuille&) = default;
+};
+// Ligne de l'historique des révisions (12.6, DOC-10) : écrite au cartouche, une par révision publiée
+struct RevisionCartouche {
+  std::string revision, date, auteur, description;
+  friend bool operator==(const RevisionCartouche&, const RevisionCartouche&) = default;
 };
 struct Cartouche {
   std::string titre, societe, auteur, revision = "A", date, commentaire;
+  // 0.34 : champs libres du cartouche (7.6, lus par ${…}) et historique des révisions (12.6)
+  std::map<std::string, std::string> champs;
+  std::vector<RevisionCartouche> historique;
   friend bool operator==(const Cartouche&, const Cartouche&) = default;
+};
+// Styles et réglages par défaut du schéma (7.25, SAI-49, SAI-50) : fils et bus (épaisseur, couleur, style), hérités
+// de la classe de réseau qui en a un ; jonctions ; tailles de texte ; format des renvois et des numéros de page (7.10)
+struct StyleFil {
+  std::string couleur, style;  // style : « », « tirets », « points »
+  Nm epaisseur = 0;
+  friend bool operator==(const StyleFil&, const StyleFil&) = default;
+};
+struct ReglagesSchema {
+  StyleFil fil, bus;
+  std::map<std::string, StyleFil> parClasse;  // classe de réseau → style de ses fils
+  Nm diametreJonction = 0;
+  std::string couleurJonction;
+  Nm tailleTexte = 0, tailleEtiquette = 0, tailleChamp = 0;  // 0 : valeurs de la 0.33
+  std::string formatRenvoi = "{page}.{zone}";  // renvois entre feuilles et contacts sous une bobine (7.10)
+  std::string formatPage = "{n}/{N}";
+  std::string porteeNoms = "projet";           // portée des noms des étiquettes globales (7.13) : « projet »
+  bool zonesCadre = true;                      // bordure en zones lettres-chiffres
+  friend bool operator==(const ReglagesSchema&, const ReglagesSchema&) = default;
 };
 
 // Géométrie d'un symbole placé, en coordonnées de la feuille.

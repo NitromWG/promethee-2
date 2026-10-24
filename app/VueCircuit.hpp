@@ -15,6 +15,7 @@
 #include <set>
 #include <functional>
 #include <optional>
+#include <tuple>
 #include <utility>
 #include <string>
 #include <string_view>
@@ -24,6 +25,7 @@
 #include <QWidget>
 
 #include "OutilVue.hpp"
+#include "promethee/circuit_edition.hpp"
 #include "promethee/electronique.hpp"
 
 namespace prom::ecad {
@@ -136,7 +138,11 @@ class VueCircuit : public QWidget {
   void copier();
   void coller();
   void dupliquer();
-  bool peutColler() const { return !m_presse.pistes.empty() || !m_presse.vias.empty() || !m_presse.zones.empty() || !m_presse.textes.empty(); }
+  bool peutColler() const;
+  // Collage spécial (5.30) : réseaux gardés ou retirés, cuivre rangé dans une classe, composants neufs ou non
+  void collerAvec(const prom::ecad::OptionsCollageCircuit& o);
+  // Point de la carte sous la souris, le centre de la vue si elle n'y est pas (poses depuis le ruban)
+  prom::ecad::Pt pointSouris() const;
   // Texte de sérigraphie sur la carte (révision, nom, polarité…), sur la face de la couche active ; rend son UUID
   std::string poserTexte(prom::ecad::Pt p, const std::string& texte);
   prom::ecad::Boite boiteTexte(const prom::ecad::TexteCircuit& t) const;
@@ -184,6 +190,7 @@ class VueCircuit : public QWidget {
   void menuCoin(QPointF q, const std::string& trait1, const std::string& trait2);
   std::string poserCongeOuChanfrein(const std::string& trait1, const std::string& trait2, prom::ecad::Nm r, bool chanfrein);
   void menuEmpreinte(QPointF q, const std::string& composant);
+  void menuPiste(QPointF q, const std::string& piste);  // couper, trancher, dérouter, lisser (5.23)
   // Contour décalé de « d » autour des pastilles réunies des composants, sur la couche ; rend le nombre de polygones
   int contourAutour(const std::vector<std::string>& composants, prom::ecad::Nm d, prom::ecad::Couche couche);
   // Plan de montage en PDF (A4 paysage) : faces dessus et dessous à l'échelle, contour coté, pastilles, sérigraphie,
@@ -354,6 +361,10 @@ class VueCircuit : public QWidget {
   void transformerEmpreintes(const std::function<void(prom::ecad::EmpreintePlacee&)>& f);
   int sommetSous(QPointF q) const;
   std::pair<int, prom::ecad::Pt> areteSous(QPointF q) const;
+  // Sommets et côtés du contour de la carte et de ses découpes (5.4) : boucle −1 pour le contour, k pour la découpe k ;
+  // {−2, −1} si rien n'est sous le curseur
+  std::pair<int, int> sommetContourSous(QPointF q) const;
+  std::tuple<int, int, prom::ecad::Pt> areteContourSous(QPointF q) const;
   void dessinerCouche(class QPainter& g, prom::ecad::Couche c, double opacite);
 
   ModeRouteur m_modeRouteur = ModeRouteur::Contourner;
@@ -381,13 +392,10 @@ class VueCircuit : public QWidget {
   // Déplacement de la sélection (glisser, flèches) : état de départ, bouts de pistes qui suivent
   prom::ecad::Circuit m_circuitDepart;
   std::vector<Accroche> m_accroches;
-  struct PressePapiers {
-    std::vector<prom::ecad::Piste> pistes;
-    std::vector<prom::ecad::Via> vias;
-    std::vector<prom::ecad::Zone> zones;
-    std::vector<prom::ecad::TexteCircuit> textes;
-    prom::ecad::Pt origine;
-  } m_presse;
+  // Presse-papiers du circuit (5.16, C23, C24) : celui du noyau, copié aussi dans le presse-papiers du système
+  // (type « application/x-promethee-circuit ») pour passer d'une vue, d'une fenêtre ou d'un projet à l'autre
+  prom::ecad::PressePapiersCircuit m_presse;
+  std::uint64_t m_generationVisibles = 0;  // écriture différée de la visibilité des couches (5.12)
   double m_echelle = 12;
   QPointF m_origine{40, 40};
   QPointF m_souris, m_pression;

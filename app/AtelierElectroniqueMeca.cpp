@@ -5,11 +5,19 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QFileDialog>
+#include <QInputDialog>
 #include <QLocale>
+#include <QRegularExpression>
 
 #include "AtelierElectronique.hpp"
 #include "Document.hpp"
 #include "FenetreFacade.hpp"
+#include "FenetresMeca034.hpp"
+#include "SelectionElectronique.hpp"
+#include "VuePiece.hpp"
+#include "promethee/distances3d.hpp"
+#include "promethee/idf.hpp"
 #include "promethee/carte3d.hpp"
 #include "promethee/contour_esquisse.hpp"
 #include "promethee/fichiers.hpp"
@@ -128,4 +136,116 @@ void AtelierElectronique::ouvrirContourEsquisse() {
   else m_contourEsquisse->refaire();
   m_contourEsquisse->show();
   m_contourEsquisse->raise();
+}
+
+// ---------- 0.34, lot L6 ----------
+void AtelierElectronique::importerBoitierCommerce() {
+  auto* d = new DialogueBoitierImporte(*this, this);
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  d->show();
+}
+
+void AtelierElectronique::ajouterPieceMontee() {
+  std::string composant;
+  for (const auto& id : m_selection->composants()) composant = id;
+  auto* d = new DialoguePieceMontee(*this, composant, this);
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  d->show();
+}
+
+const ApparenceCarte3D& AtelierElectronique::apparence3D() const {
+  static const ApparenceCarte3D defaut;
+  return m_apparence3D ? *m_apparence3D : defaut;
+}
+
+void AtelierElectronique::reglerApparence3D(const ApparenceCarte3D& a) {
+  m_apparence3D = std::make_unique<ApparenceCarte3D>(a);
+  m_3dAJour = false;
+  m_signature3D.clear();
+  if (mode() == Vue3D) majVue3D();
+}
+
+prom::ecad::PointDeVue AtelierElectronique::pointDeVue3D(const std::string& nom) const {
+  prom::ecad::PointDeVue v;
+  v.distance = 0;
+  if (m_3d) v = m_3d->navigation().capturer(nom);
+  return v;
+}
+
+void AtelierElectronique::appliquerPointDeVue3D(const prom::ecad::PointDeVue& v) {
+  if (m_3d) m_3d->navigation().appliquer(v);
+}
+
+void AtelierElectronique::enregistrerPointDeVue3D(const QString& nom) {
+  if (!m_3d || nom.trimmed().isEmpty()) return;
+  const prom::ecad::PointDeVue v = m_3d->navigation().capturer(nom.trimmed().toStdString());
+  modifierConception([&](ConceptionElec& c) {
+    std::erase_if(c.pointsDeVue, [&](const prom::ecad::PointDeVue& x) { return x.nom == v.nom; });
+    c.pointsDeVue.push_back(v);
+  }, QStringLiteral("Point de vue « %1 »").arg(nom.trimmed()));
+  afficherMessage(QStringLiteral("Point de vue <b>%1</b> gardé dans le projet.").arg(nom.trimmed().toHtmlEscaped()), NiveauMessage::Succes);
+}
+
+QString AtelierElectronique::mesurerCorps3D(const std::string& a, const std::string& b) {
+  const ConceptionElec* c = conceptionCourante();
+  if (!c) return {};
+  const prom::MesureCorps m = prom::mesurerCorps(*c, a, b);
+  if (!m.mesure.distance) return {};
+  const ComposantElec* ka = c->composant(a);
+  const ComposantElec* kb = c->composant(b);
+  const QString t = QStringLiteral("%1 → %2 : %3 mm (ΔX %4, ΔY %5, ΔZ %6) ; à la carte : %7 et %8 mm")
+                        .arg(q(ka ? ka->reference : a), q(kb ? kb->reference : b), nombre(m.mesure.distanceMin, 3), nombre(m.mesure.delta.X(), 3), nombre(-m.mesure.delta.Y(), 3),
+                             nombre(m.mesure.delta.Z(), 3), nombre(m.distanceCarteA, 3), nombre(m.distanceCarteB, 3));
+  if (m_3d) m_3d->setTracesMesure({{m.mesure.pa, m.mesure.pb, nombre(m.mesure.distanceMin, 3) + QStringLiteral(" mm")}});
+  afficherMessage(t.toHtmlEscaped(), NiveauMessage::Information);
+  return t;
+}
+
+bool AtelierElectronique::exporterIdf(const QString& cheminEmn, bool milliemesPouce) {
+  const ConceptionElec* c = conceptionCourante();
+  if (!c) return false;
+  prom::ecad::OptionsIdf o;
+  o.milliemesPouce = milliemesPouce;
+  o.origineTravail = c->circuit.affichage.origineFabrication;
+  const prom::ecad::FichiersIdf f = prom::ecad::ecrireIdf(*c, o);
+  QString emp = cheminEmn;
+  emp.replace(QRegularExpression(QStringLiteral("\\.emn$"), QRegularExpression::CaseInsensitiveOption), QStringLiteral(".emp"));
+  if (emp == cheminEmn) emp += QStringLiteral(".emp");
+  try {
+    prom::ecrireFichierAtomique(prom::cheminFichier(cheminEmn.toStdString()), f.emn);
+    prom::ecrireFichierAtomique(prom::cheminFichier(emp.toStdString()), f.emp);
+  } catch (const std::exception& e) {
+    afficherMessage(QStringLiteral("IDF non écrit : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+    return false;
+  }
+  afficherMessage(QStringLiteral("IDF 3.0 écrit : « %1 » et « %2 » (non-montés exclus).").arg(QFileInfo(cheminEmn).fileName().toHtmlEscaped(), QFileInfo(emp).fileName().toHtmlEscaped()), NiveauMessage::Succes);
+  return true;
+}
+
+bool AtelierElectronique::importerIdf(const QString& cheminEmn) {
+  QString emp = cheminEmn;
+  emp.replace(QRegularExpression(QStringLiteral("\\.emn$"), QRegularExpression::CaseInsensitiveOption), QStringLiteral(".emp"));
+  std::string emn, bib;
+  try {
+    emn = prom::lireFichier(prom::cheminFichier(cheminEmn.toStdString()));
+    if (QFileInfo::exists(emp)) bib = prom::lireFichier(prom::cheminFichier(emp.toStdString()));
+  } catch (const std::exception& e) {
+    afficherMessage(QStringLiteral("IDF illisible : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+    return false;
+  }
+  const prom::ecad::DonneesIdf d = prom::ecad::lireIdf(emn, bib);
+  ConceptionElec c = prom::ecad::conceptionDepuisIdf(d);
+  m_doc->modifier([&c](prom::Projet& p) { p.electronique.push_back(c); });
+  ouvrir(static_cast<int>(m_doc->projet().electronique.size()) - 1, Circuit);
+  afficherMessage(QStringLiteral("IDF relu : contour, %1 trou(s), %2 composant(s) à leur hauteur.%3").arg(d.trous.size()).arg(d.composants.size()).arg(d.alertes.empty() ? QString() : QStringLiteral(" ") + q(d.alertes.front()).toHtmlEscaped()),
+                  d.alertes.empty() ? NiveauMessage::Succes : NiveauMessage::Avertissement);
+  return true;
+}
+
+FenetreRendu* AtelierElectronique::rendu() const { return m_rendu; }
+
+void AtelierElectronique::ouvrirRendu() {
+  if (!m_rendu) m_rendu = new FenetreRendu(*this, this);
+  m_rendu->show();
+  m_rendu->raise();
 }

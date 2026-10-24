@@ -13,57 +13,82 @@ namespace prom::ecad {
 namespace {
 using Chemin = std::vector<std::pair<Pt, Pt>>;
 
+// Obstacles du routeur d'appoint (9.8, A8) : pastilles, pistes et vias rangées dans des index spatiaux ; les pistes et
+// vias posées pendant le routage y entrent au fur et à mesure, sans tout recalculer
 struct Obstacles {
   const ConceptionElec& c;
   const std::vector<PastillePlacee>& pp;
   Polygone carte;
   std::vector<std::pair<Pt, Pt>> bords = c.circuit.contour.aretes();  // contour et découpes (EL-44)
+  mutable IndexSpatial indexPastilles{2 * NM_PAR_MM}, indexPistes{2 * NM_PAR_MM}, indexVias{2 * NM_PAR_MM};
+  mutable std::size_t pistesIndexees = 0, viasIndexees = 0;
+  mutable bool pastillesIndexees = false;
+  Nm isolementMax = 0;
+
+  Obstacles(const ConceptionElec& cc, const std::vector<PastillePlacee>& p, Polygone k) : c(cc), pp(p), carte(std::move(k)) {
+    isolementMax = c.circuit.regles.isolement;
+    for (const auto& kl : c.circuit.regles.classes) isolementMax = std::max(isolementMax, kl.isolement);
+    for (const auto& q : c.circuit.regles.avancees.contraintes)
+      if (q.genre == GenreContrainte::Isolement) isolementMax = std::max({isolementMax, q.valeur.min, q.valeur.minInterne});
+    // Tension de service d'une classe : la table d'isolement peut dépasser toute valeur saisie
+    bool tension = false;
+    for (const auto& kl : c.circuit.regles.classes) tension |= kl.tension > 0;
+    isolementMax = std::max<Nm>(isolementMax, tension ? 12 * NM_PAR_MM : 2 * NM_PAR_MM);
+  }
+  void synchroniser() const {
+    if (!pastillesIndexees) {
+      for (std::size_t i = 0; i < pp.size(); ++i) indexPastilles.inserer(static_cast<int>(i), boite(pp[i].forme));
+      pastillesIndexees = true;
+    }
+    for (; pistesIndexees < c.circuit.pistes.size(); ++pistesIndexees) {
+      const Piste& t = c.circuit.pistes[pistesIndexees];
+      Boite bt;
+      bt.etendre(t.a);
+      bt.etendre(t.b);
+      indexPistes.inserer(static_cast<int>(pistesIndexees), bt.gonflee(t.largeur / 2));
+    }
+    for (; viasIndexees < c.circuit.vias.size(); ++viasIndexees) {
+      const Via& v = c.circuit.vias[viasIndexees];
+      Boite bv;
+      bv.etendre(v.p);
+      indexVias.inserer(static_cast<int>(viasIndexees), bv.gonflee(v.diametre / 2));
+    }
+  }
   bool dansCarte(Pt p) const { return c.circuit.contour.contient(p); }
 
   double iso(const std::string& a, const std::string& b) const { return static_cast<double>(isolementEntre(c.circuit.regles, a, b)); }
 
-  bool segment(Pt a, Pt b, Nm largeur, Couche L, const std::string& N) const {
-    const Regles& R = c.circuit.regles;
-    const double w = static_cast<double>(largeur) / 2;
-    if (!dansCarte(a) || !dansCarte(b)) return true;
-    for (const auto& [u, v] : bords)
-      if (distanceSegments(u, v, a, b) - w < static_cast<double>(R.bord)) return true;
-    for (const auto& p : pp) {
-      if (!(p.couches & bit(L)) || (!p.reseau.empty() && p.reseau == N)) continue;
-      if (distancePolygoneSegment(p.forme, a, b) - w < iso(N, p.reseau)) return true;
-    }
-    for (const auto& t : c.circuit.pistes) {
-      if (t.couche != L || (!t.reseau.empty() && t.reseau == N)) continue;
-      if (distanceSegments(a, b, t.a, t.b) - w - static_cast<double>(t.largeur) / 2 < iso(N, t.reseau)) return true;
-    }
-    for (const auto& v : c.circuit.vias) {
-      if (!v.reseau.empty() && v.reseau == N) continue;
-      if (distancePointSegment(v.p, a, b) - w - static_cast<double>(v.diametre) / 2 < iso(N, v.reseau)) return true;
-    }
-    return false;
-  }
-  // Premier obstacle rencontré par un segment (diagnostic) ; vide si le segment passe.
+  // Premier obstacle rencontré par un segment ; vide si le segment passe
   std::string bloqueur(Pt a, Pt b, Nm largeur, Couche L, const std::string& N) const {
+    synchroniser();
     const Regles& R = c.circuit.regles;
     const double w = static_cast<double>(largeur) / 2;
     if (!dansCarte(a) || !dansCarte(b)) return "le bord de la carte (tracé hors de la matière)";
     for (const auto& [u, v] : bords)
       if (distanceSegments(u, v, a, b) - w < static_cast<double>(R.bord)) return "le bord de la carte";
-    for (const auto& p : pp) {
+    Boite zone;
+    zone.etendre(a);
+    zone.etendre(b);
+    zone = zone.gonflee(largeur / 2 + isolementMax + 1'000);
+    for (int i : indexPastilles.chercher(zone)) {
+      const auto& p = pp[static_cast<std::size_t>(i)];
       if (!(p.couches & bit(L)) || (!p.reseau.empty() && p.reseau == N)) continue;
       if (distancePolygoneSegment(p.forme, a, b) - w < iso(N, p.reseau))
         return "la pastille " + p.reference + "." + p.numero + (p.reseau.empty() ? std::string() : " (réseau « " + p.reseau + " »)");
     }
-    for (const auto& t : c.circuit.pistes) {
+    for (int i : indexPistes.chercher(zone)) {
+      const auto& t = c.circuit.pistes[static_cast<std::size_t>(i)];
       if (t.couche != L || (!t.reseau.empty() && t.reseau == N)) continue;
       if (distanceSegments(a, b, t.a, t.b) - w - static_cast<double>(t.largeur) / 2 < iso(N, t.reseau)) return "une piste du réseau « " + t.reseau + " »";
     }
-    for (const auto& v : c.circuit.vias) {
+    for (int i : indexVias.chercher(zone)) {
+      const auto& v = c.circuit.vias[static_cast<std::size_t>(i)];
       if (!v.reseau.empty() && v.reseau == N) continue;
       if (distancePointSegment(v.p, a, b) - w - static_cast<double>(v.diametre) / 2 < iso(N, v.reseau)) return "une via du réseau « " + v.reseau + " »";
     }
     return {};
   }
+  bool segment(Pt a, Pt b, Nm largeur, Couche L, const std::string& N) const { return !bloqueur(a, b, largeur, L, N).empty(); }
   bool chemin(const Chemin& ch, Nm largeur, Couche L, const std::string& N) const {
     for (const auto& [a, b] : ch)
       if (segment(a, b, largeur, L, N)) return true;
@@ -71,19 +96,28 @@ struct Obstacles {
   }
   // Via : loin du bord, de toutes les pastilles (pas de via dans une pastille), des pistes et vias des autres réseaux
   bool via(Pt p, Nm diametre, const std::string& N) const {
+    synchroniser();
     const Regles& R = c.circuit.regles;
     const double r = static_cast<double>(diametre) / 2;
     if (!dansCarte(p)) return true;
     for (const auto& [u, v] : bords)
       if (distancePointSegment(p, u, v) - r < static_cast<double>(R.bord)) return true;
-    for (const auto& x : pp)
+    Boite zone;
+    zone.etendre(p);
+    zone = zone.gonflee(diametre / 2 + isolementMax + 1'000);
+    for (int i : indexPastilles.chercher(zone)) {
+      const auto& x = pp[static_cast<std::size_t>(i)];
       if (distancePolygoneSegment(x.forme, p, p) - r < iso(N, x.reseau)) return true;
-    for (const auto& t : c.circuit.pistes) {
+    }
+    for (int i : indexPistes.chercher(zone)) {
+      const auto& t = c.circuit.pistes[static_cast<std::size_t>(i)];
       if (!t.reseau.empty() && t.reseau == N) continue;
       if (distancePointSegment(p, t.a, t.b) - r - static_cast<double>(t.largeur) / 2 < iso(N, t.reseau)) return true;
     }
-    for (const auto& v : c.circuit.vias)
+    for (int i : indexVias.chercher(zone)) {
+      const auto& v = c.circuit.vias[static_cast<std::size_t>(i)];
       if (distance(p, v.p) - r - static_cast<double>(v.diametre) / 2 < iso(N, v.reseau)) return true;
+    }
     return false;
   }
 };
@@ -171,13 +205,11 @@ std::vector<Chemin> candidatsDirects(const PastillePlacee& pa, const PastillePla
 }
 
 // Une passe : chaque liaison du chevelu, du plus court au plus long
-int routerLiaisons(ConceptionElec& c, bool changerDeFace) {
-  const Connectivite k = connectivite(c);
-  const auto pp = pastilles(c, k);
-  const Remplissages z = remplirZones(c, k);
+// Une passe : les liaisons du chevelu, des plus courtes aux plus longues (9.8 : connectivité, pastilles, zones et
+// index des obstacles calculés une fois pour toutes les passes)
+int routerLiaisons(ConceptionElec& c, const Connectivite& k, const std::vector<PastillePlacee>& pp, const Remplissages& z, const Obstacles& o, bool changerDeFace) {
   auto chevelu = etatRoutage(c, k, z).chevelu;
   std::sort(chevelu.begin(), chevelu.end(), [](const Liaison& a, const Liaison& b) { return distance(a.a, a.b) < distance(b.a, b.b); });
-  Obstacles o{c, pp, c.circuit.contour.polygone()};
   int poses = 0;
   for (const Liaison& l : chevelu) {
     const PastillePlacee* pa = pastilleEn(pp, l.a, l.reseau);
@@ -245,12 +277,8 @@ int routerLiaisons(ConceptionElec& c, bool changerDeFace) {
 }
 
 // Une passe : les pastilles CMS d'un réseau à zone sur l'autre face y descendent par une via
-int coudre(ConceptionElec& c) {
-  const Connectivite k = connectivite(c);
-  const auto pp = pastilles(c, k);
-  const Remplissages z = remplirZones(c, k);
+int coudre(ConceptionElec& c, const Connectivite& k, const std::vector<PastillePlacee>& pp, const Remplissages& z, const Obstacles& o) {
   const auto chevelu = etatRoutage(c, k, z).chevelu;
-  Obstacles o{c, pp, c.circuit.contour.polygone()};
   int vias = 0;
   std::vector<Pt> traitees;
   for (const Liaison& l : chevelu)
@@ -336,12 +364,19 @@ BilanRoutage routerSimple(ConceptionElec& c) {
     const Connectivite k = connectivite(c);
     aFaire = etatRoutage(c, k, remplirZones(c, k)).chevelu.size();
   }
-  // D'abord les descentes vers les plans, puis les liaisons sur une face, enfin celles qui changent de face
-  for (int passe = 0; passe < 6; ++passe) {
-    const int v = coudre(c);
-    int p = routerLiaisons(c, false);
-    if (p == 0 && v == 0) p = routerLiaisons(c, true);
-    if (p == 0 && v == 0) break;
+  // D'abord les descentes vers les plans, puis les liaisons sur une face, enfin celles qui changent de face. Réseaux,
+  // pastilles et zones ne changent pas d'une passe à l'autre : calculés une fois (9.8)
+  {
+    const Connectivite k = connectivite(c);
+    const auto pp = pastilles(c, k);
+    const Remplissages z = remplirZones(c, k);
+    const Obstacles o{c, pp, c.circuit.contour.polygone()};
+    for (int passe = 0; passe < 6; ++passe) {
+      const int v = coudre(c, k, pp, z, o);
+      int p = routerLiaisons(c, k, pp, z, o, false);
+      if (p == 0 && v == 0) p = routerLiaisons(c, k, pp, z, o, true);
+      if (p == 0 && v == 0) break;
+    }
   }
   b.nonRoutees = diagnostiquerChevelu(c);
   b.restantes = static_cast<int>(b.nonRoutees.size());

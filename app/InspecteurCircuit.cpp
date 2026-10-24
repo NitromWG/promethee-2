@@ -28,6 +28,7 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include "promethee/circuit_edition.hpp"
 #include "AtelierElectronique.hpp"
 #include "ChampValeur.hpp"
 #include "Document.hpp"
@@ -216,10 +217,35 @@ class PagePlacement : public PageCircuit {
     });
     QFormLayout* fl = nullptr;
     groupe(QStringLiteral("Placement"), fl);
-    valeur(fl, QStringLiteral("X"), false, -2000, 2000, [this] { const EmpreintePlacee* e = empreinte(); return e ? mm(e->position.x) : 0.0; },
-           [this](ConceptionElec& c, double v) { for (auto& y : c.circuit.empreintes) if (y.composant == m_choisi) y.position.x = nm(v); });
-    valeur(fl, QStringLiteral("Y"), false, -2000, 2000, [this] { const EmpreintePlacee* e = empreinte(); return e ? mm(e->position.y) : 0.0; },
-           [this](ConceptionElec& c, double v) { for (auto& y : c.circuit.empreintes) if (y.composant == m_choisi) y.position.y = nm(v); });
+    // Coordonnées dans le repère de travail (5.31) : origine choisie, y vers le haut au choix
+    valeur(fl, QStringLiteral("X"), false, -2000, 2000,
+           [this] {
+             const EmpreintePlacee* e = empreinte();
+             const ConceptionElec* c = conception();
+             return e && c ? mm(versRepereTravail(c->circuit.affichage, e->position).x) : 0.0;
+           },
+           [this](ConceptionElec& c, double v) {
+             for (auto& y : c.circuit.empreintes)
+               if (y.composant == m_choisi) {
+                 Pt t = versRepereTravail(c.circuit.affichage, y.position);
+                 t.x = nm(v);
+                 y.position = depuisRepereTravail(c.circuit.affichage, t);
+               }
+           });
+    valeur(fl, QStringLiteral("Y"), false, -2000, 2000,
+           [this] {
+             const EmpreintePlacee* e = empreinte();
+             const ConceptionElec* c = conception();
+             return e && c ? mm(versRepereTravail(c->circuit.affichage, e->position).y) : 0.0;
+           },
+           [this](ConceptionElec& c, double v) {
+             for (auto& y : c.circuit.empreintes)
+               if (y.composant == m_choisi) {
+                 Pt t = versRepereTravail(c.circuit.affichage, y.position);
+                 t.y = nm(v);
+                 y.position = depuisRepereTravail(c.circuit.affichage, t);
+               }
+           });
     valeur(fl, QStringLiteral("Rotation"), true, -360, 360, [this] { const EmpreintePlacee* e = empreinte(); return e ? e->rotation : 0.0; },
            [this](ConceptionElec& c, double v) { for (auto& y : c.circuit.empreintes) if (y.composant == m_choisi) y.rotation = v; });
     auto* face = new QComboBox;

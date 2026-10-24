@@ -151,6 +151,35 @@ class AtelierElectronique : public QWidget {
   class DialogueMisesAJour* misesAJourArticles() const;
   // Articles de la bibliothèque qui diffèrent des composants posés d'après eux : un message propose la mise à jour
   int signalerMisesAJourArticles();
+  // 0.34 (lot L4) : empreintes rangées en série dans la bibliothèque personnelle (une écriture ; un identifiant déjà
+  // pris par une autre géométrie est gardé tel quel) ; rend le nombre rangé
+  int rangerEmpreintesPerso(const std::vector<prom::ecad::DefEmpreinte>& empreintes);
+  void ouvrirAchats();                     // 4.18 : reste à acheter pour N cartes
+  void ouvrirEchangeEmpreintes();          // 4.20 : empreintes échangées en masse
+  void ouvrirGestionBibliotheque();        // 4.23 : bibliothèque d'articles en tableau
+  void ouvrirSerieEmpreintes();            // 4.26 : empreintes par noms
+  void ouvrirAffectation();                // 4.28 : affectation des empreintes, non modale
+  void ouvrirGabaritsPastilles();          // 4.24 : piles de pastilles du projet
+  // 0.34 (lot L6) : boîtier du commerce (6.7), pièce montée (6.8), apparence et points de vue de la 3D (6.11),
+  // mesure entre deux corps (6.12), IDF (6.17), rendu et images clés (6.18)
+  void importerBoitierCommerce();
+  void ajouterPieceMontee();
+  const struct ApparenceCarte3D& apparence3D() const;
+  void reglerApparence3D(const struct ApparenceCarte3D& a);
+  prom::ecad::PointDeVue pointDeVue3D(const std::string& nom) const;  // la caméra de la vue 3D
+  void appliquerPointDeVue3D(const prom::ecad::PointDeVue& v);
+  void enregistrerPointDeVue3D(const QString& nom);  // gardé dans le projet, en un pas
+  QString mesurerCorps3D(const std::string& a, const std::string& b);  // texte de la mesure, tracée dans la vue
+  bool exporterIdf(const QString& cheminEmn, bool milliemesPouce = false);
+  bool importerIdf(const QString& cheminEmn);  // carte ajoutée au projet
+  void ouvrirRendu();
+  class FenetreRendu* rendu() const;
+  class VuePiece* vue3DCarte() const { return m_3d; }
+  class DialogueGabaritsPastilles* gabaritsPastilles() const;
+  class DialogueAchats* achats() const;
+  class DialogueGestionBibliotheque* gestionBibliotheque() const;
+  class DialogueSerieEmpreintes* serieEmpreintes() const;
+  class FenetreAffectation* affectation() const;
   // ---------- Circuit (lot L5) ----------
   class PanneauAPlacer* aPlacer() const { return m_aPlacer; }
   void montrerAPlacer();
@@ -178,6 +207,31 @@ class AtelierElectronique : public QWidget {
   // Symboles choisis déplacés vers une autre feuille : UUID, repères, empreintes et pistes gardés ; liaisons coupées
   // remplacées par des étiquettes globales ; rend le nombre de symboles déplacés
   int deplacerVersFeuille(const std::set<std::string>& symboles, int cible);
+  // ---------- Schéma avancé (0.34, lot L7) ----------
+  int migrerEnHierarchie();                      // 7.2 : feuilles à plat sous une racine ; rend son indice, −1 si rien
+  int synchroniserPortsBlocs(bool retirerOrphelins = false);  // 7.3 : blocs de la feuille montrée ; rend les changements
+  void allerFeuilleMere();                       // 7.2 : un niveau plus haut dans la hiérarchie
+  bool echangerPortesChoisies();                 // 7.8 : deux unités choisies d'un même composant
+  int appliquerDirectivesSchema();               // 7.14 : classes des directives reprises par les règles du circuit
+  void ouvrirGrapheReseaux();                    // 7.14 : graphe des réseaux rangé par ressorts
+  class DialogueGrapheReseaux* grapheReseaux() const;
+  void ouvrirImportFormes();                     // 7.19 : DXF ou SVG en formes modifiables
+  int importerFormesFeuille(const QString& chemin, const std::set<std::string>& calques = {});
+  // 7.16 : la sélection (schéma ou circuit) enregistrée en extrait, un extrait posé au centre de la feuille ou de la
+  // carte, la disposition des composants choisis recopiée sur les voies semblables ; rendent ce qui est fait
+  bool enregistrerExtrait(const QString& chemin, const QString& nom);
+  int poserExtraitFichier(const QString& chemin);
+  int recopierDispositionChoisie(double dxMm, double dyMm);
+  void ouvrirJeuxStyles();                       // 7.25
+  bool appliquerJeuStylesNomme(const QString& nom);  // jeu intégré (« école »…)
+  void ouvrirAssistantSymbole();                 // 7.20
+  // 7.24 : cuivre propre à la carte ; la copie locale de l'empreinte du composant choisi, son retour, son éclatement
+  QString copieLocaleChoisie();
+  bool revenirBibliothequeChoisie();
+  int eclaterEmpreinteChoisie();
+  void ouvrirGenerateurs();
+  void ouvrirPastilles(const std::string& empreinte = {});  // 7.9, 7.21 : celle du composant choisi à défaut
+  class DialoguePastilles* pastillesEmpreinte() const;
   // ---------- Fabrication et cartes complexes (lot L8) ----------
   void ouvrirContraintes();  // gestionnaire de contraintes, le même au schéma et au circuit
   class GestionnaireContraintes* contraintes() const;
@@ -235,7 +289,7 @@ class AtelierElectronique : public QWidget {
   // Panneaux (1.21, ERG-23) : sur une fenêtre principale imbriquée, les vues au centre, ils flottent (un second
   // écran), s'ancrent, se groupent en onglets ou se replient ; leurs dispositions nommées se gardent pour soi, dans
   // le projet ou dans un fichier (DispositionsAtelier)
-  enum class Panneau : std::uint8_t { Projet, Bibliotheque, Inspecteur, Messages, Verifications, Recherche, Apprendre, Ecarts, Champs, APlacer };
+  enum class Panneau : std::uint8_t { Projet, Bibliotheque, Inspecteur, Messages, Verifications, Recherche, Apprendre, Ecarts, Champs, APlacer, Reseaux };
   // Écarts entre le schéma et le circuit (3.8) : la liste, et sa pastille dans la barre d'état
   class PanneauEcarts* ecarts() const { return m_ecarts; }
   void montrerEcarts();
@@ -308,6 +362,8 @@ class AtelierElectronique : public QWidget {
   void construireRuban();
   void ajusterRuban();  // replié selon la largeur (2.15, G12)
   void enregistrerCommandes();
+  void enregistrerCommandesCuivre();  // commandes du cuivre et de la carte (lot L5, OutilsCuivre.cpp)
+  void enregistrerCommandesL8();      // fabrication, signaux, impédance, routage par stratégies (0.34, OutilsFabrication034.cpp)
   QWidget* controleCouches();
   QWidget* controleGrille();
   std::map<std::string, std::function<void()>, std::less<>> m_commandes;
@@ -343,8 +399,9 @@ class AtelierElectronique : public QWidget {
   QAction *m_actionMosaique = nullptr, *m_actionTableauObjets = nullptr;
   QMainWindow* m_fenetre = nullptr;
   QDockWidget *m_dockProjet = nullptr, *m_dockBibliotheque = nullptr, *m_dockInspecteur = nullptr, *m_dockMessages = nullptr, *m_dockVerifications = nullptr, *m_dockRecherche = nullptr, *m_dockApprendre = nullptr,
-              *m_dockEcarts = nullptr, *m_dockChamps = nullptr, *m_dockAPlacer = nullptr;
+              *m_dockEcarts = nullptr, *m_dockChamps = nullptr, *m_dockAPlacer = nullptr, *m_dockReseaux = nullptr;
   class PanneauAPlacer* m_aPlacer = nullptr;
+  class PanneauReseaux* m_reseaux = nullptr;
   QPointer<class FenetreRapport> m_rapport;
   QPointer<class FenetreFacade> m_facade;
   QPointer<class GestionnaireContraintes> m_contraintes;
@@ -365,6 +422,15 @@ class AtelierElectronique : public QWidget {
   QPointer<class FenetreChoixEmpreinte> m_choixEmpreinte;
   QPointer<class DialogueStandardisation> m_standardisation;
   QPointer<class DialogueMisesAJour> m_misesAJour;
+  QPointer<class DialogueAchats> m_achats;
+  QPointer<class DialogueGestionBibliotheque> m_gestionBibliotheque;
+  QPointer<class DialogueSerieEmpreintes> m_serieEmpreintes;
+  QPointer<class FenetreAffectation> m_affectation;
+  QPointer<class DialogueGabaritsPastilles> m_gabaritsPastilles;
+  QPointer<class FenetreRendu> m_rendu;
+  QPointer<class DialogueGrapheReseaux> m_grapheReseaux;
+  QPointer<class DialoguePastilles> m_pastillesEmpreinte;
+  std::unique_ptr<struct ApparenceCarte3D> m_apparence3D;
   VueSchema* m_schema = nullptr;
   VueCircuit* m_circuit = nullptr;
   VuePiece* m_3d = nullptr;

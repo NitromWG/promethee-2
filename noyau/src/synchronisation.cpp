@@ -23,8 +23,9 @@ std::set<std::string> composantsPoses(const ConceptionElec& c) {
   for (const auto& f : c.feuilles)
     for (const auto& s : f.symboles)
       if (!s.composant.empty()) r.insert(s.composant);
+  // Composant de la carte seule (5.17) : posé sans symbole, la synchronisation le garde avec ses réseaux
   for (const auto& x : c.composants)
-    if (x.symbole.empty()) r.insert(x.uuid);
+    if (x.symbole.empty() || x.carteSeule) r.insert(x.uuid);
   return r;
 }
 
@@ -314,7 +315,8 @@ std::vector<EcartSynchro> ecartsSynchronisation(const ConceptionElec& c, const C
     }
     if (!attendue) continue;  // 15 : empreinte inconnue ou effacée, l'ancienne reste
     const DefEmpreinte* actuelle = c.empreinte(e->empreinte);
-    if (e->empreinte != x.empreinte) {
+    // Une copie locale retouchée sur la carte (7.24) dérive de l'empreinte du schéma : pas d'écart
+    if (e->empreinte != x.empreinte && e->copieLocale != x.empreinte) {
       ec.avant = e->empreinte;
       ec.apres = x.empreinte;
       std::vector<std::string> perdues;

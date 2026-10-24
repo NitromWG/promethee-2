@@ -1,8 +1,10 @@
 // Prométhée : import électrique d'une carte KiCad (.kicad_pcb). Licence GPL-3.0-only.
+#include "promethee/fichiers.hpp"
 #include "promethee/hauteurs.hpp"
 #include "promethee/kicad_electronique.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <map>
@@ -25,17 +27,31 @@ using kicad_interne::Expr;
 Pt kp(const Expr& e, std::size_t i = 1) { return {nm(e.nombre(i)), nm(e.nombre(i + 1))}; }
 
 std::optional<Couche> coucheKicad(const std::string& n) {
-  if (n == "F.Cu") return Couche::CuivreDessus;
-  if (n == "B.Cu") return Couche::CuivreDessous;
-  if (n == "In1.Cu") return Couche::CuivreInt1;
-  if (n == "In2.Cu") return Couche::CuivreInt2;
+  // Toutes les couches du modèle (0.34, 10.1) : 32 cuivres, vernis, pâte, colle, dessins, couches personnelles
   if (n == "F.SilkS" || n == "F.Silkscreen") return Couche::SerigraphieDessus;
   if (n == "B.SilkS" || n == "B.Silkscreen") return Couche::SerigraphieDessous;
   if (n == "F.CrtYd" || n == "F.Courtyard") return Couche::EncombrementDessus;
   if (n == "B.CrtYd" || n == "B.Courtyard") return Couche::EncombrementDessous;
-  if (n == "F.Fab") return Couche::FabricationDessus;
-  if (n == "B.Fab") return Couche::FabricationDessous;
-  return std::nullopt;
+  if (n == "F.Adhes" || n == "F.Adhesive") return Couche::ColleDessus;
+  if (n == "B.Adhes" || n == "B.Adhesive") return Couche::ColleDessous;
+  if (n == "Dwgs.User" || n == "User.Drawings" || n == "Eco1.User" || n == "User.Eco1") return Couche::Dessins;
+  if (n == "Cmts.User" || n == "User.Comments" || n == "Eco2.User" || n == "User.Eco2" || n == "Margin") return Couche::Commentaires;
+  return coucheDepuisCode(n);
+}
+// Cuivres d'une carte de « nc » couches
+Couches tousLesCuivres(int nc) {
+  Couches r = 0;
+  for (Couche k : couchesCuivre(std::max(nc, 1))) r |= bit(k);
+  return r;
+}
+// Arc de KiCad 5 (« start » : centre, « end » : départ, « angle » : balayage en degrés) en trois points
+std::array<Pt, 3> arcKicad5(Pt centre, Pt depart, double angle) {
+  const double dx = static_cast<double>(depart.x - centre.x), dy = static_cast<double>(depart.y - centre.y);
+  auto tourner = [&](double a) {
+    const double r = a * std::numbers::pi / 180, c = std::cos(r), s = std::sin(r);
+    return Pt{centre.x + static_cast<Nm>(std::llround(dx * c - dy * s)), centre.y + static_cast<Nm>(std::llround(dx * s + dy * c))};
+  };
+  return {depart, tourner(angle / 2), tourner(angle)};
 }
 
 double largeurTrait(const Expr& e, double defaut = 0.12) {
@@ -81,7 +97,7 @@ struct BrocheReseau {
 // Définition d'une empreinte KiCad (pastilles, sérigraphie, encombrement, corps), dans le repère local de
 // Prométhée pour son placement « em » ; « broches » reçoit les numéros de pastilles et leur réseau
 DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, const std::string& nomKicad, std::map<std::string, int>& ignores,
-                                   const std::function<std::string(const Expr&)>& reseau, std::vector<BrocheReseau>& broches) {
+                                   const std::function<std::string(const Expr&)>& reseau, std::vector<BrocheReseau>& broches, int nc = 4) {
   // Points de l'empreinte : position du fichier (repère de l'empreinte, déjà retournée sur la face arrière)
   // tournée et placée, puis ramenée dans le repère local de Prométhée
   auto local = [&](const Expr& x, std::size_t i = 1) { return versEmpreinte(em, tournerDegres(kp(x, i), em.rotation) + em.position); };
@@ -94,39 +110,95 @@ DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, con
   for (const auto& s : e.elements) {
     const std::string n = s.nom();
     if (n == "pad") {
-      // Pastille sans cuivre (ouverture de pâte ou de vernis seule) : pas une pastille électrique
+      // Pastille sans cuivre (ouverture de pâte ou de vernis seule) : gardée avec ses seules couches, sans numéro
+      // électrique (10.1)
       bool cuivre = false;
       if (const Expr* ls = s.enfant("layers"))
         for (std::size_t i = 1; i < ls->elements.size(); ++i) {
           const std::string l = ls->valeur(i);
           cuivre |= l.size() > 3 && l.compare(l.size() - 3, 3, ".Cu") == 0;
         }
-      if (!cuivre) {
-        ++ignores["ouverture de pâte ou de vernis sans cuivre"];
-        continue;
-      }
       Pastille p;
-      p.numero = s.valeur(1);
+      p.numero = cuivre ? s.valeur(1) : std::string();
       const std::string type = s.valeur(2), forme = s.valeur(3);
-      p.type = type == "smd" ? TypePastille::CMS : type == "np_thru_hole" ? TypePastille::NonMetallisee : TypePastille::Traversante;
-      if (type == "connect") {
-        p.type = TypePastille::CMS;
-        ++ignores["pastille de contact (connect) importée en CMS"];
-      }
-      p.forme = forme == "circle" ? FormePastille::Rond : forme == "oval" ? FormePastille::Ovale : forme == "roundrect" ? FormePastille::RectArrondi : FormePastille::Rect;
-      if (forme == "trapezoid" || forme == "custom") ++ignores["pastille " + forme + " approchée par un rectangle"];
+      // « connect » : contact sans trou ni pâte (doigt de connecteur, plage de clavier), une CMS à ses seules couches
+      p.type = type == "smd" || type == "connect" ? TypePastille::CMS : type == "np_thru_hole" ? TypePastille::NonMetallisee : TypePastille::Traversante;
+      if (type == "connect") p.fabrication = "connecteurBord";
+      p.forme = forme == "circle" ? FormePastille::Rond : forme == "oval" ? FormePastille::Ovale : forme == "roundrect" ? FormePastille::RectArrondi : forme == "trapezoid" ? FormePastille::Trapeze
+                : forme == "custom" ? FormePastille::Libre : FormePastille::Rect;
       if (const Expr* rr = s.enfant("roundrect_rratio")) p.arrondi = rr->nombre(1, 0.25);
+      if (const Expr* ch = s.enfant("chamfer_ratio")) {
+        p.forme = FormePastille::Chanfreine;
+        p.chanfrein = ch->nombre(1, 0.2);
+        if (const Expr* coins = s.enfant("chamfer")) {
+          p.coinsChanfrein = 0;
+          for (std::size_t i = 1; i < coins->elements.size(); ++i) {
+            const std::string c2 = coins->valeur(i);
+            p.coinsChanfrein |= c2 == "top_left" ? 1 : c2 == "top_right" ? 2 : c2 == "bottom_right" ? 4 : c2 == "bottom_left" ? 8 : 0;
+          }
+        }
+      }
       if (const Expr* t = s.enfant("size")) {
         p.largeur = nm(t->nombre(1));
         p.hauteur = nm(t->nombre(2, t->nombre(1)));
       }
+      if (p.forme == FormePastille::Trapeze)
+        if (const Expr* d2 = s.enfant("rect_delta")) p.trapeze = nm(std::max(std::abs(d2->nombre(1, 0)), std::abs(d2->nombre(2, 0))));
+      // Pastille de forme libre : l'ancre et ses primitives (polygones, cercles, traits épais), dans le repère de la
+      // pastille
+      if (p.forme == FormePastille::Libre) {
+        Polygones morceaux;
+        const bool ancreRonde = [&] {
+          if (const Expr* o = s.enfant("options"))
+            if (const Expr* a = o->enfant("anchor")) return a->valeur(1) == "circle";
+          return false;
+        }();
+        morceaux.push_back(ancreRonde ? cercle({0, 0}, std::max<Nm>(p.largeur / 2, 1)) : rectangle({0, 0}, std::max<Nm>(p.largeur, 1), std::max<Nm>(p.hauteur, 1), 0));
+        if (const Expr* prims = s.enfant("primitives"))
+          for (const auto& g : prims->elements) {
+            const std::string gn = g.nom();
+            const Nm ep = nm(largeurTrait(g, 0));
+            if (gn == "gr_poly")
+              if (const Expr* pts = g.enfant("pts")) {
+                Polygone q;
+                for (const auto& xy : pts->elements)
+                  if (xy.nom() == "xy") q.push_back(kp(xy));
+                if (q.size() >= 3) morceaux.push_back(orienter(q));
+                if (ep > 0) for (std::size_t i = 0; i < q.size(); ++i) morceaux.push_back(oblong(q[i], q[(i + 1) % q.size()], ep));
+              }
+            if (gn == "gr_circle" && g.enfant("center") && g.enfant("end")) {
+              const Pt c2 = kp(*g.enfant("center"));
+              morceaux.push_back(cercle(c2, static_cast<Nm>(std::llround(distance(c2, kp(*g.enfant("end"))) + static_cast<double>(ep) / 2))));
+            }
+            if ((gn == "gr_line" || gn == "gr_rect") && g.enfant("start") && g.enfant("end")) {
+              const Pt a2 = kp(*g.enfant("start")), b2 = kp(*g.enfant("end"));
+              if (gn == "gr_rect") morceaux.push_back(orienter(Polygone{a2, {b2.x, a2.y}, b2, {a2.x, b2.y}}));
+              else morceaux.push_back(oblong(a2, b2, std::max<Nm>(ep, 1)));
+            }
+          }
+        const Polygones u = unir(morceaux);
+        if (!u.empty()) p.contourLibre = *std::max_element(u.begin(), u.end(), [](const Polygone& x, const Polygone& y) { return aireMm2(x) < aireMm2(y); });
+      }
       if (const Expr* dr = s.enfant("drill")) {
         if (dr->valeur(1) == "oval") {
-          p.percage = nm(std::min(dr->nombre(2), dr->nombre(3, dr->nombre(2))));
-          ++ignores["perçage oblong approché par un trou rond"];
+          // Fente (4.27) : le long de l'axe x de la pastille ; une fente verticale tourne la pastille d'un quart de tour
+          const double dx = dr->nombre(2), dy = dr->nombre(3, dr->nombre(2));
+          p.percage = nm(std::min(dx, dy));
+          p.longueurPercage = nm(std::max(dx, dy));
+          if (dy > dx) {
+            std::swap(p.largeur, p.hauteur);
+            p.rotation = 90;  // ajouté à l'angle de la pastille plus bas
+          }
         } else
           p.percage = nm(dr->nombre(1));
+        if (const Expr* off = dr->enfant("offset")) p.decalagePercage = kp(*off);
       }
+      if (const Expr* zc = s.enfant("zone_connect")) {
+        const int v = static_cast<int>(zc->nombre(1, -1));
+        p.connexion = v == 0 ? ConnexionZone::Aucune : v == 1 ? ConnexionZone::Thermique : v == 2 ? ConnexionZone::Pleine : ConnexionZone::Heritee;
+      }
+      if (const Expr* m = s.enfant("solder_mask_margin")) p.margeVernis = nm(m->nombre(1, 0));
+      if (const Expr* m = s.enfant("solder_paste_margin")) p.margePate = nm(m->nombre(1, 0));
       // KiCad écrit l'angle absolu de la pastille et l'omet quand il vaut 0 : la valeur par défaut est donc 0, pas
       // l'angle de l'empreinte (X1). Une pastille de 3 × 0,5 mm sans angle dans une empreinte à 90° reste à 0°.
       double angleAbsolu = 0;
@@ -141,7 +213,8 @@ DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, con
         Couches lues = 0;
         for (std::size_t i = 1; i < ls->elements.size(); ++i) {
           const std::string l = ls->valeur(i);
-          if (l == "*.Cu" || l == "F&B.Cu") lues |= bit(Couche::CuivreDessus) | bit(Couche::CuivreDessous) | bit(Couche::CuivreInt1) | bit(Couche::CuivreInt2);
+          if (l == "*.Cu") lues |= tousLesCuivres(std::max(nc, 4));
+          else if (l == "F&B.Cu") lues |= bit(Couche::CuivreDessus) | bit(Couche::CuivreDessous);
           else if (l == "*.Mask") lues |= bit(Couche::VernisDessus) | bit(Couche::VernisDessous);
           else if (l == "*.Paste") lues |= bit(Couche::PateDessus) | bit(Couche::PateDessous);
           else if (l == "F.Mask") lues |= bit(Couche::VernisDessus);
@@ -154,13 +227,13 @@ DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, con
         for (int i = 0; i < NB_COUCHES; ++i)
           if (lues & bit(static_cast<Couche>(i))) locales |= bit(coucheLocale(static_cast<Couche>(i)));
         // Un trou non métallisé n'a jamais de cuivre, même si KiCad écrit « *.Cu »
-        if (p.type == TypePastille::NonMetallisee) locales &= ~(bit(Couche::CuivreDessus) | bit(Couche::CuivreDessous) | bit(Couche::CuivreInt1) | bit(Couche::CuivreInt2));
+        if (p.type == TypePastille::NonMetallisee) locales &= ~tousLesCuivres(32);
         // Seulement quand elles diffèrent de ce que le type suppose : un fichier simple reste simple
         Pastille parDefaut;
         parDefaut.type = p.type;
-        if (locales != couchesPastille(parDefaut, false, 4)) p.couches = locales;
+        if (locales != couchesPastille(parDefaut, false, std::max(nc, 4))) p.couches = locales;
       }
-      p.rotation = em.dessous ? em.rotation - angleAbsolu : angleAbsolu - em.rotation;
+      p.rotation = p.rotation + (em.dessous ? em.rotation - angleAbsolu : angleAbsolu - em.rotation);
       p.rotation = std::fmod(p.rotation + 720.0, 360.0);
       if (p.largeur <= 0) continue;
       d.pastilles.push_back(p);
@@ -180,7 +253,7 @@ DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, con
       continue;
     }
     const std::optional<Couche> cl = coucheKicad(kicad_interne::couche(s));
-    if (!cl || estCuivre(*cl)) continue;
+    if (!cl) continue;
     const Couche cd = coucheLocale(*cl);
     const bool encombrement = cd == Couche::EncombrementDessus;
     auto trait = [&](Pt a, Pt b) {
@@ -189,7 +262,6 @@ DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, con
         enc.etendre(b);
         return;
       }
-      if (cd != Couche::SerigraphieDessus && cd != Couche::SerigraphieDessous) return;
       TraitEmpreinte t;
       t.couche = cd;
       t.a = a;
@@ -215,7 +287,7 @@ DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, con
       if (encombrement) {
         enc.etendre(centre - Pt{rayon, rayon});
         enc.etendre(centre + Pt{rayon, rayon});
-      } else if (cd == Couche::SerigraphieDessus || cd == Couche::SerigraphieDessous) {
+      } else {
         TraitEmpreinte t;
         t.couche = cd;
         t.a = centre;
@@ -227,8 +299,12 @@ DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, con
       if (s.enfant("mid")) {
         const auto pts = arcTroisPoints(local(*s.enfant("start")), local(*s.enfant("mid")), local(*s.enfant("end")));
         for (std::size_t i = 1; i < pts.size(); ++i) trait(pts[i - 1], pts[i]);
-      } else
-        ++ignores["arc d'empreinte au format KiCad 5"];
+      } else if (const Expr* ang = s.enfant("angle")) {
+        // KiCad 5 : centre, point de départ et balayage
+        const auto a3 = arcKicad5(local(*s.enfant("start")), local(*s.enfant("end")), em.dessous ? -ang->nombre(1) : ang->nombre(1));
+        const auto pts = arcTroisPoints(a3[0], a3[1], a3[2]);
+        for (std::size_t i = 1; i < pts.size(); ++i) trait(pts[i - 1], pts[i]);
+      }
     } else if (n == "fp_poly") {
       if (const Expr* pts = s.enfant("pts")) {
         std::vector<Pt> v;
@@ -436,9 +512,9 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
   if (const Expr* ls = racine.enfant("layers"))
     for (const auto& l : ls->elements)
       if (l.liste && l.valeur(1).size() > 3 && l.valeur(1).compare(l.valeur(1).size() - 3, 3, ".Cu") == 0) ++cuivres;
-  c.circuit.empilage.couchesCuivre = cuivres >= 3 ? 4 : cuivres == 1 ? 1 : 2;
+  // Toutes les couches de cuivre (0.34 : jusqu'à 32)
+  c.circuit.empilage.couchesCuivre = std::clamp(cuivres, 1, 32);
   r.couchesCuivre = cuivres;
-  if (cuivres > 4) r.alertes.push_back(std::to_string(cuivres) + " couches de cuivre dans KiCad : seules F.Cu, In1.Cu, In2.Cu et B.Cu sont reprises.");
   if (const Expr* tb = racine.enfant("title_block")) {
     if (const Expr* t = tb->enfant("title")) c.cartouche.titre = t->valeur(1);
     if (const Expr* t = tb->enfant("rev")) c.cartouche.revision = t->valeur(1);
@@ -486,6 +562,21 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
           for (const auto& xy : pts->elements)
             if (xy.nom() == "xy") p.push_back(P(xy));
           for (std::size_t i = 0; p.size() > 1 && i < p.size(); ++i) morceaux.push_back({p[i], p[(i + 1) % p.size()], std::nullopt});
+        }
+      } else if (n == "gr_curve") {
+        // Courbe de Bézier cubique : découpée en 16 cordes
+        if (const Expr* pts = e.enfant("pts")) {
+          std::vector<Point> q;
+          for (const auto& xy : pts->elements)
+            if (xy.nom() == "xy") q.push_back(P(xy));
+          if (q.size() == 4)
+            for (int k = 0; k < 16; ++k) {
+              auto b = [&](double t) {
+                const double u = 1 - t;
+                return Point{u * u * u * q[0].x + 3 * u * u * t * q[1].x + 3 * u * t * t * q[2].x + t * t * t * q[3].x, u * u * u * q[0].y + 3 * u * u * t * q[1].y + 3 * u * t * t * q[2].y + t * t * t * q[3].y};
+              };
+              morceaux.push_back({b(k / 16.0), b((k + 1) / 16.0), std::nullopt});
+            }
         }
       } else
         ++ignores["tracé de contour " + n];
@@ -562,12 +653,9 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
     Instance inst;
     inst.composant = em.composant;
     inst.reference = comp.reference;
-    DefEmpreinte d = definitionDepuisKicad(e, em, nomKicad, ignores, reseau, inst.broches);
+    DefEmpreinte d = definitionDepuisKicad(e, em, nomKicad, ignores, reseau, inst.broches, c.circuit.empilage.couchesCuivre);
     r.pastilles += static_cast<int>(d.pastilles.size());
-    if (d.pastilles.empty() && d.traits.empty()) {
-      ++ignores["empreinte sans pastille ni sérigraphie"];
-      continue;
-    }
+    // Une empreinte sans pastille ni dessin (repère de montage vide) est gardée : son corps et sa place comptent
     // Identifiant : celui de KiCad, une variante si une autre géométrie porte déjà ce nom
     std::string id = "kicad:" + nomKicad;
     for (int variante = 2; c.empreintes.count(id) && !memesPastilles(c.empreintes.at(id), d); ++variante) id = "kicad:" + nomKicad + "#" + std::to_string(variante);
@@ -585,14 +673,31 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
     const std::string n = e.nom();
     if (n == "segment" || n == "arc") {
       const auto cl = coucheKicad(kicad_interne::couche(e));
-      if (!cl || !estCuivre(*cl)) { ++ignores["piste sur une couche non reprise"]; continue; }
       const Nm largeur = nm(e.enfant("width") ? e.enfant("width")->nombre(1, 0.25) : 0.25);
+      if (cl && !estCuivre(*cl) && e.enfant("start") && e.enfant("end")) {
+        // Piste sur une couche technique : un dessin de la carte (10.1)
+        DessinCircuit d;
+        d.uuid = nouvelUuid();
+        d.couche = *cl;
+        d.epaisseur = largeur;
+        if (n == "arc" && e.enfant("mid")) {
+          d.forme = DessinCircuit::Forme::Arc;
+          d.points = {kp(*e.enfant("start")), kp(*e.enfant("mid")), kp(*e.enfant("end"))};
+        } else
+          d.points = {kp(*e.enfant("start")), kp(*e.enfant("end"))};
+        c.circuit.dessins.push_back(d);
+        continue;
+      }
+      if (!cl) { ++ignores["piste sur une couche inconnue"]; continue; }
       const std::string res = reseau(e);
-      std::vector<Pt> pts;
-      if (n == "segment" && e.enfant("start") && e.enfant("end")) pts = {kp(*e.enfant("start")), kp(*e.enfant("end"))};
-      else if (n == "arc" && e.enfant("start") && e.enfant("mid") && e.enfant("end")) pts = arcTroisPoints(kp(*e.enfant("start")), kp(*e.enfant("mid")), kp(*e.enfant("end")));
-      for (std::size_t i = 1; i < pts.size(); ++i)
-        if (!(pts[i - 1] == pts[i])) c.circuit.pistes.push_back({nouvelUuid(), res, *cl, pts[i - 1], pts[i], largeur});
+      if (n == "segment" && e.enfant("start") && e.enfant("end")) {
+        if (!(kp(*e.enfant("start")) == kp(*e.enfant("end")))) c.circuit.pistes.push_back({nouvelUuid(), res, *cl, kp(*e.enfant("start")), kp(*e.enfant("end")), largeur});
+      } else if (n == "arc" && e.enfant("start") && e.enfant("mid") && e.enfant("end")) {
+        // Arc de piste (8.4) : gardé en arc, de « start » à « end » par « mid »
+        Piste t{nouvelUuid(), res, *cl, kp(*e.enfant("start")), kp(*e.enfant("end")), largeur};
+        t.milieu = kp(*e.enfant("mid"));
+        c.circuit.pistes.push_back(t);
+      }
       ++r.pistes;
     } else if (n == "via") {
       Via v;
@@ -601,11 +706,51 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
       if (const Expr* t = e.enfant("size")) v.diametre = nm(t->nombre(1, 0.8));
       if (const Expr* t = e.enfant("drill")) v.percage = nm(t->nombre(1, 0.4));
       v.reseau = reseau(e);
-      if (e.valeur(1) == "blind" || e.valeur(1) == "micro") ++ignores["via borgne ou micro-via traitée en via traversante"];
+      // Vias borgnes, enterrées et micro-vias (8.22) : leurs couches de départ et d'arrivée
+      if (const Expr* ls = e.enfant("layers"); ls && ls->elements.size() >= 3)
+        if (const auto a = coucheKicad(ls->valeur(1)), b = coucheKicad(ls->valeur(2)); a && b && estCuivre(*a) && estCuivre(*b)) {
+          v.de = *a;
+          v.vers = *b;
+        }
+      if (e.valeur(1) == "micro") {
+        v.type = TypeVia::Micro;
+        v.laser = true;
+      } else if (e.valeur(1) == "blind") {
+        const bool exterieure = v.de == Couche::CuivreDessus || v.de == Couche::CuivreDessous || v.vers == Couche::CuivreDessus || v.vers == Couche::CuivreDessous;
+        v.type = exterieure ? TypeVia::Borgne : TypeVia::Enterree;
+      }
       c.circuit.vias.push_back(v);
       ++r.vias;
     } else if (n == "zone") {
-      if (e.enfant("keepout")) { ++ignores["zone d'interdiction (keepout)"]; continue; }
+      if (const Expr* ko = e.enfant("keepout")) {
+        // Zone d'interdiction (keepout) : une zone de règles (5.4) avec ses interdictions et ses couches
+        ZoneRegle zr;
+        zr.uuid = nouvelUuid();
+        if (const Expr* nn = e.enfant("name")) zr.nom = nn->valeur(1);
+        if (zr.nom.empty()) zr.nom = "Interdiction KiCad";
+        auto interdit = [&](const char* quoi) {
+          const Expr* x = ko->enfant(quoi);
+          return x && x->valeur(1) == "not_allowed";
+        };
+        zr.interditPistes = interdit("tracks");
+        zr.interditVias = interdit("vias");
+        zr.interditPastilles = interdit("pads");
+        zr.interditZones = interdit("copperpour");
+        zr.interditEmpreintes = interdit("footprints");
+        if (const auto cl = coucheKicad(kicad_interne::couche(e)); cl && estCuivre(*cl)) zr.couches |= bit(*cl);
+        if (const Expr* ls = e.enfant("layers"))
+          for (std::size_t i = 1; i < ls->elements.size(); ++i) {
+            const std::string l = ls->valeur(i);
+            if (l == "*.Cu" || l == "F&B.Cu") zr.couches = 0;
+            else if (const auto cl = coucheKicad(l); cl && estCuivre(*cl)) zr.couches |= bit(*cl);
+          }
+        if (const Expr* poly = e.enfant("polygon"))
+          if (const Expr* pts = poly->enfant("pts"))
+            for (const auto& xy : pts->elements)
+              if (xy.nom() == "xy") zr.contour.push_back(kp(xy));
+        if (zr.contour.size() >= 3) c.circuit.zonesRegles.push_back(zr);
+        continue;
+      }
       std::vector<Couche> couches;
       if (const auto cl = coucheKicad(kicad_interne::couche(e)); cl && estCuivre(*cl)) couches.push_back(*cl);
       if (const Expr* ls = e.enfant("layers"))
@@ -639,10 +784,12 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
       ++r.zones;
     } else if (n == "gr_text") {
       const auto cl = coucheKicad(kicad_interne::couche(e));
-      if (!cl || (*cl != Couche::SerigraphieDessus && *cl != Couche::SerigraphieDessous)) { ++ignores["texte hors sérigraphie"]; continue; }
+      if (!cl || *cl == Couche::Contour) { ++ignores["texte sur une couche inconnue ou sur le contour"]; continue; }
       TexteCircuit t;
       t.uuid = nouvelUuid();
       t.texte = e.valeur(1);
+      // « \n » de KiCad : saut de ligne (texte sur plusieurs lignes)
+      for (std::size_t i = t.texte.find("\\n"); i != std::string::npos; i = t.texte.find("\\n", i + 1)) t.texte.replace(i, 2, "\n");
       t.couche = *cl;
       if (const Expr* at = e.enfant("at")) {
         t.p = kp(*at);
@@ -654,9 +801,54 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
           if (const Expr* sz = fo->enfant("size")) t.hauteur = nm(sz->nombre(1, 1.0));
       c.circuit.textes.push_back(t);
       ++r.textes;
-    } else if (n.rfind("gr_", 0) == 0 && kicad_interne::couche(e) != "Edge.Cuts")
-      ++ignores["dessin " + n + " hors contour"];
-    else if (n == "dimension") ++ignores["cote"];
+    } else if (n.rfind("gr_", 0) == 0 && kicad_interne::couche(e) != "Edge.Cuts") {
+      // Dessins de la carte (5.31) sur leur couche : traits, arcs, cercles, rectangles, polygones, courbes
+      const auto cl = coucheKicad(kicad_interne::couche(e));
+      if (!cl) { ++ignores["dessin sur une couche inconnue"]; continue; }
+      DessinCircuit d;
+      d.uuid = nouvelUuid();
+      d.couche = *cl;
+      d.epaisseur = nm(largeurTrait(e, 0.15));
+      if (const Expr* f = e.enfant("fill")) d.plein = f->valeur(1) == "solid" || f->valeur(1) == "yes";
+      const Expr* debut = e.enfant("start");
+      const Expr* fin = e.enfant("end");
+      if (n == "gr_line" && debut && fin) d.points = {kp(*debut), kp(*fin)};
+      else if (n == "gr_arc" && debut && fin && e.enfant("mid")) {
+        d.forme = DessinCircuit::Forme::Arc;
+        d.points = {kp(*debut), kp(*e.enfant("mid")), kp(*fin)};
+      } else if (n == "gr_arc" && debut && fin && e.enfant("angle")) {
+        const auto a3 = arcKicad5(kp(*debut), kp(*fin), e.enfant("angle")->nombre(1));
+        d.forme = DessinCircuit::Forme::Arc;
+        d.points = {a3[0], a3[1], a3[2]};
+      } else if (n == "gr_circle" && e.enfant("center") && fin) {
+        d.forme = DessinCircuit::Forme::Cercle;
+        d.points = {kp(*e.enfant("center")), kp(*fin)};
+      } else if (n == "gr_rect" && debut && fin) {
+        d.forme = DessinCircuit::Forme::Rectangle;
+        d.points = {kp(*debut), kp(*fin)};
+      } else if ((n == "gr_poly" || n == "gr_curve") && e.enfant("pts")) {
+        d.forme = n == "gr_poly" ? DessinCircuit::Forme::Polygone : DessinCircuit::Forme::Bezier;
+        for (const auto& xy : e.enfant("pts")->elements)
+          if (xy.nom() == "xy") d.points.push_back(kp(xy));
+      } else {
+        ++ignores["dessin " + n + " sans géométrie lisible"];
+        continue;
+      }
+      if (d.points.size() >= 2) c.circuit.dessins.push_back(d);
+    } else if (n == "dimension") {
+      // Cote (5.15) : points mesurés, genre, couche
+      Cote k;
+      k.uuid = nouvelUuid();
+      if (const auto cl = coucheKicad(kicad_interne::couche(e))) k.couche = *cl;
+      const std::string genre = e.enfant("type") ? e.enfant("type")->valeur(1) : std::string("aligned");
+      k.genre = genre == "orthogonal" ? GenreCote::Horizontale : genre == "radial" ? GenreCote::Rayon : genre == "center" ? GenreCote::Centre : GenreCote::Alignee;
+      if (const Expr* pts = e.enfant("pts"))
+        for (const auto& xy : pts->elements)
+          if (xy.nom() == "xy") k.points.push_back(kp(xy));
+      if (const Expr* h = e.enfant("height")) k.decalage = nm(h->nombre(1, 2));
+      if (k.points.size() >= 2) c.circuit.cotes.push_back(k);
+      else ++ignores["cote sans points"];
+    }
   }
   // Schéma de liaison : un symbole par composant (broches = numéros de pastilles), chaque broche prolongée d'un
   // fil et d'une étiquette globale au nom de son réseau ; les broches sans réseau reçoivent une marque de
@@ -942,30 +1134,18 @@ std::string ptK(Pt p) { return nbK(mm(p.x)) + " " + nbK(mm(p.y)); }
 std::string chaineK(const std::string& t) {
   std::string r = "\"";
   for (char ch : t) {
+    if (ch == '\n') {
+      r += "\\n";
+      continue;
+    }
     if (ch == '"' || ch == '\\') r += '\\';
     r += ch;
   }
   return r + "\"";
 }
 const char* nomKicad(Couche c) {
-  switch (c) {
-    case Couche::CuivreDessus: return "F.Cu";
-    case Couche::CuivreInt1: return "In1.Cu";
-    case Couche::CuivreInt2: return "In2.Cu";
-    case Couche::CuivreDessous: return "B.Cu";
-    case Couche::VernisDessus: return "F.Mask";
-    case Couche::VernisDessous: return "B.Mask";
-    case Couche::PateDessus: return "F.Paste";
-    case Couche::PateDessous: return "B.Paste";
-    case Couche::SerigraphieDessus: return "F.SilkS";
-    case Couche::SerigraphieDessous: return "B.SilkS";
-    case Couche::Contour: return "Edge.Cuts";
-    case Couche::EncombrementDessus: return "F.CrtYd";
-    case Couche::EncombrementDessous: return "B.CrtYd";
-    case Couche::FabricationDessus: return "F.Fab";
-    case Couche::FabricationDessous: return "B.Fab";
-  }
-  return "Cmts.User";
+  // Les codes des couches sont ceux de KiCad
+  return codeCouche(c);
 }
 }  // namespace
 
@@ -978,10 +1158,11 @@ std::string kicadDepuisConception(const ConceptionElec& c, const Connectivite& k
   if (!c.cartouche.societe.empty()) o += " (company " + chaineK(c.cartouche.societe) + ")";
   if (!c.cartouche.date.empty()) o += " (date " + chaineK(c.cartouche.date) + ")";
   o += ")\n  (layers\n    (0 \"F.Cu\" signal)\n";
-  if (nc >= 4) o += "    (1 \"In1.Cu\" signal)\n    (2 \"In2.Cu\" signal)\n";
-  o += "    (31 \"B.Cu\" signal)\n    (34 \"B.Paste\" user)\n    (35 \"F.Paste\" user)\n    (36 \"B.SilkS\" user \"B.Silkscreen\")\n    (37 \"F.SilkS\" user \"F.Silkscreen\")\n"
+  // Cuivres internes (0.34 : jusqu'à 30), numérotés comme KiCad
+  for (int i = 1; i + 1 < nc && i <= 30; ++i) o += "    (" + std::to_string(i) + " \"In" + std::to_string(i) + ".Cu\" signal)\n";
+  o += "    (31 \"B.Cu\" signal)\n    (32 \"B.Adhes\" user \"B.Adhesive\")\n    (33 \"F.Adhes\" user \"F.Adhesive\")\n    (34 \"B.Paste\" user)\n    (35 \"F.Paste\" user)\n    (36 \"B.SilkS\" user \"B.Silkscreen\")\n    (37 \"F.SilkS\" user \"F.Silkscreen\")\n"
        "    (38 \"B.Mask\" user)\n    (39 \"F.Mask\" user)\n    (44 \"Edge.Cuts\" user)\n    (46 \"B.CrtYd\" user \"B.Courtyard\")\n    (47 \"F.CrtYd\" user \"F.Courtyard\")\n"
-       "    (48 \"B.Fab\" user)\n    (49 \"F.Fab\" user)\n  )\n";
+       "    (48 \"B.Fab\" user)\n    (49 \"F.Fab\" user)\n    (40 \"Dwgs.User\" user \"User.Drawings\")\n    (41 \"Cmts.User\" user \"User.Comments\")\n  )\n";
   o += "  (setup (pad_to_mask_clearance " + nbK(mm(c.circuit.fabrication.margeVernis)) + "))\n";
   // Réseaux : numéros dans l'ordre alphabétique ; 0 = sans réseau
   std::map<std::string, int> numeros;
@@ -1032,19 +1213,38 @@ std::string kicadDepuisConception(const ConceptionElec& c, const Connectivite& k
       if (t.rayon > 0) o += "    (fp_circle (center " + ptK(locK(t.a)) + ") (end " + ptK(locK(t.a + Pt{t.rayon, 0})) + ") " + trait + " (fill none))\n";
       else o += "    (fp_line (start " + ptK(locK(t.a)) + ") (end " + ptK(locK(t.b)) + ") " + trait + ")\n";
     }
+    if (x && x->horsNomenclature) o += "    (attr exclude_from_bom)\n";
+    if (x && x->horsPlacement) o += "    (attr exclude_from_pos_files)\n";
     for (const auto& pa : d->pastilles) {
       const Pastille ps = pastilleSurCarte(e, pa);
-      const char* type = pa.type == TypePastille::CMS ? "smd" : pa.type == TypePastille::NonMetallisee ? "np_thru_hole" : "thru_hole";
-      const char* forme = pa.forme == FormePastille::Rond ? "circle" : pa.forme == FormePastille::Ovale ? "oval" : pa.forme == FormePastille::Rect ? "rect" : "roundrect";
+      std::string type = pa.type == TypePastille::CMS ? "smd" : pa.type == TypePastille::NonMetallisee ? "np_thru_hole" : "thru_hole";
+      const char* forme = pa.forme == FormePastille::Rond ? "circle" : pa.forme == FormePastille::Ovale ? "oval" : pa.forme == FormePastille::Rect ? "rect"
+                          : pa.forme == FormePastille::Trapeze ? "trapezoid" : pa.forme == FormePastille::Libre ? "custom" : "roundrect";
       std::string couches;
-      if (pa.type == TypePastille::CMS) couches = "\"" + face + ".Cu\" \"" + face + ".Paste\" \"" + face + ".Mask\"";
-      else if (pa.type == TypePastille::NonMetallisee) couches = "\"*.Cu\" \"*.Mask\"";
+      if (pa.couches) {
+        // Couches explicites de la pastille (X2), sur la face où l'empreinte est posée
+        for (int i = 0; i < NB_COUCHES; ++i)
+          if (pa.couches & bit(static_cast<Couche>(i))) couches += (couches.empty() ? "" : " ") + std::string("\"") + coucheK(static_cast<Couche>(i)) + "\"";
+      } else if (pa.type == TypePastille::CMS) couches = "\"" + face + ".Cu\" \"" + face + ".Paste\" \"" + face + ".Mask\"";
       else couches = "\"*.Cu\" \"*.Mask\"";
+      if (pa.type == TypePastille::CMS && pa.fabrication == "connecteurBord") type = "connect";
+      // Fente : la pastille KiCad garde son angle, la fente le long de son axe x
       o += "    (pad " + chaineK(pa.numero) + " " + type + " " + forme + " (at " + ptK(locK(pa.position)) + " " + nbK(ps.rotation) + ") (size " + nbK(mm(pa.largeur)) + " " +
            nbK(mm(pa.hauteur)) + ")";
-      if (pa.percage > 0) o += " (drill " + nbK(mm(pa.percage)) + ")";
+      if (pa.fente()) o += " (drill oval " + nbK(mm(pa.longueurPercage)) + " " + nbK(mm(pa.percage)) + ")";
+      else if (pa.percage > 0) o += " (drill " + nbK(mm(pa.percage)) + (pa.decalagePercage == Pt{} ? std::string() : " (offset " + ptK(pa.decalagePercage) + ")") + ")";
       o += " (layers " + couches + ")";
       if (pa.forme == FormePastille::RectArrondi) o += " (roundrect_rratio " + nbK(pa.arrondi) + ")";
+      if (pa.forme == FormePastille::Chanfreine) o += " (chamfer_ratio " + nbK(pa.chanfrein) + ")";
+      if (pa.forme == FormePastille::Trapeze) o += " (rect_delta 0 " + nbK(mm(pa.trapeze)) + ")";
+      if (pa.margeVernis) o += " (solder_mask_margin " + nbK(mm(*pa.margeVernis)) + ")";
+      if (pa.margePate) o += " (solder_paste_margin " + nbK(mm(*pa.margePate)) + ")";
+      if (pa.connexion != ConnexionZone::Heritee) o += " (zone_connect " + std::string(pa.connexion == ConnexionZone::Aucune ? "0" : pa.connexion == ConnexionZone::Thermique ? "1" : "2") + ")";
+      if (pa.forme == FormePastille::Libre && pa.contourLibre.size() >= 3) {
+        o += " (options (clearance outline) (anchor rect)) (primitives (gr_poly (pts";
+        for (const Pt& q : pa.contourLibre) o += " (xy " + ptK(q) + ")";
+        o += ") (width 0) (fill yes)))";
+      }
       if (pa.type != TypePastille::NonMetallisee) {
         const auto it = reseauPastille.find({static_cast<int>(ie), pa.numero});
         if (it != reseauPastille.end() && !it->second.empty()) o += " " + net(it->second);
@@ -1056,10 +1256,55 @@ std::string kicadDepuisConception(const ConceptionElec& c, const Connectivite& k
          face + ".CrtYd\"))\n";
     o += "  )\n";
   }
-  for (const auto& p : c.circuit.pistes)
-    o += "  (segment (start " + ptK(p.a) + ") (end " + ptK(p.b) + ") (width " + nbK(mm(p.largeur)) + ") (layer \"" + nomKicad(p.couche) + "\") " + net(p.reseau) + ")\n";
-  for (const auto& v : c.circuit.vias)
-    o += "  (via (at " + ptK(v.p) + ") (size " + nbK(mm(v.diametre)) + ") (drill " + nbK(mm(v.percage)) + ") (layers \"F.Cu\" \"B.Cu\") " + net(v.reseau) + ")\n";
+  for (const auto& p : c.circuit.pistes) {
+    if (p.milieu) o += "  (arc (start " + ptK(p.a) + ") (mid " + ptK(*p.milieu) + ") (end " + ptK(p.b) + ") (width " + nbK(mm(p.largeur)) + ") (layer \"" + nomKicad(p.couche) + "\") " + net(p.reseau) + ")\n";
+    else o += "  (segment (start " + ptK(p.a) + ") (end " + ptK(p.b) + ") (width " + nbK(mm(p.largeur)) + ") (layer \"" + nomKicad(p.couche) + "\") " + net(p.reseau) + ")\n";
+  }
+  for (const auto& v : c.circuit.vias) {
+    const char* genre = v.type == TypeVia::Micro ? "micro " : v.type == TypeVia::Borgne || v.type == TypeVia::Enterree ? "blind " : "";
+    o += "  (via " + std::string(genre) + "(at " + ptK(v.p) + ") (size " + nbK(mm(v.diametre)) + ") (drill " + nbK(mm(v.percage)) + ") (layers \"" + nomKicad(v.de) + "\" \"" + nomKicad(v.vers) + "\") " + net(v.reseau) + ")\n";
+  }
+  // Zones de règles qui interdisent quelque chose : zones d'interdiction de KiCad (keepout)
+  for (const auto& zr : c.circuit.zonesRegles) {
+    if (zr.contour.size() < 3 || !(zr.interditPistes || zr.interditVias || zr.interditPastilles || zr.interditZones || zr.interditEmpreintes)) continue;
+    std::string couches;
+    if (zr.couches == 0) couches = "\"*.Cu\"";
+    else
+      for (Couche x : couchesCuivre(nc))
+        if (zr.couches & bit(x)) couches += (couches.empty() ? "" : " ") + std::string("\"") + nomKicad(x) + "\"";
+    auto permis = [](bool interdit) { return interdit ? "not_allowed" : "allowed"; };
+    o += "  (zone (net 0) (net_name \"\") (layers " + couches + ") (name " + chaineK(zr.nom) + ") (hatch edge 0.5)\n    (keepout (tracks " + permis(zr.interditPistes) + ") (vias " + permis(zr.interditVias) +
+         ") (pads " + permis(zr.interditPastilles) + ") (copperpour " + permis(zr.interditZones) + ") (footprints " + permis(zr.interditEmpreintes) + "))\n    (polygon (pts";
+    for (const Pt& q : zr.contour) o += " (xy " + ptK(q) + ")";
+    o += "))\n  )\n";
+  }
+  // Dessins de la carte (5.31) et cotes (5.15)
+  for (const auto& d : c.circuit.dessins) {
+    if (d.points.size() < 2) continue;
+    const std::string trait = "(stroke (width " + nbK(mm(d.epaisseur)) + ") (type solid)) (layer \"" + nomKicad(d.couche) + "\")";
+    const std::string rempli = std::string(" (fill ") + (d.plein ? "solid" : "none") + ")";
+    switch (d.forme) {
+      case DessinCircuit::Forme::Trait: o += "  (gr_line (start " + ptK(d.points[0]) + ") (end " + ptK(d.points[1]) + ") " + trait + ")\n"; break;
+      case DessinCircuit::Forme::Arc:
+        if (d.points.size() >= 3) o += "  (gr_arc (start " + ptK(d.points[0]) + ") (mid " + ptK(d.points[1]) + ") (end " + ptK(d.points[2]) + ") " + trait + ")\n";
+        break;
+      case DessinCircuit::Forme::Cercle: o += "  (gr_circle (center " + ptK(d.points[0]) + ") (end " + ptK(d.points[1]) + ") " + trait + rempli + ")\n"; break;
+      case DessinCircuit::Forme::Rectangle: o += "  (gr_rect (start " + ptK(d.points[0]) + ") (end " + ptK(d.points[1]) + ") " + trait + rempli + ")\n"; break;
+      case DessinCircuit::Forme::Polygone:
+      case DessinCircuit::Forme::Bezier: {
+        o += std::string("  (") + (d.forme == DessinCircuit::Forme::Bezier && d.points.size() == 4 ? "gr_curve" : "gr_poly") + " (pts";
+        for (const Pt& q : d.points) o += " (xy " + ptK(q) + ")";
+        o += ") " + trait + (d.forme == DessinCircuit::Forme::Polygone ? rempli : std::string()) + ")\n";
+        break;
+      }
+    }
+  }
+  for (const auto& k2 : c.circuit.cotes) {
+    if (k2.points.size() < 2) continue;
+    const char* genre = k2.genre == GenreCote::Horizontale || k2.genre == GenreCote::Verticale ? "orthogonal" : k2.genre == GenreCote::Rayon || k2.genre == GenreCote::Diametre ? "radial" : k2.genre == GenreCote::Centre ? "center" : "aligned";
+    o += "  (dimension (type " + std::string(genre) + ") (layer \"" + nomKicad(k2.couche) + "\") (pts (xy " + ptK(k2.points[0]) + ") (xy " + ptK(k2.points[1]) + ")) (height " + nbK(mm(k2.decalage)) +
+         ") (format (units 2) (units_format 1) (precision " + std::to_string(k2.precision) + ")) (style (thickness " + nbK(mm(k2.epaisseur)) + ") (arrow_length 1.27) (text_position_mode 0) (extension_height 0.58642) (extension_offset 0.5) keep_text_aligned))\n";
+  }
   for (const auto& z : c.circuit.zones) {
     if (z.contour.size() < 3) continue;
     const auto it = numeros.find(z.reseau);
@@ -1079,6 +1324,30 @@ std::string kicadDepuisConception(const ConceptionElec& c, const Connectivite& k
          nbK(mm(t.hauteur)) + ") (thickness " + nbK(mm(epaisseurTexte(t.hauteur))) + "))" + (t.couche == Couche::SerigraphieDessous ? " (justify mirror)" : "") + "))\n";
   o += ")\n";
   return o;
+}
+
+std::string projetKicadDepuisConception(const ConceptionElec& c) {
+  // Fichier .kicad_pro (JSON) : règles de conception et classes de réseaux avec leurs motifs, que KiCad relit pour
+  // sa DRC ; les noms des réseaux sont ceux de la carte écrite à côté
+  const Regles& R = c.circuit.regles;
+  nlohmann::ordered_json classes = nlohmann::ordered_json::array();
+  auto classe = [&](const std::string& nom, Nm isolement, Nm largeur, Nm via, Nm percage) {
+    return nlohmann::ordered_json{{"name", nom}, {"clearance", mm(isolement)}, {"track_width", mm(largeur)}, {"via_diameter", mm(via)}, {"via_drill", mm(percage)},
+                                  {"microvia_diameter", mm(c.circuit.empilage.microViaDiametre)}, {"microvia_drill", mm(c.circuit.empilage.microViaPercage)},
+                                  {"diff_pair_gap", 0.25}, {"diff_pair_width", mm(largeur)}, {"pcb_color", "rgba(0, 0, 0, 0.000)"}, {"schematic_color", "rgba(0, 0, 0, 0.000)"}, {"wire_width", 6}, {"bus_width", 12}, {"line_style", 0}};
+  };
+  classes.push_back(classe("Default", R.isolement, R.largeur, R.viaDiametre, R.viaPercage));
+  for (const auto& k : R.classes) classes.push_back(classe(k.nom, k.isolement, k.largeur, k.viaDiametre, k.viaPercage));
+  nlohmann::ordered_json motifs = nlohmann::ordered_json::array();
+  for (const auto& [motif, nom] : R.classeReseau) motifs.push_back({{"netclass", nom}, {"pattern", motif}});
+  nlohmann::ordered_json p;
+  p["board"]["design_settings"]["rules"] = {{"min_clearance", mm(R.isolement)}, {"min_track_width", mm(R.largeurMin)}, {"min_via_diameter", mm(R.viaDiametre)},
+                                             {"min_through_hole_diameter", mm(R.percageMin)}, {"min_copper_edge_clearance", mm(R.bord)}, {"min_hole_to_hole", mm(R.ecartTrous)},
+                                             {"min_via_annular_width", mm(R.anneauMin)}, {"min_hole_clearance", mm(R.cuivreTrou)}};
+  p["board"]["design_settings"]["defaults"] = {{"board_outline_line_width", 0.1}, {"copper_line_width", 0.2}};
+  p["meta"] = {{"filename", nomFichierAscii(c.nom, "carte") + ".kicad_pro"}, {"version", 1}};
+  p["net_settings"] = {{"classes", classes}, {"meta", {{"version", 3}}}, {"netclass_patterns", motifs}};
+  return p.dump(2) + "\n";
 }
 
 }  // namespace prom::ecad

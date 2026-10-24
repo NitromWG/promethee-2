@@ -1,11 +1,13 @@
 // Prométhée : panneau, relecture des fichiers de fabrication, impédance, devis, routage complet, visionneuse HTML
 // (lot L8). Licence GPL-3.0-only.
+#include "promethee/lignes_transmission.hpp"
 #include "promethee/fabrication_avancee.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <numeric>
+#include <optional>
 #include <set>
 #include <sstream>
 
@@ -47,6 +49,7 @@ PanneauFabrication panneauFabrication(const ConceptionElec& c, const OptionsPann
   ModeleFabrication& m = r.modele;
   m.nom = base.nom + " (panneau " + std::to_string(C) + " × " + std::to_string(L) + ")";
   m.boite = {0, 0, PW, PH};
+  m.repere = m.boite;  // origine des fichiers : le coin bas gauche du panneau (5.31)
   m.contour = {{0, 0}, {PW, 0}, {PW, PH}, {0, PH}};
   auto origine = [&](int i, int j) { return Pt{rail + ecart + j * (W + ecart) - base.boite.x0, rail + ecart + i * (H + ecart) - base.boite.y0}; };
   // Cuivre, vernis, pâte, sérigraphie : chaque carte à sa place
@@ -149,6 +152,21 @@ PanneauFabrication panneauFabrication(const ConceptionElec& c, const OptionsPann
           }
         }
     }
+  // Trois mires globales sur le cadre (8.15) : cuivre de 1 mm, ouverture de vernis de 2 mm, au milieu du rail, coins
+  // bas gauche, bas droit et haut gauche du panneau (repère de fabrication) ; les mêmes que le fichier de placement
+  if (rail >= 2'000'000) {
+    const Nm mi = rail / 2;
+    for (const Pt p : {Pt{mi, PH - mi}, Pt{PW - mi, PH - mi}, Pt{mi, mi}})
+      for (auto& cf : m.couches) {
+        if (cf.couche != Couche::CuivreDessus && cf.couche != Couche::VernisDessus) continue;
+        PrimitiveFab f;
+        f.type = PrimitiveFab::Type::Disque;
+        f.a = p;
+        f.l = cf.couche == Couche::CuivreDessus ? 1'000'000 : 2'000'000;
+        f.fonction = cf.couche == Couche::CuivreDessus ? "FiducialPad,Global" : "Material";
+        cf.primitives.push_back(f);
+      }
+  }
   // Contrôles du panneau : une perforation loin du cuivre (marge au bord des règles)
   const Nm bord = c.circuit.regles.bord;
   for (const auto& t : m.trous) {
@@ -177,8 +195,9 @@ PanneauFabrication panneauFabrication(const ConceptionElec& c, const OptionsPann
 LectureGerber lireGerber(const std::string& texte) {
   LectureGerber r;
   struct Ouverture {
-    char forme = 'C';
+    char forme = 'C';  // C, R, O, ou M (macro RoundRect : « modele » est son contour autour de l'origine)
     Nm l = 0, h = 0;
+    Polygone modele;
   };
   std::map<int, Ouverture> ouvertures;
   int courante = -1;
@@ -192,6 +211,11 @@ LectureGerber lireGerber(const std::string& texte) {
     if (it == ouvertures.end()) return cercle(p, 50'000);
     const Ouverture& o = it->second;
     if (o.forme == 'C') return cercle(p, std::max<Nm>(o.l / 2, 500));
+    if (o.forme == 'M') {
+      Polygone q = o.modele;
+      for (Pt& s : q) s = s + p;
+      return q;
+    }
     if (o.forme == 'R') return rectangle(p, o.l, o.h);
     if (o.l >= o.h) return oblong({p.x - (o.l - o.h) / 2, p.y}, {p.x + (o.l - o.h) / 2, p.y}, o.h);
     return oblong({p.x, p.y - (o.h - o.l) / 2}, {p.x, p.y + (o.h - o.l) / 2}, o.l);
@@ -210,6 +234,28 @@ LectureGerber lireGerber(const std::string& texte) {
         int code = 0;
         while (i < ligne.size() && std::isdigit(static_cast<unsigned char>(ligne[i]))) code = code * 10 + (ligne[i++] - '0');
         Ouverture o;
+        if (ligne.compare(i, 10, "RoundRect,") == 0) {
+          // Rectangle arrondi (8.4) : rayon, puis les quatre centres des arrondis ; le contour est leur enveloppe
+          // gonflée du rayon
+          std::string reste = ligne.substr(i + 10, ligne.find('*') - i - 10);
+          std::vector<Nm> v;
+          for (std::size_t deb = 0; deb <= reste.size();) {
+            const auto fin = reste.find('X', deb);
+            v.push_back(valeurMm(reste.substr(deb, fin == std::string::npos ? std::string::npos : fin - deb)));
+            if (fin == std::string::npos) break;
+            deb = fin + 1;
+          }
+          if (v.size() == 9) {
+            o.forme = 'M';
+            Polygone coins;
+            for (int k = 0; k < 4; ++k) coins.push_back({v[static_cast<std::size_t>(1 + 2 * k)], v[static_cast<std::size_t>(2 + 2 * k)]});
+            const Polygones g = gonfler({orienter(coins)}, v[0]);
+            o.modele = g.empty() ? orienter(coins) : g.front();
+            o.l = o.h = 2 * v[0];
+          }
+          ouvertures[code] = o;
+          continue;
+        }
         o.forme = ligne[i];
         const std::string reste = ligne.substr(i + 2, ligne.find('*') - i - 2);
         const auto xx = reste.find('X');
@@ -246,6 +292,39 @@ LectureGerber lireGerber(const std::string& texte) {
         continue;
       }
       if (ligne[0] == '%') continue;
+      if (ligne.rfind("G02", 0) == 0 || ligne.rfind("G03", 0) == 0) {
+        // Arc (8.4) : du point courant au point donné, centre en I, J relatif au départ ; relu en cordes
+        const bool horaire = ligne[2] == '2';
+        auto lire = [&](char lettre, Nm defaut) {
+          const auto k = ligne.find(lettre);
+          if (k == std::string::npos) return defaut;
+          std::size_t f = k + 1;
+          if (f < ligne.size() && (ligne[f] == '-' || ligne[f] == '+')) ++f;
+          while (f < ligne.size() && std::isdigit(static_cast<unsigned char>(ligne[f]))) ++f;
+          return static_cast<Nm>(std::stoll(ligne.substr(k + 1, f - k - 1)));
+        };
+        const Nm nx = lire('X', x), ny = lire('Y', y), cx = x + lire('I', 0), cy = y + lire('J', 0);
+        const double r0 = std::hypot(static_cast<double>(x - cx), static_cast<double>(y - cy));
+        const double t0 = std::atan2(static_cast<double>(y - cy), static_cast<double>(x - cx)), t1 = std::atan2(static_cast<double>(ny - cy), static_cast<double>(nx - cx));
+        double balayage = horaire ? t0 - t1 : t1 - t0;
+        while (balayage <= 0) balayage += 2 * 3.14159265358979323846;
+        const int n = std::clamp(static_cast<int>(balayage / 0.05) + 1, 2, 720);
+        const auto it = ouvertures.find(courante);
+        const Nm l = it == ouvertures.end() ? 100'000 : it->second.l;
+        Pt a{x, y};
+        for (int k = 1; k <= n; ++k) {
+          const double t = horaire ? t0 - balayage * k / n : t0 + balayage * k / n;
+          const Pt b = k == n ? Pt{nx, ny} : Pt{cx + static_cast<Nm>(std::llround(r0 * std::cos(t))), cy + static_cast<Nm>(std::llround(r0 * std::sin(t)))};
+          if (region) {
+            if (pointsRegion.empty()) pointsRegion.push_back(a);
+            pointsRegion.push_back(b);
+          } else r.objets.push_back({ObjetGerber::Genre::Trait, oblong(a, b, std::max<Nm>(l, 1000)), ref, num, reseau, a, b, l});
+          a = b;
+        }
+        x = nx;
+        y = ny;
+        continue;
+      }
       if (ligne.rfind("G36", 0) == 0) {
         region = true;
         pointsRegion.clear();
@@ -315,6 +394,7 @@ std::vector<std::pair<Pt, Nm>> lirePercages(const std::string& texte) {
   std::istringstream in(texte);
   std::string ligne;
   bool entete = true;
+  std::optional<Pt> departFente;
   while (std::getline(in, ligne)) {
     if (ligne.empty() || ligne[0] == ';') continue;
     if (ligne == "%") {
@@ -328,11 +408,29 @@ std::vector<std::pair<Pt, Nm>> lirePercages(const std::string& texte) {
       else courant = t;
       continue;
     }
-    if (ligne[0] == 'X' && !entete) {
-      const auto yy = ligne.find('Y');
-      const double x = std::stod(ligne.substr(1, yy - 1)), y = std::stod(ligne.substr(yy + 1));
-      r.push_back({{std::llround(x * 1e6), std::llround(y * 1e6)}, outils[courant]});
+    if (entete) continue;
+    auto point = [](const std::string& t) {
+      const auto xx = t.find('X'), yy = t.find('Y');
+      const double x = std::stod(t.substr(xx + 1, yy - xx - 1)), y = std::stod(t.substr(yy + 1));
+      return Pt{std::llround(x * 1e6), std::llround(y * 1e6)};
+    };
+    // Fente (4.13) : en G85 sur une ligne, ou détourée (G00 départ, M15, G01 arrivée, M16) ; relue en son milieu
+    if (const auto g85 = ligne.find("G85"); ligne[0] == 'X' && g85 != std::string::npos) {
+      const Pt a = point(ligne.substr(0, g85)), b = point(ligne.substr(g85 + 3));
+      r.push_back({{(a.x + b.x) / 2, (a.y + b.y) / 2}, outils[courant]});
+      continue;
     }
+    if (ligne.rfind("G00X", 0) == 0) {
+      departFente = point(ligne.substr(3));
+      continue;
+    }
+    if (ligne.rfind("G01X", 0) == 0 && departFente) {
+      const Pt b = point(ligne.substr(3));
+      r.push_back({{(departFente->x + b.x) / 2, (departFente->y + b.y) / 2}, outils[courant]});
+      departFente.reset();
+      continue;
+    }
+    if (ligne[0] == 'X') r.push_back({point(ligne), outils[courant]});
   }
   return r;
 }
@@ -464,9 +562,14 @@ Microruban microrubanDe(const Empilage& e) {
   return m;
 }
 
-double impedanceMicroruban(double w, const Microruban& m) { return 87.0 / std::sqrt(m.er + 1.41) * std::log(5.98 * m.h / (0.8 * w + m.t)); }
+// Moteur de lignes de 8.21 : Hammerstad et Jensen, paire de Kirschning et Jansen, à 1 GHz
+double impedanceMicroruban(double w, const Microruban& m) {
+  return LigneTransmission(GenreLigne::Microruban, {m.er, 0.02, 1e9, 1e3, 1e12, false}).analyser({w * 1e-3, 0, m.h * 1e-3, 0, m.t * 1e-3, 0}, 1e9).z0;
+}
 
-double impedanceDifferentielle(double w, double s, const Microruban& m) { return 2 * impedanceMicroruban(w, m) * (1 - 0.48 * std::exp(-0.96 * s / m.h)); }
+double impedanceDifferentielle(double w, double s, const Microruban& m) {
+  return LigneTransmission(GenreLigne::MicrorubanCouple, {m.er, 0.02, 1e9, 1e3, 1e12, false}).analyser({w * 1e-3, s * 1e-3, m.h * 1e-3, 0, m.t * 1e-3, 0}, 1e9).zDiff;
+}
 
 ProposPaire proposerPaire(double zdiff, const Empilage& e) {
   const Microruban m = microrubanDe(e);

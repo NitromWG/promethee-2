@@ -2,6 +2,7 @@
 // Licence GPL-3.0-only.
 #include "DialogueRemplacer.hpp"
 
+#include <algorithm>
 #include <set>
 
 #include <QCheckBox>
@@ -12,13 +13,16 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QPainter>
 #include <QPushButton>
 #include <QRadioButton>
+#include <QSlider>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
 #include "AtelierElectronique.hpp"
 #include "InspecteurElectronique.hpp"
+#include "VueSchema.hpp"
 
 using namespace prom::ecad;
 
@@ -36,6 +40,25 @@ DialogueRemplacer::DialogueRemplacer(AtelierElectronique& a, std::vector<std::st
       if (const ComposantElec* x = c->composant(id)) refs << q(x->reference);
   setWindowTitle(refs.size() == 1 ? QStringLiteral("Remplacer %1").arg(refs.front()) : QStringLiteral("Remplacer %1 composants").arg(refs.size()));
   auto* col = new QVBoxLayout(this);
+  // Portée (4.20) : la sélection, ou des motifs à jokers sur toute la conception
+  auto* gp = new QGroupBox(QStringLiteral("Portée"));
+  auto* lp = new QHBoxLayout(gp);
+  m_porteeRepere = new QLineEdit;
+  m_porteeRepere->setObjectName(QStringLiteral("porteeRepere"));
+  m_porteeRepere->setPlaceholderText(QStringLiteral("Repère : R*, C1?"));
+  m_porteeValeur = new QLineEdit;
+  m_porteeValeur->setObjectName(QStringLiteral("porteeValeur"));
+  m_porteeValeur->setPlaceholderText(QStringLiteral("Valeur : 10k, 100n*"));
+  auto* viser = new QPushButton(QStringLiteral("Viser"));
+  viser->setObjectName(QStringLiteral("viserPortee"));
+  m_porteeBilan = new QLabel(QStringLiteral("%1 composant(s) de la sélection").arg(m_composants.size()));
+  m_porteeBilan->setObjectName(QStringLiteral("bilanPortee"));
+  lp->addWidget(m_porteeRepere);
+  lp->addWidget(m_porteeValeur);
+  lp->addWidget(viser);
+  lp->addWidget(m_porteeBilan, 1);
+  connect(viser, &QPushButton::clicked, this, [this] { appliquerPortee(m_porteeRepere->text(), m_porteeValeur->text()); });
+  col->addWidget(gp);
   auto* haut = new QHBoxLayout;
   // Articles : ceux du projet, de la bibliothèque et de la bibliothèque personnelle
   auto* gauche = new QVBoxLayout;
@@ -80,6 +103,30 @@ DialogueRemplacer::DialogueRemplacer(AtelierElectronique& a, std::vector<std::st
   lb->addWidget(m_parNumero);
   connect(m_parNom, &QRadioButton::toggled, this, [this] { majApercu(); });
   droite->addWidget(gb);
+  // Comparaison en superposition : A (actuel) et B (remplaçant), curseur de transparence et bascule A/B
+  auto* gs = new QGroupBox(QStringLiteral("Comparer"));
+  auto* ls = new QVBoxLayout(gs);
+  m_superposition = new Superposition;
+  m_superposition->setObjectName(QStringLiteral("superpositionRemplacement"));
+  m_superposition->setMinimumSize(200, 140);
+  ls->addWidget(m_superposition);
+  auto* lt = new QHBoxLayout;
+  m_transparence = new QSlider(Qt::Horizontal);
+  m_transparence->setObjectName(QStringLiteral("transparenceComparaison"));
+  m_transparence->setRange(0, 100);
+  m_transparence->setValue(50);
+  m_transparence->setToolTip(QStringLiteral("0 : l’actuel seul ; 100 : le remplaçant seul"));
+  m_ab = new QPushButton(QStringLiteral("A/B"));
+  m_ab->setObjectName(QStringLiteral("basculeAB"));
+  m_ab->setToolTip(QStringLiteral("Montrer l’un puis l’autre"));
+  lt->addWidget(new QLabel(QStringLiteral("A")));
+  lt->addWidget(m_transparence, 1);
+  lt->addWidget(new QLabel(QStringLiteral("B")));
+  lt->addWidget(m_ab);
+  ls->addLayout(lt);
+  connect(m_transparence, &QSlider::valueChanged, this, [this](int v) { m_superposition->reglerFondu(v / 100.0); });
+  connect(m_ab, &QPushButton::clicked, this, &DialogueRemplacer::basculerAB);
+  droite->addWidget(gs);
   droite->addStretch(1);
   haut->addLayout(droite);
   col->addLayout(haut, 1);
@@ -105,7 +152,7 @@ DialogueRemplacer::DialogueRemplacer(AtelierElectronique& a, std::vector<std::st
   });
   connect(boutons, &QDialogButtonBox::rejected, this, &QDialog::reject);
   col->addWidget(boutons);
-  resize(720, 560);
+  resize(760, 640);
   remplirArticles({});
   majApercu();
 }
@@ -162,6 +209,12 @@ void DialogueRemplacer::majApercu() {
   if (!c.symbole(m_article))
     for (const auto& d : AtelierElectronique::bibliothequePerso())
       if (d.id == m_article) c.symboles[d.id] = d;
+  if (const ComposantElec* x = c.composant(m_composants.front()))
+    if (const DefSymbole* da = c.symbole(x->symbole))
+      if (const DefSymbole* db = c.symbole(m_article)) {
+        const QSize t = m_superposition->size().expandedTo(QSize(200, 140));
+        m_superposition->montrer(VueSchema::apercu(*da, t), VueSchema::apercu(*db, t));
+      }
   int fils = 0;
   QStringList perdues;
   std::string avant, apres;
@@ -214,4 +267,49 @@ int DialogueRemplacer::appliquer() {
   }, ids.size() == 1 ? QStringLiteral("Remplacer par %1").arg(q(article)) : QStringLiteral("Remplacer %1 composants par %2").arg(ids.size()).arg(q(article)));
   if (n == 0) m_bilan->setText(QStringLiteral("<span style='color:%1'>%2</span>").arg(teintes::erreur(), q(erreur).toHtmlEscaped()));
   return n;
+}
+
+int DialogueRemplacer::appliquerPortee(const QString& repere, const QString& valeur) {
+  const ConceptionElec* c = m_atelier.conceptionCourante();
+  if (!c) return 0;
+  PorteeMasse p;
+  p.reference = repere.trimmed().toStdString();
+  p.valeur = valeur.trimmed().toStdString();
+  if (m_porteeRepere->text() != repere) m_porteeRepere->setText(repere);
+  if (m_porteeValeur->text() != valeur) m_porteeValeur->setText(valeur);
+  m_composants = composantsVises(*c, p);
+  m_porteeBilan->setText(QStringLiteral("%1 composant(s) visé(s)").arg(m_composants.size()));
+  setWindowTitle(QStringLiteral("Remplacer %1 composants").arg(m_composants.size()));
+  majApercu();
+  return static_cast<int>(m_composants.size());
+}
+
+void DialogueRemplacer::reglerTransparence(int pourcent) { m_transparence->setValue(std::clamp(pourcent, 0, 100)); }
+int DialogueRemplacer::transparence() const { return m_transparence->value(); }
+void DialogueRemplacer::basculerAB() { m_transparence->setValue(m_transparence->value() < 50 ? 100 : 0); }
+
+Superposition::Superposition(QWidget* parent) : QWidget(parent) {}
+
+void Superposition::montrer(const QPixmap& a, const QPixmap& b) {
+  m_a = a;
+  m_b = b;
+  update();
+}
+
+void Superposition::reglerFondu(double t) {
+  m_t = std::clamp(t, 0.0, 1.0);
+  update();
+}
+
+void Superposition::paintEvent(QPaintEvent*) {
+  QPainter g(this);
+  g.fillRect(rect(), palette().base());
+  auto poser = [&](const QPixmap& p, double opacite) {
+    if (p.isNull() || opacite <= 0) return;
+    g.setOpacity(opacite);
+    const QPixmap r = p.scaled(size(), Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    g.drawPixmap((width() - r.width()) / 2, (height() - r.height()) / 2, r);
+  };
+  poser(m_a, 1.0 - m_t);
+  poser(m_b, m_t);
 }

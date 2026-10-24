@@ -52,10 +52,25 @@ std::vector<LigneNomenclature> nomenclature(const Projet& p, const Derive& d) {
     const TypeComposant* T = typeComposant(k->type);
     l.push_back({"Électronique", k->ref, (T ? T->nom : k->type) + (k->valeur.empty() ? "" : ", " + k->valeur), "Achat", 1});
   }
+  // Pièces montées sur les cartes électroniques (6.8, nomenclature commune) : dissipateurs, entretoises, blindages
+  const ecad::BoitierImporte* commerce = nullptr;
+  for (const auto& ce : p.electronique) {
+    for (const auto& m : ce.piecesMontees) {
+      std::string designation = m.nom;
+      if (!m.fabricant.empty() || !m.mpn.empty()) designation += " (" + m.fabricant + (m.fabricant.empty() || m.mpn.empty() ? "" : " ") + m.mpn + ")";
+      l.push_back({"Pièces montées", m.reference.empty() ? m.nom : m.reference, designation, m.fournisseur.empty() ? "Achat" : "Achat (" + m.fournisseur + ")", std::max(1, m.quantite)});
+    }
+    if (ce.pilotageBoitier && ce.boitierImporte) commerce = &*ce.boitierImporte;
+  }
   const auto& c = p.carte;
   l.push_back({"Pièces fabriquées", "PCB1", "Carte " + fmt(c.L, 2) + " × " + fmt(c.W, 2) + " mm, épaisseur " + fmt(c.t, 2) + " mm", "Fabrication de circuits imprimés", 1});
-  l.push_back({"Pièces fabriquées", "B1", "Boîtier " + fmt(d.Lo, 2) + " × " + fmt(d.Wo, 2) + " × " + fmt(d.zt, 2) + " mm", "Impression 3D", 1});
-  l.push_back({"Pièces fabriquées", "B2", "Couvercle " + fmt(d.Lo, 2) + " × " + fmt(d.Wo, 2) + " × " + fmt(p.boitier.couvercle + Levre::h, 2) + " mm", "Impression 3D", 1});
+  if (commerce)
+    // Boîtier du commerce importé (6.7) : acheté, pas imprimé
+    l.push_back({"Pièces achetées", "B1", "Boîtier " + (commerce->nom.empty() ? std::string("du commerce") : commerce->nom) + (commerce->mpn.empty() ? std::string() : " (" + commerce->fabricant + " " + commerce->mpn + ")"), "Achat", 1});
+  else {
+    l.push_back({"Pièces fabriquées", "B1", "Boîtier " + fmt(d.Lo, 2) + " × " + fmt(d.Wo, 2) + " × " + fmt(d.zt, 2) + " mm", "Impression 3D", 1});
+    l.push_back({"Pièces fabriquées", "B2", "Couvercle " + fmt(d.Lo, 2) + " × " + fmt(d.Wo, 2) + " × " + fmt(p.boitier.couvercle + Levre::h, 2) + " mm", "Impression 3D", 1});
+  }
   // Visserie regroupée par taille.
   std::map<std::string, int> vis, inserts, visInserts;
   for (const auto& t : d.trous) {

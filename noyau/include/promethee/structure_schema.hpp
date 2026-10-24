@@ -12,6 +12,7 @@
 // Licence GPL-3.0-only.
 #pragma once
 
+#include <map>
 #include <optional>
 #include <set>
 #include <string>
@@ -26,13 +27,18 @@ struct NomBus {
   int debut = 0, fin = 0;
 };
 std::optional<NomBus> lireNomBus(const std::string& texte);  // « D[0..7] »
+// Membres d'un bus ou d'un faisceau (7.13, STR-17) : « D[0..7] » → D0 … D7 ; « {SDA SCL INT} » → SDA, SCL, INT ; un
+// alias de la conception (« MEM » → « A[0..15] D[0..7] RD WR ») développé, récursivement ; vide pour un nom simple
+std::vector<std::string> membresFaisceau(const std::string& nom, const std::map<std::string, std::vector<std::string>>& alias = {});
 struct BusFeuille {
   NomBus nom;
   std::string etiquette;          // UUID de l'étiquette qui le nomme
   std::set<std::string> fils;     // UUID des fils du bus
   std::vector<std::pair<std::string, std::string>> entrees;  // UUID du fil d'entrée, nom porté (« D3 »)
+  std::vector<std::string> membres;  // noms de ses membres, développés (bus, faisceau, alias)
 };
-std::vector<BusFeuille> busDeFeuille(const Feuille& f);
+// Bus et faisceaux d'une feuille ; « alias » : ceux de la conception (aliasBus), qui font aussi des faisceaux
+std::vector<BusFeuille> busDeFeuille(const Feuille& f, const std::map<std::string, std::vector<std::string>>* alias = nullptr);
 
 // Feuille de canal ; rend le nombre de copies faites
 int repeterFeuille(ConceptionElec& c, std::size_t feuille, int exemplaires);

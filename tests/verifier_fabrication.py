@@ -42,7 +42,7 @@ class Defauts:
 # Gerber
 class Ouverture:
     def __init__(self, forme, params):
-        self.forme = forme  # C, R, O
+        self.forme = forme  # C, R, O, ou M (macro : rectangle arrondi, dimensions calculées)
         self.params = params
 
     def dimensions(self):
@@ -50,8 +50,18 @@ class Ouverture:
             return self.params[0], self.params[0]
         return self.params[0], self.params[1]
 
+
     def plus_petit_cote(self):
         return min(self.dimensions())
+
+
+def dimensions_roundrect(params):
+    """Macro RoundRect (rayon, puis les centres des quatre arrondis) : côtés du rectangle, arrondis compris."""
+    r = params[0]
+    c = [(params[1 + 2 * i], params[2 + 2 * i]) for i in range(4)]
+    a = math.hypot(c[1][0] - c[0][0], c[1][1] - c[0][1]) + 2 * r
+    b = math.hypot(c[2][0] - c[1][0], c[2][1] - c[1][1]) + 2 * r
+    return a, b
 
 
 class Gerber:
@@ -78,9 +88,12 @@ class Gerber:
                 continue
             if c == "%":
                 fin = texte.index("%", i + 1)
-                for morceau in texte[i + 1:fin].split("*"):
-                    morceau = morceau.strip()
-                    if morceau:
+                morceaux = [m.strip() for m in texte[i + 1:fin].split("*") if m.strip()]
+                if morceaux and morceaux[0].startswith("AM"):
+                    # Définition de macro : son nom, ses primitives (lignes « 0 » de commentaire comprises)
+                    yield True, ("AM", morceaux[0][2:], morceaux[1:])
+                else:
+                    for morceau in morceaux:
                         yield True, morceau
                 i = fin + 1
             else:
@@ -102,7 +115,14 @@ class Gerber:
         region = None
         contour = []
         mode_lineaire = True
+        mode_arc = None  # "G02" (horaire) ou "G03" (antihoraire)
+        quadrant_multiple = False
+        self.macros = {}
         for etendue, cmd in self._commandes(texte):
+            if etendue and isinstance(cmd, tuple):
+                _, nom, primitives = cmd
+                self.macros[nom] = primitives
+                continue
             if etendue:
                 if cmd.startswith("FS"):
                     self.format_ok = cmd == "FSLAX46Y46"
@@ -128,6 +148,17 @@ class Gerber:
                     if cmd in ("TD", "TD.P"):
                         broche = None
                 elif cmd.startswith("AD"):
+                    mm_ = re.fullmatch(r"ADD(\d+)([A-Za-z_][A-Za-z0-9_]+),([-\d.X]+)", cmd)
+                    if mm_ and mm_.group(2) not in ("C", "R", "O"):
+                        if mm_.group(2) not in self.macros:
+                            defaut(f"{self.nom} : ouverture D{mm_.group(1)} d'une macro inconnue « {mm_.group(2)} »")
+                            continue
+                        params = [float(v) for v in mm_.group(3).split("X")]
+                        if mm_.group(2) == "RoundRect" and len(params) == 9:
+                            self.ouvertures[int(mm_.group(1))] = Ouverture("M", list(dimensions_roundrect(params)))
+                        else:
+                            defaut(f"{self.nom} : macro « {mm_.group(2)} » aux paramètres inattendus")
+                        continue
                     m = re.fullmatch(r"ADD(\d+)([CRO]),([\d.]+)(?:X([\d.]+))?", cmd)
                     if not m:
                         defaut(f"{self.nom} : ouverture illisible « {cmd} »")
@@ -150,10 +181,47 @@ class Gerber:
                 break
             if cmd == "G01":
                 mode_lineaire = True
+                mode_arc = None
                 continue
-            if cmd in ("G02", "G03", "G75", "G74"):
-                mode_lineaire = False
-                defaut(f"{self.nom} : arcs non attendus (le producteur n'écrit que des segments)")
+            if cmd == "G75":
+                quadrant_multiple = True
+                continue
+            if cmd == "G74":
+                defaut(f"{self.nom} : G74 (quadrant unique) est retiré de la norme")
+                continue
+            if cmd in ("G02", "G03"):
+                mode_lineaire, mode_arc = False, cmd
+                continue
+            ma = re.fullmatch(r"(G0[23])(X[+-]?\d+)?(Y[+-]?\d+)?I([+-]?\d+)J([+-]?\d+)D01", cmd)
+            if ma:
+                # Arc (8.4) : du point courant au point donné, centre en I, J relatif au départ ; découpé en cordes
+                if not quadrant_multiple:
+                    defaut(f"{self.nom} : arc sans G75")
+                nx = self._coord(cmd, "X", x)
+                ny = self._coord(cmd, "Y", y)
+                cx, cy = x + int(ma.group(4)) / 1e6, y + int(ma.group(5)) / 1e6
+                r0, r1 = math.hypot(x - cx, y - cy), math.hypot(nx - cx, ny - cy)
+                if abs(r0 - r1) > 0.002:
+                    defaut(f"{self.nom} : arc incohérent (rayons {r0:.4f} et {r1:.4f} mm)")
+                t0, t1 = math.atan2(y - cy, x - cx), math.atan2(ny - cy, nx - cx)
+                horaire = ma.group(1) == "G02"
+                balayage = (t0 - t1) % (2 * math.pi) if horaire else (t1 - t0) % (2 * math.pi)
+                if balayage == 0:
+                    balayage = 2 * math.pi
+                pas = max(2, int(balayage / 0.1) + 1)
+                px, py = x, y
+                for k in range(1, pas + 1):
+                    t = t0 - balayage * k / pas if horaire else t0 + balayage * k / pas
+                    qx, qy = (nx, ny) if k == pas else (cx + r0 * math.cos(t), cy + r0 * math.sin(t))
+                    if region is not None:
+                        if not contour:
+                            contour = [(px, py)]
+                        contour.append((qx, qy))
+                    elif ouverture is not None:
+                        self.traits.append((px, py, qx, qy, ouverture, reseau))
+                    px, py = qx, qy
+                x, y = nx, ny
+                mode_lineaire = True
                 continue
             if cmd == "G36":
                 region, contour = [], []
@@ -225,20 +293,45 @@ class Gerber:
 # ---------------------------------------------------------------------------------------------------------
 # Excellon
 class Excellon:
-    def __init__(self, chemin, defaut):
+    """Perçage Excellon. strict : le format du dossier de fabrication (M48, METRIC, décimales, fonction X2) ;
+    sinon toutes les variantes que Prométhée sait écrire (4.27) : INCH, zéros de tête gardés (LZ, entiers 3.3 en
+    millimètres, 2.4 en pouces), ruban EIA sans en-tête, XNC, sans attributs. Les cotes sont rendues en mm."""
+
+    def __init__(self, chemin, defaut, strict=True):
         self.nom = chemin.name
         self.fonction = None
         self.outils = {}
         self.trous = []  # (x, y, diamètre)
+        self.fentes = []  # (x0, y0, x1, y1, diamètre)
+        depart, plonge = None, False
         texte = chemin.read_text(encoding="utf-8")
         lignes = [l.strip() for l in texte.splitlines()]
-        if not lignes or lignes[0] != "M48":
+        eia = not lignes or lignes[0] != "M48"
+        if eia and strict:
             defaut(f"{self.nom} : en-tête M48 absent")
-        if "METRIC" not in [l.split(",")[0] for l in lignes]:
+        unites = [l.split(",") for l in lignes if l.split(",")[0] in ("METRIC", "INCH")]
+        pouces = bool(unites) and unites[0][0] == "INCH"
+        zeros_tete = bool(unites) and "LZ" in unites[0][1:]
+        if strict and (not unites or pouces):
             defaut(f"{self.nom} : unité METRIC absente")
         if "M30" not in lignes:
             defaut(f"{self.nom} : fin M30 absente")
-        entete = True
+        echelle = 25.4 if pouces else 1.0
+        entiers = 2 if pouces else 3
+
+        def valeur(v):
+            # Point décimal : la valeur telle quelle ; sans point (LZ) : entiers fixes, les décimales suivent
+            if "." in v:
+                return float(v) * echelle
+            if not zeros_tete:
+                defaut(f"{self.nom} : coordonnée sans point décimal « {v} » hors du format LZ")
+                return float(v) * echelle
+            signe = -1 if v.startswith("-") else 1
+            chiffres = v.lstrip("+-")
+            return signe * int(chiffres) / 10 ** (len(chiffres) - entiers) * echelle
+
+        NB = r"([+-]?[\d.]+)"
+        entete = not eia
         outil = None
         for l in lignes:
             if l.startswith("; #@! TF.FileFunction,"):
@@ -249,30 +342,87 @@ class Excellon:
                 entete = False
                 continue
             m = re.fullmatch(r"T(\d+)C([\d.]+)", l)
-            if entete and m:
-                self.outils[int(m.group(1))] = float(m.group(2))
+            if m and (entete or eia):
+                self.outils[int(m.group(1))] = float(m.group(2)) * echelle
                 continue
-            if not entete:
-                m = re.fullmatch(r"T(\d+)", l)
-                if m:
-                    outil = int(m.group(1))
-                    if outil != 0 and outil not in self.outils:
-                        defaut(f"{self.nom} : outil T{outil} non défini")
-                    continue
-                m = re.fullmatch(r"X([+-]?[\d.]+)Y([+-]?[\d.]+)", l)
-                if m:
-                    if "." not in m.group(1) or "." not in m.group(2):
-                        defaut(f"{self.nom} : coordonnée sans point décimal « {l} »")
-                    if outil in self.outils:
-                        self.trous.append((float(m.group(1)), float(m.group(2)), self.outils[outil]))
-                    else:
-                        defaut(f"{self.nom} : trou sans outil « {l} »")
-                    continue
-                if l in ("G90", "G05", "M30"):
-                    continue
-                defaut(f"{self.nom} : ligne inconnue « {l} »")
-        if self.fonction is None:
+            if entete:
+                continue
+            m = re.fullmatch(r"T(\d+)", l)
+            if m:
+                outil = int(m.group(1))
+                if outil != 0 and outil not in self.outils:
+                    defaut(f"{self.nom} : outil T{outil} non défini")
+                continue
+            m = re.fullmatch(f"X{NB}Y{NB}G85X{NB}Y{NB}", l)
+            if m:
+                # Fente en G85 (4.13) : ses deux bouts ; le trou est compté au milieu
+                x0, y0, x1, y1 = (valeur(v) for v in m.groups())
+                self.fentes.append((x0, y0, x1, y1, self.outils.get(outil, 0)))
+                self.trous.append(((x0 + x1) / 2, (y0 + y1) / 2, self.outils.get(outil, 0)))
+                continue
+            m = re.fullmatch(f"G0([01])X{NB}Y{NB}", l)
+            if m:
+                # Fente détourée (4.13) : G00 au départ, M15 (plongée), G01 à l'arrivée, M16 (remontée)
+                if m.group(1) == "0":
+                    depart = (valeur(m.group(2)), valeur(m.group(3)))
+                elif depart is None or not plonge:
+                    defaut(f"{self.nom} : G01 sans G00 ni M15 « {l} »")
+                else:
+                    x1, y1 = valeur(m.group(2)), valeur(m.group(3))
+                    self.fentes.append((depart[0], depart[1], x1, y1, self.outils.get(outil, 0)))
+                    self.trous.append(((depart[0] + x1) / 2, (depart[1] + y1) / 2, self.outils.get(outil, 0)))
+                continue
+            if l == "M15":
+                plonge = True
+                continue
+            if l == "M16":
+                plonge, depart = False, None
+                continue
+            m = re.fullmatch(f"X{NB}Y{NB}", l)
+            if m:
+                if strict and ("." not in m.group(1) or "." not in m.group(2)):
+                    defaut(f"{self.nom} : coordonnée sans point décimal « {l} »")
+                if outil in self.outils:
+                    self.trous.append((valeur(m.group(1)), valeur(m.group(2)), self.outils[outil]))
+                else:
+                    defaut(f"{self.nom} : trou sans outil « {l} »")
+                continue
+            if l in ("G90", "G05", "M30") or (not strict and l.startswith("FMAT")):
+                continue
+            defaut(f"{self.nom} : ligne inconnue « {l} »")
+        if self.fonction is None and strict:
             defaut(f"{self.nom} : fonction X2 (TF.FileFunction) absente")
+
+
+def comparer_jeux_excellon(dossier, defaut):
+    """4.27 : chaque fichier du dossier, écrit avec un jeu d'options différent, relu ici ; tous doivent donner les
+    mêmes trous, les mêmes fentes et les mêmes diamètres que le premier, à la résolution de leur format près."""
+    fichiers = sorted(dossier.glob("*.drl"))
+    if len(fichiers) < 2:
+        defaut(f"{dossier} : moins de deux fichiers de perçage à comparer")
+        return {}
+    lus = [(f, Excellon(f, defaut, strict=False)) for f in fichiers]
+
+    def cle(t):
+        return tuple(round(v, 2) for v in t)
+
+    ref_f, ref = lus[0]
+    if not ref.trous:
+        defaut(f"{ref_f.name} : aucun trou")
+    resume = {"jeux": len(lus), "trous": len(ref.trous), "fentes": len(ref.fentes)}
+    for f, e in lus[1:]:
+        texte = f.read_text(encoding="utf-8")
+        # Résolution du format : 0,0001 pouce (2,54 µm) ou 1 µm ; la tolérance en prend la moitié, plus 1 µm
+        tol = (0.00254 if "INCH" in texte else 0.001) / 2 + 0.001
+        for genre, a, b in (("trous", ref.trous, e.trous), ("fentes", ref.fentes, e.fentes)):
+            if len(a) != len(b):
+                defaut(f"{f.name} : {len(b)} {genre} au lieu de {len(a)}")
+                continue
+            for x, y in zip(sorted(a, key=cle), sorted(b, key=cle)):
+                if any(abs(u - v) > tol for u, v in zip(x, y)):
+                    defaut(f"{f.name} : {genre[:-1]} {tuple(round(v, 4) for v in y)} au lieu de {tuple(round(v, 4) for v in x)}")
+                    break
+    return resume
 
 
 # ---------------------------------------------------------------------------------------------------------
@@ -664,6 +814,23 @@ def verifier(dossier, attendu, defaut):
             else:
                 defaut(message)
 
+    # Segment effilé à bouts carrés (5.22) : une région de cuivre au contour exact du trapèze, à 1 µm près
+    if attendu.get("trapeze"):
+        ax, ay, bx, by, wa, wb = attendu["trapeze"]
+        L = math.hypot(bx - ax, by - ay)
+        nx, ny = -(by - ay) / L, (bx - ax) / L
+        coins = [(ax + nx * wa / 2, ay + ny * wa / 2), (bx + nx * wb / 2, by + ny * wb / 2), (bx - nx * wb / 2, by - ny * wb / 2), (ax - nx * wa / 2, ay - ny * wa / 2)]
+        trouve = False
+        for _cote, g in cuivres.values():
+            for poly, *_ in g.regions:
+                pts = [q for i, q in enumerate(poly) if i == 0 or math.hypot(q[0] - poly[i - 1][0], q[1] - poly[i - 1][1]) > 1e-9]
+                if len(pts) > 1 and math.hypot(pts[0][0] - pts[-1][0], pts[0][1] - pts[-1][1]) <= 1e-9:
+                    pts = pts[:-1]
+                if len(pts) == 4 and all(min(math.hypot(c[0] - q[0], c[1] - q[1]) for q in pts) <= 0.001 for c in coins):
+                    trouve = True
+        if not trouve:
+            defaut("segment effilé de %.3f à %.3f mm : aucune région au contour exact du trapèze attendu" % (wa, wb))
+
     # Perçages
     perces = {}
     for f in sorted((dossier / "Percage").glob("*.drl")):
@@ -678,6 +845,12 @@ def verifier(dossier, attendu, defaut):
         for x, y, d in e.trous:
             if not dans_carte((x, y), contour, decoupes) or min(distance_bord((x, y), b) for b in [contour] + decoupes) < d / 2 - TOL:
                 defaut(f"{f.name} : trou de {d} mm en ({x:.4f} ; {y:.4f}) hors de la carte")
+    # Fente attendue (4.13) : relue en G85 ou détourée, de la longueur hors tout et du diamètre de la conception
+    if attendu.get("fente"):
+        longueur, diametre = attendu["fente"]
+        fentes = [f for e in perces.values() for f in e.fentes]
+        if not any(abs(f[4] - diametre) <= TOL and abs(math.hypot(f[2] - f[0], f[3] - f[1]) + f[4] - longueur) <= TOL for f in fentes):
+            defaut("fente de %.3f × %.3f mm attendue : %s" % (longueur, diametre, ", ".join("%.3f × %.3f" % (math.hypot(f[2] - f[0], f[3] - f[1]) + f[4], f[4]) for f in fentes) or "aucune fente lue"))
     pth = [t for e in perces.values() if e.fonction and e.fonction.startswith("Plated") for t in e.trous]
     npth = [t for e in perces.values() if e.fonction and e.fonction.startswith("NonPlated") for t in e.trous]
     if not perces:
@@ -808,6 +981,8 @@ def verifier(dossier, attendu, defaut):
         "gbrjob_fichiers": job.get("fichiers"),
     }
     for cle, valeur in attendu.items():
+        if cle in ("trapeze", "fente"):
+            continue
         if valeur is not None and resume.get(cle) != valeur:
             defaut(f"attendu {cle} = {valeur}, trouvé {resume.get(cle)}")
     return resume
@@ -820,16 +995,32 @@ def main():
     a.add_argument("--composants", type=int)
     a.add_argument("--trous-npth", type=int)
     a.add_argument("--carte", type=float, nargs=2, metavar=("LARGEUR", "HAUTEUR"))
+    a.add_argument("--trapeze", type=float, nargs=6, metavar=("AX", "AY", "BX", "BY", "LA", "LB"))
+    a.add_argument("--fente", type=float, nargs=2, metavar=("LONGUEUR", "DIAMETRE"))
+    a.add_argument("--jeux-excellon", action="store_true", help="dossier de perçages écrits avec des options différentes (4.27)")
     o = a.parse_args()
     if not o.dossier.is_dir():
         print(f"dossier introuvable : {o.dossier}", file=sys.stderr)
         return 2
     defauts = Defauts()
+    if o.jeux_excellon:
+        resume = comparer_jeux_excellon(o.dossier, defauts)
+        for cle, valeur in resume.items():
+            print(f"  {cle} : {valeur}")
+        if defauts.liste:
+            print(f"{len(defauts.liste)} défaut(s) :", file=sys.stderr)
+            for d in defauts.liste:
+                print("  - " + d, file=sys.stderr)
+            return 1
+        print("Jeux d'options Excellon relus à l'identique (vérification indépendante).")
+        return 0
     attendu = {
         "couches_cuivre": o.couches,
         "composants_places": o.composants,
         "trous_non_metallises": o.trous_npth,
         "carte_mm": tuple(round(v, 3) for v in o.carte) if o.carte else None,
+        "trapeze": tuple(o.trapeze) if o.trapeze else None,
+        "fente": tuple(o.fente) if o.fente else None,
     }
     try:
         resume = verifier(o.dossier, attendu, defauts)

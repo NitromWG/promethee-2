@@ -66,6 +66,38 @@ struct Modele3D {
   double hauteur() const { return z1 - z0 + dz; }
   friend bool operator==(const Modele3D&, const Modele3D&) = default;
 };
+// Pièce mécanique montée sur la carte (6.8, MEC-13, FAB-17) : dissipateur, entretoise, blindage, vis ; son modèle 3D
+// exact (identifiant dans ConceptionElec::modeles3D), sa place (mm, repère de la carte, y vers le bas ; z au-dessus de
+// la face où elle est posée) et ce qu'il faut acheter : elle va dans la nomenclature de la carte et dans la commune
+struct PieceMontee {
+  std::string uuid, reference, nom, fabricant, mpn, fournisseur;  // « DS1 », « Dissipateur TO-220 »
+  std::string modele;      // identifiant du modèle 3D
+  std::string composant;   // composant qu'elle équipe (le dissipateur de U5) ; vide sinon
+  int quantite = 1;
+  double x = 0, y = 0, z = 0, rotation = 0;
+  bool dessous = false;
+  friend bool operator==(const PieceMontee&, const PieceMontee&) = default;
+};
+// Boîtier du commerce importé en STEP pour les contrôles (6.7, MEC-10) : son modèle exact (identifiant dans
+// modeles3D), placé autour de la carte (translation en mm, rotation autour de z en degrés, repère de la carte) ; le
+// jeu minimal exigé entre un corps et ses parois
+struct BoitierImporte {
+  std::string modele;
+  std::string nom, fabricant, mpn;
+  double x = 0, y = 0, z = 0, rotation = 0;
+  double jeu = 0.5;
+  friend bool operator==(const BoitierImporte&, const BoitierImporte&) = default;
+};
+// Point de vue nommé des vues 3D (6.11, MEC-20) : cible, direction (azimut et élévation en degrés), distance,
+// projection ; gardé dans le projet
+struct PointDeVue {
+  std::string nom;
+  double cible[3] = {0, 0, 0};
+  double azimut = 45, elevation = 30, distance = 100;
+  bool orthographique = false;
+  double champ = 30;  // ouverture verticale de la perspective (degrés)
+  friend bool operator==(const PointDeVue&, const PointDeVue&) = default;
+};
 // Façade (lot L6, 6.14, MEC-24, MEC-25) : sur une face du boîtier, des découpes, légendes et échelles graduées qui
 // suivent leur composant ; contrôlée avant la sortie en SVG et en DXF
 struct ElementFacade {
@@ -128,6 +160,9 @@ struct ConceptionElec {
   std::map<std::string, Article> articles;
   std::map<std::string, Modele3D> modeles3D;  // modèles 3D exacts, par identifiant (6.2)
   std::vector<Facade> facades;                // façades du boîtier (6.14)
+  std::vector<PieceMontee> piecesMontees;     // pièces mécaniques montées sur la carte (6.8)
+  std::optional<BoitierImporte> boitierImporte;  // boîtier du commerce importé en STEP (6.7)
+  std::vector<PointDeVue> pointsDeVue;        // points de vue nommés des vues 3D (6.11)
   // Esquisse qui pilote le contour (6.13, MEC-29) : boucle extérieure, découpes, cercles des trous de fixation ;
   // texte JSON d'une esquisse (prom::Esquisse), nul sans esquisse
   nlohmann::ordered_json esquisseContour;
@@ -153,6 +188,12 @@ struct ConceptionElec {
   std::string varianteActive;
   std::vector<NoteObjet> notes;        // commentaires, tâches et journal attachés aux objets (12.12)
   std::vector<JeuSorties> jeuxSorties; // jeux de sorties enregistrés (13.2)
+  // 0.34 : styles et réglages du schéma (7.25), alias de bus partagés par la hiérarchie (7.13 : « MEM » →
+  // « A[0..15] D[0..7] RD WR »), et données des modules (classeur de simulation, platine d'essai, programme,
+  // enseignement, retouches…) : chacun lit et écrit sa clé, un module absent la garde telle quelle
+  ReglagesSchema reglagesSchema;
+  std::map<std::string, std::vector<std::string>> aliasBus;
+  std::map<std::string, nlohmann::ordered_json> extensions;
   // Clés que ce logiciel ne connaît pas, relues puis réécrites telles quelles, objet par objet (ECH-11, A13) : un
   // projet ouvert puis enregistré par une version plus ancienne ne perd plus ce qu'une plus récente y a mis. Clé : le
   // genre et l'identité de l'objet (« composant:<uuid> », « circuit/regles »…), valeur : ses clés inconnues
@@ -471,8 +512,13 @@ std::vector<LiaisonRestante> diagnostiquerChevelu(const ConceptionElec& c);
 
 // ---------- Fabrication ----------
 struct PrimitiveFab {
-  enum class Type : std::uint8_t { Disque, Rect, Oblong, Region, Trait } type = Type::Disque;
+  // Arc (8.4) : tracé de a à b passant par m, à bouts ronds de largeur l ; arrondi (8.4) : rectangle à coins arrondis
+  // (l × h, rayon r), écrit par une macro d'ouverture plutôt qu'en région
+  enum class Type : std::uint8_t { Disque, Rect, Oblong, Region, Trait, Arc, RectArrondi } type = Type::Disque;
   Pt a, b;            // centre ; trait : extrémités
+  Pt m;               // arc : point de passage
+  Nm r = 0;           // rectangle arrondi : rayon des coins
+  double rotation = 0;  // rectangle arrondi : rotation (degrés)
   Nm l = 0, h = 0;    // disque : diamètre dans l ; trait : largeur dans l
   Polygone region;
   std::string fonction, reseau, reference, numero;
@@ -486,16 +532,42 @@ struct TrouFab {
   Pt p;
   Nm diametre = 0;
   bool metallise = true;
-  std::string fonction;  // ViaDrill, ComponentDrill, MechanicalDrill
+  std::string fonction;  // ViaDrill, ComponentDrill, MechanicalDrill, Backdrill
+  // 0.34 (4.13, 4.27, 8.22, 8.23) : trou oblong (fente) de « longueur » orienté de « rotation » degrés ; paire de
+  // couches qu'il relie (via borgne ou enterrée) ; contre-perçage ; tolérance du diamètre ; repère de la pastille
+  Nm longueur = 0;
+  double rotation = 0;
+  Couche de = Couche::CuivreDessus, a = Couche::CuivreDessous;
+  bool contrePercage = false;
+  Nm tolerance = 0;
+  std::string reference;
+  bool fente() const { return longueur > diametre; }
 };
 struct ModeleFabrication {
   std::string nom;
+  std::string uuid, revision, date;  // identité du projet écrite dans les attributs X2 (8.4)
+  int couchesCuivre = 2;
   Polygone contour;
   Boite boite;
+  Boite repere;  // origine des fichiers (5.31) : x0 et y1 ; le coin bas gauche de la carte, ou l'origine de travail
   std::vector<CoucheFab> couches;
   std::vector<TrouFab> trous;
 };
 ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite& k, const Remplissages& r);
+// Points de colle tirés du corps (8.14, FAB-19) : faces et diamètre, réglés dans extensions["colle"]
+struct ReglagesColle {
+  bool dessus = false, dessous = false;
+  Nm diametre = 600'000;
+};
+ReglagesColle reglagesColle(const ConceptionElec& c);
+// Composants sans ouverture de pâte (8.14) : non montés que vise une contrainte « pâte sous les non-montés » active
+std::set<std::string> composantsSansPate(const ConceptionElec& c);
+// Repère des fichiers de fabrication et de placement (5.31) : la boîte de la carte, ou, si l'affichage le demande
+// (origineFabrication), une boîte dont le coin x0, y1 est l'origine de travail
+Boite repereFichiers(const ConceptionElec& c);
+// Texte des en-têtes et attributs des fichiers de fabrication : lettres accentuées ramenées à leur base, le reste hors
+// ASCII en « _ » ; les lecteurs anciens (gerbv) prennent sinon un fichier presque vide pour un fichier binaire
+std::string asciiFabrication(const std::string& s);
 // Textes de la sérigraphie (repères, valeurs, textes de carte) en traits de la police vectorielle commune :
 // mêmes traits à l'écran, dans les Gerber et dans la vérification des textes posés sur une pastille (EL-06)
 struct TraitSerigraphie {
@@ -519,7 +591,12 @@ struct OptionsTypon {
   bool negatif = false;
   double trouCentrage = 0.6;     // mm : diamètre du point laissé au centre des perçages (0 : trous réels)
   double marge = 5;              // mm autour de la carte
+  // Compensation de l'imprimante (8.29, FAB-14) : facteurs mesurés sur la règle de 50 mm d'une première impression
+  // (50 / longueur lue), appliqués à la carte et à la règle ; correction ajoutée à la largeur des pistes (mm, ± )
+  double echelleX = 1, echelleY = 1, correctionLargeur = 0;
 };
+// Facteur d'échelle à saisir quand la règle de 50 mm imprimée mesure « mesure » mm
+inline double facteurEchelleTypon(double mesure) { return mesure > 1 ? 50.0 / mesure : 1.0; }
 struct ModeleTypon {
   double largeur = 0, hauteur = 0;            // mm, page (carte et marges, au moins 90 mm de large), règle comprise
   double hauteurCarte = 0;                    // mm, partie carte de la page
@@ -533,6 +610,7 @@ struct ModeleTypon {
   Polygone contour;
   Polygones decoupes;
   bool miroir = false;
+  double echelleX = 1, echelleY = 1;          // compensation reprise par la règle de 50 mm
 };
 ModeleTypon modeleTypon(const ConceptionElec& c, const Connectivite& k, const Remplissages& r, const OptionsTypon& o);
 std::string svgTypon(const ModeleTypon& m, const OptionsTypon& o, const std::string& titre);

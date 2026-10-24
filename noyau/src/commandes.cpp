@@ -225,7 +225,37 @@ ChangementConception differencier(const ConceptionElec& a, const ConceptionElec&
     for (const auto& z : x.zones) ordreA.push_back(z.uuid);
     for (const auto& z : y.zones) ordreB.push_back(z.uuid);
     if (ch.objets.size() != avantZones || !(x.zones == y.zones) || ordreA != ordreB) ch.zones = ch.circuit = true;
+    // Objets de la 0.34 sans suivi objet par objet : gouttes et cuivre propre, dessins, volumes, zones de règles,
+    // motifs d'accord, groupes, cotes, piles de pastilles. Sans eux, un changement qui ne touchait qu'eux passait
+    // pour vide et ne laissait aucun pas d'annulation
+    const std::pair<bool, const char*> objets034[] = {{!(x.regions == y.regions), "regions"},       {!(x.dessins == y.dessins), "dessins"},
+                                                      {!(x.volumes == y.volumes), "volumes"},       {!(x.zonesRegles == y.zonesRegles), "zonesRegles"},
+                                                      {!(x.motifs == y.motifs), "motifs"},          {!(x.groupes == y.groupes), "groupes"},
+                                                      {!(x.cotes == y.cotes), "cotes"},             {!(x.gabarits == y.gabarits), "gabarits"}};
+    for (const auto& [differe, nom] : objets034)
+      if (differe) {
+        ch.proprietes.insert(nom);
+        ch.circuit = true;
+      }
   }
+  // Données de la conception ajoutées par les lots de la 0.34 (pièces montées, boîtier, points de vue, styles,
+  // alias de bus, extensions des modules, esquisse du contour, articles et modèles 3D, façades, ERC, variables)
+  const std::pair<bool, const char*> donnees[] = {{!(a.piecesMontees == b.piecesMontees), "piecesMontees"},
+                                                  {!(a.boitierImporte == b.boitierImporte), "boitierImporte"},
+                                                  {!(a.pointsDeVue == b.pointsDeVue), "pointsDeVue"},
+                                                  {!(a.reglagesSchema == b.reglagesSchema), "reglagesSchema"},
+                                                  {a.aliasBus != b.aliasBus, "aliasBus"},
+                                                  {a.extensions != b.extensions, "extensions"},
+                                                  {a.esquisseContour != b.esquisseContour, "esquisseContour"},
+                                                  {!(a.articles == b.articles), "articles"},
+                                                  {!(a.modeles3D == b.modeles3D), "modeles3D"},
+                                                  {!(a.facades == b.facades), "facades"},
+                                                  {!(a.erc == b.erc), "erc"},
+                                                  {a.variables != b.variables, "variables"},
+                                                  {a.synchroSurConfirmation != b.synchroSurConfirmation, "synchroSurConfirmation"}};
+  for (const auto& [differe, nom] : donnees)
+    if (differe) ch.proprietes.insert(nom);
+  if (a.aliasBus != b.aliasBus) ch.connectivite = ch.schema = true;  // un alias change les membres des faisceaux (7.13)
   return ch;
 }
 

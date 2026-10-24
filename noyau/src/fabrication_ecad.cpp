@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <fstream>
 #include <map>
+#include <set>
 #include <numbers>
 #include <sstream>
 #include <stdexcept>
@@ -16,6 +17,8 @@
 #include "promethee/fichiers.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/police.hpp"
+#include "promethee/fabrication_detaillee.hpp"
+#include "promethee/regles_carte.hpp"
 
 namespace prom::ecad {
 
@@ -24,7 +27,7 @@ bool quartDeTour(double degres) { return std::abs(std::remainder(degres, 90.0)) 
 bool tourne90(double degres) { return std::abs(std::remainder(degres, 180.0)) > 1.0; }
 std::string sur(const std::string& s) {
   std::string r;
-  for (char ch : s) r += (ch == '*' || ch == '%' || ch == ',' || ch == '\n') ? '_' : ch;
+  for (char ch : asciiFabrication(s)) r += (ch == '*' || ch == '%' || ch == ',' || ch == '\n') ? '_' : ch;
   return r;
 }
 std::string decimal(Nm v) {
@@ -88,11 +91,15 @@ std::vector<PrimitiveFab> fenetresPate(const Pastille& pa, const Polygone& forme
 // Fonction X2 d'un fichier Gerber : la même dans son attribut %TF.FileFunction et dans le gbrjob, dont la norme
 // reprend les valeurs de l'attribut (« Soldermask,Top », « Paste,Top », « Profile,NP »)
 std::string fonctionFichier(Couche couche, int nCuivre) {
+  // Cuivres internes (8.20) : leur rang physique dans l'empilage, de 2 à n − 1
+  if (estCuivreInterne(couche)) return "Copper,L" + std::to_string(rangCuivre(couche, std::max(nCuivre, 3)) + 1) + ",Inr";
   switch (couche) {
     case Couche::CuivreDessus: return "Copper,L1,Top";
-    case Couche::CuivreInt1: return "Copper,L2,Inr";
-    case Couche::CuivreInt2: return "Copper,L3,Inr";
     case Couche::CuivreDessous: return "Copper,L" + std::to_string(std::max(1, nCuivre)) + ",Bot";  // L1 en simple face
+    case Couche::ColleDessus: return "Glue,Top";
+    case Couche::ColleDessous: return "Glue,Bot";
+    case Couche::ProtectionDessus: return "Other,Coating-Top";
+    case Couche::ProtectionDessous: return "Other,Coating-Bot";
     case Couche::VernisDessus: return "Soldermask,Top";
     case Couche::VernisDessous: return "Soldermask,Bot";
     case Couche::PateDessus: return "Paste,Top";
@@ -205,14 +212,98 @@ std::vector<TraitSerigraphie> textesSerigraphie(const ConceptionElec& c) {
   return r;
 }
 
+std::string asciiFabrication(const std::string& s) {
+  // Lettres latines accentuées ramenées à leur base ; le reste hors ASCII devient « _ » (une fois par caractère)
+  static const char* const latin1[64] = {"A", "A", "A", "A", "A", "A", "AE", "C", "E", "E", "E", "E", "I", "I", "I", "I", "D", "N", "O", "O", "O", "O", "O", "x", "O", "U", "U", "U", "U", "Y", "_", "ss",
+                                         "a", "a", "a", "a", "a", "a", "ae", "c", "e", "e", "e", "e", "i", "i", "i", "i", "d", "n", "o", "o", "o", "o", "o", "_", "o", "u", "u", "u", "u", "y", "_", "y"};
+  std::string r;
+  for (std::size_t i = 0; i < s.size();) {
+    const unsigned char c = static_cast<unsigned char>(s[i]);
+    if (c < 0x80) {
+      r += (c >= 32 || c == '\t') ? static_cast<char>(c) : '_';
+      ++i;
+      continue;
+    }
+    // Longueur de la séquence UTF-8 et point de code
+    const std::size_t n = c >= 0xF0 ? 4 : c >= 0xE0 ? 3 : c >= 0xC0 ? 2 : 1;
+    std::uint32_t cp = n == 2 ? c & 0x1F : n == 3 ? c & 0x0F : c & 0x07;
+    for (std::size_t k = 1; k < n && i + k < s.size(); ++k) cp = (cp << 6) | (static_cast<unsigned char>(s[i + k]) & 0x3F);
+    i += n;
+    if (cp >= 0xC0 && cp <= 0xFF) r += latin1[cp - 0xC0];
+    else if (cp == 0x152) r += "OE";
+    else if (cp == 0x153) r += "oe";
+    else if (cp == 0x2019 || cp == 0x2018) r += '\'';
+    else if (cp == 0x2013 || cp == 0x2014) r += '-';
+    else r += '_';
+  }
+  return r;
+}
+
+Boite repereFichiers(const ConceptionElec& c) {
+  Boite b = boite(c.circuit.contour.polygone());
+  const auto& a = c.circuit.affichage;
+  if (a.origineFabrication && a.origineTravail) {
+    // L'origine de travail devient le zéro des fichiers : x0 et y1 (y vers le haut dans les fichiers)
+    const Nm dx = a.origineTravail->x - b.x0, dy = a.origineTravail->y - b.y1;
+    b.x0 += dx;
+    b.x1 += dx;
+    b.y0 += dy;
+    b.y1 += dy;
+  }
+  return b;
+}
+
+ReglagesColle reglagesColle(const ConceptionElec& c) {
+  ReglagesColle r;
+  if (const auto it = c.extensions.find("colle"); it != c.extensions.end() && it->second.is_object()) {
+    const std::string faces = it->second.value("faces", std::string());
+    r.dessus = faces == "dessus" || faces == "deux";
+    r.dessous = faces == "dessous" || faces == "deux";
+    r.diametre = nm(it->second.value("diametre", 0.6));
+  }
+  return r;
+}
+
+std::set<std::string> composantsSansPate(const ConceptionElec& c) {
+  std::set<std::string> r;
+  const auto& K = c.circuit.regles.avancees.contraintes;
+  if (std::none_of(K.begin(), K.end(), [](const Contrainte& k) { return k.active && k.genre == GenreContrainte::PateNonMontes && k.texte != "non"; })) return r;
+  for (const auto& x : c.composants)
+    if (x.nePasMonter && resoudre(c, GenreContrainte::PateNonMontes, proprietesComposant(c, x)).trouvee) r.insert(x.uuid);
+  return r;
+}
+
 ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite& k, const Remplissages& remplis) {
   ModeleFabrication m;
   m.nom = c.nom;
+  m.uuid = c.uuid;
+  m.revision = c.cartouche.revision;
+  m.date = c.cartouche.date;
   m.contour = c.circuit.contour.polygone();
   m.boite = boite(m.contour);
+  m.repere = repereFichiers(c);
   const int nc = c.circuit.empilage.couchesCuivre;
+  m.couchesCuivre = nc;
   std::vector<Couche> liste = couchesCuivre(nc);
   for (Couche x : {Couche::VernisDessus, Couche::VernisDessous, Couche::PateDessus, Couche::PateDessous, Couche::SerigraphieDessus, Couche::SerigraphieDessous, Couche::Contour}) liste.push_back(x);
+  // Couches de colle (8.14) : seulement si une empreinte en porte
+  for (Couche x : {Couche::ColleDessus, Couche::ColleDessous})
+    for (const auto& e : c.circuit.empreintes)
+      if (const DefEmpreinte* d = c.empreinte(e.empreinte);
+          d && std::any_of(d->traits.begin(), d->traits.end(), [&](const TraitEmpreinte& t) { return coucheSurCarte(e, t.couche) == x; })) {
+        liste.push_back(x);
+        break;
+      }
+  // Points de colle tirés du corps (8.14, FAB-19) : réglage du projet, extensions["colle"] = {faces, diametre}
+  const ReglagesColle colle = reglagesColle(c);
+  for (Couche x : {Couche::ColleDessus, Couche::ColleDessous})
+    if (((x == Couche::ColleDessus && colle.dessus) || (x == Couche::ColleDessous && colle.dessous)) && std::find(liste.begin(), liste.end(), x) == liste.end()) liste.push_back(x);
+  // Vernis de protection (8.14, FAB-27) et dessins de la carte sur les couches techniques : la couche existe dès
+  // qu'un dessin y est posé
+  for (Couche x : {Couche::ColleDessus, Couche::ColleDessous, Couche::ProtectionDessus, Couche::ProtectionDessous})
+    if (std::find(liste.begin(), liste.end(), x) == liste.end() &&
+        std::any_of(c.circuit.dessins.begin(), c.circuit.dessins.end(), [&](const DessinCircuit& d) { return d.couche == x; }))
+      liste.push_back(x);
   for (Couche x : liste) m.couches.push_back({x, {}});
   auto couche = [&](Couche x) -> CoucheFab* {
     for (auto& cf : m.couches)
@@ -243,7 +334,23 @@ ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite&
         if (!b.nom.empty() && b.nom != "~") nomsBroches.emplace(std::make_pair(x.uuid, b.numero), b.nom);
   // Simple face : aucun trou n'est métallisé, la carte n'a qu'une couche de cuivre (F9)
   const bool simpleFace = nc == 1;
-  // Pastilles : cuivre, vernis (agrandi), pâte (CMS)
+  // Pastilles : cuivre, vernis (agrandi), pâte (CMS) ; pas de pâte sous un non-monté quand la règle le demande (8.14)
+  const std::set<std::string> sansPate = composantsSansPate(c);
+  // Marges de vernis et de pâte posées par les règles d'assemblage (8.14), par composant ; la pastille garde la sienne
+  std::map<std::string, Nm> margeVernisRegle, margePateRegle;
+  {
+    const auto& K = c.circuit.regles.avancees.contraintes;
+    const bool mv = std::any_of(K.begin(), K.end(), [](const Contrainte& q) { return q.active && q.genre == GenreContrainte::MargeVernis; });
+    const bool mp = std::any_of(K.begin(), K.end(), [](const Contrainte& q) { return q.active && q.genre == GenreContrainte::MargePate; });
+    if (mv || mp)
+      for (const auto& x : c.composants) {
+        const Proprietes pr = proprietesComposant(c, x);
+        if (mv)
+          if (const Resolution r = resoudre(c, GenreContrainte::MargeVernis, pr); r.trouvee) margeVernisRegle[x.uuid] = r.valeur.min ? r.valeur.min : r.valeur.pref;
+        if (mp)
+          if (const Resolution r = resoudre(c, GenreContrainte::MargePate, pr); r.trouvee) margePateRegle[x.uuid] = r.valeur.min ? r.valeur.min : r.valeur.pref;
+      }
+  }
   const auto pp = pastilles(c, k);
   for (const auto& x : pp) {
     const Pastille& pa = x.pastille;
@@ -262,11 +369,31 @@ ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite&
         p.type = pa.forme == FormePastille::Rect ? PrimitiveFab::Type::Rect : PrimitiveFab::Type::Oblong;
         p.l = (tourne90(pa.rotation) ? pa.hauteur : pa.largeur) + 2 * marge;
         p.h = (tourne90(pa.rotation) ? pa.largeur : pa.hauteur) + 2 * marge;
+      } else if (pa.forme == FormePastille::RectArrondi && marge >= 0) {
+        // Rectangle arrondi (8.4, F12) : une macro d'ouverture, quelle que soit sa rotation, plutôt qu'une région
+        p.type = PrimitiveFab::Type::RectArrondi;
+        p.l = pa.largeur + 2 * marge;
+        p.h = pa.hauteur + 2 * marge;
+        p.r = static_cast<Nm>(pa.arrondi * static_cast<double>(std::min(pa.largeur, pa.hauteur))) + marge;
+        p.rotation = pa.rotation;
       } else {
         p.type = PrimitiveFab::Type::Region;
-        const Polygones g = marge > 0 ? gonfler({x.forme}, marge) : Polygones{x.forme};
+        const Polygones g = marge != 0 ? gonfler({x.forme}, marge) : Polygones{x.forme};
         p.region = g.empty() ? x.forme : g.front();
       }
+      return p;
+    };
+    // Forme libre de vernis ou de pâte (4.24) : dans le repère de la pastille
+    auto libre = [&](const Polygone& q, const char* fonction) {
+      PrimitiveFab p;
+      p.type = PrimitiveFab::Type::Region;
+      for (const Pt& s : q) p.region.push_back(surPastille(pa, s));
+      p.region = orienter(p.region);
+      p.fonction = fonction;
+      p.reseau = x.reseau;
+      p.reference = x.reference;
+      p.numero = x.numero;
+      p.broche = nomBroche;
       return p;
     };
     // Propriété de fabrication de la pastille (3.20, EMP-18) : BGA, fiducial, point de test, dissipateur…
@@ -275,12 +402,43 @@ ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite&
     // Grande pastille CMS (pastille centrale) : pâte en fenêtres, pour un taux de couverture réglé (EL-31)
     const double aire = mm(pa.largeur) * mm(pa.hauteur);
     const bool fenetres = pa.type == TypePastille::CMS && aire >= RF.seuilGrandePastille && RF.tauxPateGrandes < 0.999;
+    const auto itV = margeVernisRegle.find(x.composant);
+    const auto itP = margePateRegle.find(x.composant);
+    const Nm margeVernis = pa.margeVernis.value_or(itV != margeVernisRegle.end() ? itV->second : RF.margeVernis);
+    const Nm margePate = pa.margePate.value_or(itP != margePateRegle.end() ? itP->second : RF.margePate);
     for (auto& cf : m.couches) {
       if (!(x.couches & bit(cf.couche))) continue;
       if (estCuivre(cf.couche)) cf.primitives.push_back(primitive(0, fonction));
-      else if (cf.couche == Couche::VernisDessus || cf.couche == Couche::VernisDessous) cf.primitives.push_back(primitive(RF.margeVernis, fonction));
+      else if (cf.couche == Couche::VernisDessus || cf.couche == Couche::VernisDessous) cf.primitives.push_back(pa.vernisLibre.size() >= 3 ? libre(pa.vernisLibre, fonction) : primitive(margeVernis, fonction));
       else if (cf.couche == Couche::PateDessus || cf.couche == Couche::PateDessous) {
-        if (!fenetres) { cf.primitives.push_back(primitive(0, fonction)); continue; }
+        if (sansPate.count(x.composant)) continue;
+        if (pa.pateLibre.size() >= 3) { cf.primitives.push_back(libre(pa.pateLibre, fonction)); continue; }
+        if (pa.motifPate) {
+          // Motif de pâte (4.24, EMP-26) : grille de fenêtres de la pastille, au taux de couverture voulu
+          const MotifPate& mp = *pa.motifPate;
+          const double L = static_cast<double>(pa.largeur), H = static_cast<double>(pa.hauteur), e = static_cast<double>(mp.ecart);
+          const double w = std::max(1.0, (L - (mp.colonnes - 1) * e) / mp.colonnes), h = std::max(1.0, (H - (mp.lignes - 1) * e) / mp.lignes);
+          const double f = std::min(1.0, std::sqrt(mp.couverture * L * H / (mp.colonnes * mp.lignes * w * h)));
+          for (int i = 0; i < mp.colonnes; ++i)
+            for (int j = 0; j < mp.lignes; ++j) {
+              const Pt centre = surPastille(pa, {static_cast<Nm>(std::llround(-L / 2 + w / 2 + i * (w + e))), static_cast<Nm>(std::llround(-H / 2 + h / 2 + j * (h + e)))});
+              const Nm lw = static_cast<Nm>(std::llround(w * f)), lh = static_cast<Nm>(std::llround(h * f));
+              const Polygone fen = mp.rayon > 0 ? rectangleArrondi(centre, lw, lh, std::min(mp.rayon, std::min(lw, lh) / 2), pa.rotation) : rectangle(centre, lw, lh, pa.rotation);
+              for (auto& q : intersecter({fen}, {x.forme})) {
+                PrimitiveFab p;
+                p.type = PrimitiveFab::Type::Region;
+                p.region = std::move(q);
+                p.fonction = fonction;
+                p.reseau = x.reseau;
+                p.reference = x.reference;
+                p.numero = x.numero;
+                p.broche = nomBroche;
+                cf.primitives.push_back(std::move(p));
+              }
+            }
+          continue;
+        }
+        if (!fenetres) { cf.primitives.push_back(primitive(margePate, fonction)); continue; }
         for (auto& f : fenetresPate(pa, x.forme, RF.tauxPateGrandes)) {
           f.fonction = fonction;
           f.reseau = x.reseau;
@@ -293,17 +451,41 @@ ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite&
     }
     if (pa.percage > 0) {
       const bool metallise = pa.type == TypePastille::Traversante && !simpleFace;
-      m.trous.push_back({pa.position, pa.percage, metallise, pa.type == TypePastille::Traversante ? "ComponentDrill" : "MechanicalDrill"});
+      // Trou décalé, oblong (fente), avec sa tolérance (4.27) ; trous en plus de la même pastille
+      TrouFab t{surPastille(pa, pa.decalagePercage), pa.percage, metallise, pa.type == TypePastille::Traversante ? "ComponentDrill" : "MechanicalDrill"};
+      t.longueur = pa.longueurPercage > pa.percage ? pa.longueurPercage : 0;
+      t.rotation = pa.rotation;
+      t.tolerance = pa.tolerancePercage;
+      t.reference = x.reference + "." + x.numero;
+      if (pa.fabrication == "castellee") t.fonction = "CastellatedDrill";
+      m.trous.push_back(t);
+      for (const auto& tp : pa.trousEnPlus) {
+        TrouFab u{surPastille(pa, tp.decalage), tp.diametre, metallise, t.fonction};
+        u.longueur = tp.longueur > tp.diametre ? tp.longueur : 0;
+        u.rotation = pa.rotation + tp.rotation;
+        u.reference = t.reference;
+        m.trous.push_back(u);
+      }
     }
   }
   // Vias (couvertes de vernis) et pistes
   for (const auto& v : c.circuit.vias) {
+    // Couches que la via relie (8.22), couronnes non fonctionnelles retirées (8.23) : comme pour la connectivité
+    Couches couchesV = couchesVia(v, nc);
+    if (v.retirerCouronnes) {
+      Couches utiles = bit(Couche::CuivreDessus) | bit(Couche::CuivreDessous);
+      for (const auto& p : c.circuit.pistes)
+        if (p.reseau == v.reseau && (distance(p.a, v.p) <= static_cast<double>(v.diametre) / 2 || distance(p.b, v.p) <= static_cast<double>(v.diametre) / 2)) utiles |= bit(p.couche);
+      for (const auto& z : c.circuit.zones)
+        if (z.reseau == v.reseau) utiles |= bit(z.couche);
+      couchesV &= utiles;
+    }
     for (Couche x : couchesCuivre(nc))
-      if (CoucheFab* cf = couche(x)) {
+      if (CoucheFab* cf = couche(x); cf && (couchesV & bit(x))) {
         PrimitiveFab p;
         p.type = PrimitiveFab::Type::Disque;
         p.a = v.p;
-        p.l = v.diametre;
+        p.l = diametreViaSur(v, x, nc);
         p.fonction = "ViaPad";
         p.reseau = v.reseau;
         cf->primitives.push_back(p);
@@ -319,17 +501,67 @@ ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite&
           p.fonction = "ViaPad";
           cf->primitives.push_back(p);
         }
-    m.trous.push_back({v.p, v.percage, !simpleFace, "ViaDrill"});  // simple face : un trou de strap, non métallisé (F9)
+    {
+      // Simple face : un trou de strap, non métallisé (F9) ; via borgne ou enterrée : sa paire de couches
+      TrouFab t{v.p, v.percage, !simpleFace, "ViaDrill"};
+      const std::vector<Couche> cu = couchesCuivre(nc);
+      if (v.type != TypeVia::Traversante && cu.size() > 2) {
+        int i0 = std::max(0, rangCuivre(v.de, nc)), i1 = rangCuivre(v.vers, nc);
+        if (i1 < 0) i1 = static_cast<int>(cu.size()) - 1;
+        if (i0 > i1) std::swap(i0, i1);
+        t.de = cu[static_cast<std::size_t>(i0)];
+        t.a = cu[static_cast<std::size_t>(i1)];
+      }
+      m.trous.push_back(t);
+      // Contre-perçage (8.23) : depuis la face choisie jusqu'à la couche qui suit la dernière couche gardée
+      if (v.contrePercage && cu.size() > 2) {
+        const ContrePercage& cp = *v.contrePercage;
+        const int garde = rangCuivre(cp.jusqua, nc);
+        if (garde >= 0) {
+          TrouFab b{v.p, cp.diametre > 0 ? cp.diametre : v.percage + 200'000, false, "Backdrill"};
+          b.contrePercage = true;
+          if (cp.dessous && garde + 1 <= static_cast<int>(cu.size()) - 1) {
+            b.de = cu.back();
+            b.a = cu[static_cast<std::size_t>(garde + 1)];
+            m.trous.push_back(b);
+          } else if (!cp.dessous && garde - 1 >= 0) {
+            b.de = cu.front();
+            b.a = cu[static_cast<std::size_t>(garde - 1)];
+            m.trous.push_back(b);
+          }
+        }
+      }
+    }
   }
   for (const auto& t : c.circuit.pistes)
     if (CoucheFab* cf = couche(t.couche)) {
       PrimitiveFab p;
-      p.type = PrimitiveFab::Type::Trait;
-      p.a = t.a;
-      p.b = t.b;
-      p.l = t.largeur;
       p.fonction = "Conductor";
       p.reseau = t.reseau;
+      if (!t.milieu && (t.largeurFin > 0 || t.boutsCarres)) {
+        // Segment effilé ou à bouts carrés (5.22) : une région, au contour exact
+        for (auto& f : formePiste(t)) {
+          PrimitiveFab q = p;
+          q.type = PrimitiveFab::Type::Region;
+          q.region = std::move(f);
+          cf->primitives.push_back(std::move(q));
+        }
+        continue;
+      }
+      p.type = t.milieu ? PrimitiveFab::Type::Arc : PrimitiveFab::Type::Trait;
+      p.a = t.a;
+      p.b = t.b;
+      if (t.milieu) p.m = *t.milieu;
+      p.l = t.largeur;
+      cf->primitives.push_back(p);
+    }
+  for (const auto& g : c.circuit.regions)
+    if (CoucheFab* cf = couche(g.couche); cf && g.forme.size() >= 3) {
+      PrimitiveFab p;
+      p.type = PrimitiveFab::Type::Region;
+      p.region = orienter(g.forme);
+      p.fonction = "Conductor";
+      p.reseau = g.reseau;
       cf->primitives.push_back(p);
     }
   // Sérigraphie des empreintes
@@ -337,7 +569,7 @@ ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite&
     const DefEmpreinte* d = c.empreinte(e.empreinte);
     if (!d) continue;
     for (const auto& tr : d->traits) {
-      if (tr.couche != Couche::SerigraphieDessus && tr.couche != Couche::SerigraphieDessous) continue;
+      if (tr.couche != Couche::SerigraphieDessus && tr.couche != Couche::SerigraphieDessous && tr.couche != Couche::ColleDessus && tr.couche != Couche::ColleDessous) continue;
       CoucheFab* cf = couche(coucheSurCarte(e, tr.couche));
       if (!cf) continue;
       auto trait = [&](Pt a, Pt b) {
@@ -358,6 +590,51 @@ ModeleFabrication modeleFabrication(const ConceptionElec& c, const Connectivite&
         };
         for (int i = 0; i < n; ++i) trait(surCercle(i), surCercle(i + 1));
       } else trait(tr.a, tr.b);
+    }
+  }
+  // Points de colle tirés du corps (8.14) : un disque au centre de l'encombrement de chaque composant CMS monté de la
+  // face, sauf s'il porte déjà ses points dans son empreinte
+  if (colle.dessus || colle.dessous)
+    for (const auto& e : c.circuit.empreintes) {
+      const DefEmpreinte* d = c.empreinte(e.empreinte);
+      const ComposantElec* x = c.composant(e.composant);
+      if (!d || !x || x->nePasMonter || (e.dessous ? !colle.dessous : !colle.dessus)) continue;
+      if (d->pastilles.empty() || std::any_of(d->pastilles.begin(), d->pastilles.end(), [](const Pastille& q) { return q.type != TypePastille::CMS; })) continue;
+      if (std::any_of(d->traits.begin(), d->traits.end(), [](const TraitEmpreinte& t) { return t.couche == Couche::ColleDessus || t.couche == Couche::ColleDessous; })) continue;
+      if (CoucheFab* cf = couche(e.dessous ? Couche::ColleDessous : Couche::ColleDessus)) {
+        PrimitiveFab p;
+        p.type = PrimitiveFab::Type::Disque;
+        p.a = boite(encombrementSurCarte(e, *d)).centre();
+        p.l = colle.diametre;
+        p.reference = x->reference;
+        cf->primitives.push_back(p);
+      }
+    }
+  // Dessins de la carte (5.31) : traits, ou régions s'ils sont pleins ; sur le cuivre, sans fonction électrique
+  for (const auto& d : c.circuit.dessins) {
+    CoucheFab* cf = couche(d.couche);
+    if (!cf || d.couche == Couche::Contour) continue;
+    const std::vector<Pt> pts = contourDessin(d);
+    if (pts.size() < 2) continue;
+    const bool ferme = d.forme == DessinCircuit::Forme::Polygone || d.forme == DessinCircuit::Forme::Rectangle || d.forme == DessinCircuit::Forme::Cercle;
+    const char* fonction = estCuivre(d.couche) ? "NonConductor" : d.couche == Couche::SerigraphieDessus || d.couche == Couche::SerigraphieDessous ? "Other,Legend" : "";
+    const bool region = (d.plein || d.couche == Couche::ProtectionDessus || d.couche == Couche::ProtectionDessous) && ferme && pts.size() >= 3;
+    if (region) {
+      PrimitiveFab p;
+      p.type = PrimitiveFab::Type::Region;
+      p.region = orienter(Polygone(pts.begin(), pts.end()));
+      p.fonction = fonction;
+      cf->primitives.push_back(p);
+      continue;
+    }
+    for (std::size_t i = 0; i + 1 < pts.size() + (ferme ? 1 : 0); ++i) {
+      PrimitiveFab p;
+      p.type = PrimitiveFab::Type::Trait;
+      p.a = pts[i];
+      p.b = pts[(i + 1) % pts.size()];
+      p.l = d.epaisseur;
+      p.fonction = fonction;
+      cf->primitives.push_back(p);
     }
   }
   // Repères, valeurs et textes de carte, dans la police vectorielle commune (EL-06). Un texte posé sur une couche
@@ -400,36 +677,63 @@ std::string gerber(const ModeleFabrication& m, Couche couche, const std::string&
   const bool negatif = fichierNegatif(couche);
   s << "G04 Promethee : " << sur(m.nom) << " - " << codeCouche(couche) << "*\n";
   s << "%TF.GenerationSoftware,Promethee,Promethee," << sur(version) << "*%\n";
+  // Identité du projet et date (8.4, F13) : la date est celle du cartouche, pour que deux écritures d'une même
+  // révision donnent les mêmes fichiers
+  if (!m.uuid.empty()) s << "%TF.ProjectId," << sur(m.nom) << "," << sur(m.uuid) << "," << sur(m.revision.empty() ? std::string("rev?") : m.revision) << "*%\n";
+  if (m.date.size() == 10 && m.date[4] == '-' && m.date[7] == '-') s << "%TF.CreationDate," << m.date << "T00:00:00+00:00*%\n";
+  s << "%TF.Part,Single*%\n";
   s << "%TF.SameCoordinates,Original*%\n";
   s << "%TF.FileFunction," << fonction << "*%\n";
   s << "%TF.FilePolarity," << (negatif ? "Negative" : "Positive") << "*%\n";
   s << "%FSLAX46Y46*%\n%MOMM*%\n%LPD*%\nG01*\n";
   auto xy = [&m](Pt p) {
-    const Pt q = versRepereFabrication(m.boite, p);
+    const Pt q = versRepereFabrication(m.repere, p);
     return "X" + std::to_string(q.x) + "Y" + std::to_string(q.y);
   };
   // Ouvertures
   struct Cle {
     int type;
-    Nm l, h;
+    Nm l, h, r;
+    long long rot;  // millièmes de degré
     std::string fonction;
-    bool operator<(const Cle& o) const { return std::tie(type, l, h, fonction) < std::tie(o.type, o.l, o.h, o.fonction); }
+    bool operator<(const Cle& o) const { return std::tie(type, l, h, r, rot, fonction) < std::tie(o.type, o.l, o.h, o.r, o.rot, o.fonction); }
   };
   std::map<Cle, int> ouvertures;
   auto cleDe = [](const PrimitiveFab& p) {
-    const int t = p.type == PrimitiveFab::Type::Trait ? 0 : static_cast<int>(p.type);
-    return Cle{t, p.l, p.type == PrimitiveFab::Type::Disque || p.type == PrimitiveFab::Type::Trait ? 0 : p.h, p.fonction};
+    const bool rond = p.type == PrimitiveFab::Type::Trait || p.type == PrimitiveFab::Type::Arc;
+    const int t = rond ? 0 : static_cast<int>(p.type);
+    const bool arrondi = p.type == PrimitiveFab::Type::RectArrondi;
+    return Cle{t, p.l, p.type == PrimitiveFab::Type::Disque || rond ? 0 : p.h, arrondi ? p.r : 0, arrondi ? std::llround(std::fmod(std::fmod(p.rotation, 360.0) + 360.0, 360.0) * 1000) : 0, p.fonction};
   };
+  bool macroArrondi = false;
   if (cf)
     for (const auto& p : cf->primitives)
-      if (p.type != PrimitiveFab::Type::Region) ouvertures.emplace(cleDe(p), 0);
+      if (p.type != PrimitiveFab::Type::Region) {
+        ouvertures.emplace(cleDe(p), 0);
+        macroArrondi |= p.type == PrimitiveFab::Type::RectArrondi;
+      }
+  // Macro du rectangle arrondi (8.4, F12), celle de KiCad : un polygone des quatre centres des arrondis, quatre cercles
+  // et quatre traits de la largeur de l'arrondi
+  if (macroArrondi)
+    s << "%AMRoundRect*\n0 Rectangle aux coins arrondis*\n0 $1 rayon ; $2 a $9 centres des quatre arrondis*\n"
+         "4,1,4,$2,$3,$4,$5,$6,$7,$8,$9,$2,$3,0*\n1,1,$1+$1,$2,$3*\n1,1,$1+$1,$4,$5*\n1,1,$1+$1,$6,$7*\n1,1,$1+$1,$8,$9*\n"
+         "20,1,$1+$1,$2,$3,$4,$5,0*\n20,1,$1+$1,$4,$5,$6,$7,0*\n20,1,$1+$1,$6,$7,$8,$9,0*\n20,1,$1+$1,$8,$9,$2,$3,0*%\n";
   int d = 10;
   for (auto& [cle, code] : ouvertures) {
     code = d++;
     s << "%TA.AperFunction," << cle.fonction << "*%\n";
     if (cle.type == 0 || cle.type == static_cast<int>(PrimitiveFab::Type::Disque)) s << "%ADD" << code << "C," << decimal(std::max<Nm>(cle.l, 1000)) << "*%\n";
     else if (cle.type == static_cast<int>(PrimitiveFab::Type::Rect)) s << "%ADD" << code << "R," << decimal(cle.l) << "X" << decimal(cle.h) << "*%\n";
-    else s << "%ADD" << code << "O," << decimal(cle.l) << "X" << decimal(cle.h) << "*%\n";
+    else if (cle.type == static_cast<int>(PrimitiveFab::Type::RectArrondi)) {
+      // Centres des arrondis, tournés, dans le repère de fabrication (y vers le haut : l'angle s'inverse)
+      const Nm rr = std::clamp<Nm>(cle.r, 0, std::min(cle.l, cle.h) / 2);
+      const double a = -static_cast<double>(cle.rot) / 1000.0 * std::numbers::pi / 180, ca = std::cos(a), sa = std::sin(a);
+      const double dx = static_cast<double>(cle.l) / 2 - static_cast<double>(rr), dy = static_cast<double>(cle.h) / 2 - static_cast<double>(rr);
+      s << "%ADD" << code << "RoundRect," << decimal(rr);
+      for (const auto& [ux, uy] : {std::pair{-dx, dy}, std::pair{dx, dy}, std::pair{dx, -dy}, std::pair{-dx, -dy}})
+        s << "X" << decimal(static_cast<Nm>(std::llround(ux * ca - uy * sa))) << "X" << decimal(static_cast<Nm>(std::llround(ux * sa + uy * ca)));
+      s << "*%\n";
+    } else s << "%ADD" << code << "O," << decimal(cle.l) << "X" << decimal(cle.h) << "*%\n";
     s << "%TD*%\n";
   }
   if (cf) {
@@ -460,12 +764,25 @@ std::string gerber(const ModeleFabrication& m, Couche couche, const std::string&
       s << "%TD.AperFunction*%\n";
     }
     int courante = -1;
+    bool modeArc = false;
     for (const auto& p : cf->primitives) {
       if (p.type == PrimitiveFab::Type::Region) continue;
       attributs(p);
       const int code = ouvertures[cleDe(p)];
       if (code != courante) { s << "D" << code << "*\n"; courante = code; }
-      if (p.type == PrimitiveFab::Type::Trait) s << xy(p.a) << "D02*\n" << xy(p.b) << "D01*\n";
+      if (p.type == PrimitiveFab::Type::Arc) {
+        // Arc de piste (8.4, ROU-13) : G75 (arcs sur plus d'un quadrant), G02 horaire ou G03 antihoraire, centre
+        // en I, J relatif au départ, dans le repère de fabrication (y vers le haut)
+        const Pt A = versRepereFabrication(m.repere, p.a), M = versRepereFabrication(m.repere, p.m), B = versRepereFabrication(m.repere, p.b);
+        double cx, cy, rayon;
+        if (!cercleParTroisPoints(A, M, B, cx, cy, rayon)) {
+          s << xy(p.a) << "D02*\n" << xy(p.b) << "D01*\n";
+          continue;
+        }
+        if (!modeArc) { s << "G75*\n"; modeArc = true; }
+        const double croix = static_cast<double>(M.x - A.x) * static_cast<double>(B.y - A.y) - static_cast<double>(M.y - A.y) * static_cast<double>(B.x - A.x);
+        s << xy(p.a) << "D02*\n" << (croix < 0 ? "G02" : "G03") << xy(p.b) << "I" << std::llround(cx - static_cast<double>(A.x)) << "J" << std::llround(cy - static_cast<double>(A.y)) << "D01*\nG01*\n";
+      } else if (p.type == PrimitiveFab::Type::Trait) s << xy(p.a) << "D02*\n" << xy(p.b) << "D01*\n";
       else s << xy(p.a) << "D03*\n";
     }
     if (!n.empty() || !pa.empty() || !co.empty()) s << "%TD*%\n";
@@ -475,47 +792,16 @@ std::string gerber(const ModeleFabrication& m, Couche couche, const std::string&
 }
 
 std::string excellon(const ModeleFabrication& m, bool metallises, const std::string& version) {
-  std::map<Nm, std::vector<Pt>> parOutil;
-  for (const auto& t : m.trous)
-    if (t.metallise == metallises) parOutil[t.diametre].push_back(t.p);
-  int nCuivre = 0;
-  for (const auto& x : m.couches) nCuivre += estCuivre(x.couche) ? 1 : 0;
-  // De la première à la dernière couche ; une carte simple face n'en a qu'une (F9)
-  const std::string paire = "1," + std::to_string(std::max(1, nCuivre));
-  std::ostringstream s;
-  s << "M48\n; Percage " << (metallises ? "metallise" : "non metallise") << " - " << sur(m.nom) << "\n";
-  s << "; #@! TF.GenerationSoftware,Promethee,Promethee," << sur(version) << "\n";
-  s << "; #@! TF.FileFunction," << (metallises ? "Plated," + paire + ",PTH" : "NonPlated," + paire + ",NPTH") << "\n";
-  s << "FMAT,2\nMETRIC\n";
-  // Fonction de chaque outil (attribut X2 d'Excellon, EL-30) : via, trou de composant ou trou mécanique
-  std::map<Nm, std::string> fonctions;
-  for (const auto& tr : m.trous)
-    if (tr.metallise == metallises) {
-      auto& f = fonctions[tr.diametre];
-      if (f.empty()) f = tr.fonction;
-      else if (f != tr.fonction) f = "Other";
-    }
-  int t = 1;
-  for (const auto& [diametre, pts] : parOutil) {
-    const std::string& f = fonctions[diametre];
-    s << "; #@! TA.AperFunction," << (metallises ? "Plated," : "NonPlated,") << (f.empty() ? std::string("Other") : f) << "\n";
-    char ligne[64];
-    std::snprintf(ligne, sizeof ligne, "T%dC%.3f\n", t++, static_cast<double>(diametre) * 1e-6);
-    s << ligne;
-  }
-  s << "%\nG90\nG05\n";
-  t = 1;
-  for (const auto& [diametre, pts] : parOutil) {
-    s << "T" << t++ << "\n";
-    for (const Pt& p : pts) {
-      char ligne[64];
-      const Pt q = versRepereFabrication(m.boite, p);
-      std::snprintf(ligne, sizeof ligne, "X%.4fY%.4f\n", static_cast<double>(q.x) * 1e-6, static_cast<double>(q.y) * 1e-6);
-      s << ligne;
-    }
-  }
-  s << "T0\nM30\n";
-  return s.str();
+  // Trous qui traversent toute la carte, ronds ou oblongs (fentes détourées, 4.13) ; les vias borgnes ou enterrées
+  // et les contre-perçages ont leurs propres fichiers (excellonPaire)
+  PairePercage paire;
+  const auto cu = couchesCuivre(std::max(1, m.couchesCuivre));
+  paire.de = cu.front();
+  paire.a = cu.back();
+  paire.metallise = metallises;
+  const int n = std::max(1, static_cast<int>(cu.size()));
+  paire.fonction = std::string(metallises ? "Plated,1," : "NonPlated,1,") + std::to_string(n) + (metallises ? ",PTH" : ",NPTH");
+  return excellonPaire(m, paire, OptionsExcellon{}, version);
 }
 
 std::string csvPlacement(const ConceptionElec& c, bool anglais) {
@@ -552,7 +838,7 @@ std::string csvPlacement(const ConceptionElec& c, bool anglais) {
     double rot = std::fmod(e->rotation, 360.0);
     if (rot < 0) rot += 360;
     const DefEmpreinte* def = c.empreinte(e->empreinte);
-    const Pt q = versRepereFabrication(carte, def ? versCarte(*e, pointDePlacement(*def)) : e->position);
+    const Pt q = versRepereFabrication(repereFichiers(c), def ? versCarte(*e, pointDePlacement(*def)) : e->position);
     s << champ(x->reference) << ',' << champ(x->valeur) << ',' << champ(e->empreinte) << ',' << nombre(static_cast<double>(q.x) * 1e-6, 4) << ',' << nombre(static_cast<double>(q.y) * 1e-6, 4)
       << ',' << nombre(rot, 1) << ','
       << (anglais ? (e->dessous ? "bottom" : "top") : (e->dessous ? "dessous" : "dessus")) << '\n';
@@ -608,6 +894,21 @@ std::vector<std::string> ecrireDossierFabrication(const ConceptionElec& c, const
   ecrire(fs::path("Test") / (base + "-netlist.ipc"), ipcD356(c, k));
   ecrire(fs::path("Percage") / (base + "-PTH.drl"), excellon(m, true, version));
   ecrire(fs::path("Percage") / (base + "-NPTH.drl"), excellon(m, false, version));
+  // Vias borgnes, enterrées et contre-perçages (8.22, 8.23) : un fichier par paire de couches ; fentes en G85 au
+  // choix du profil (4.13)
+  {
+    OptionsExcellon oe;
+    oe.g85 = c.circuit.fabrication.fentesG85;
+    for (const auto& paire : pairesPercage(m))
+      if (paire.nomFichier != "PTH" && paire.nomFichier != "NPTH") ecrire(fs::path("Percage") / (base + "-" + paire.nomFichier + ".drl"), excellonPaire(m, paire, oe, version));
+  }
+  // Tableau et plan de perçage (4.27, 8.7), vias à remplir (8.22), couches des composants en Gerber X3 (8.7)
+  ecrire(fs::path("Percage") / (base + "-tableau-percage.csv"), tableauPercagesCsv(m));
+  ecrire(fs::path("Percage") / (base + "-plan-percage.svg"), planPercageSvg(m, c.nom + " — plan de perçage"));
+  if (aDesViasRemplies(c)) ecrire(fs::path("Percage") / (base + "-vias-remplies.gbr"), gerberViaFill(m, c, version));
+  ecrire(fs::path("Assemblage") / (base + "-composants-dessus.gbr"), gerberComposants(c, false, version));
+  if (std::any_of(c.circuit.empreintes.begin(), c.circuit.empreintes.end(), [](const EmpreintePlacee& e) { return e.dessous; }))
+    ecrire(fs::path("Assemblage") / (base + "-composants-dessous.gbr"), gerberComposants(c, true, version));
   ecrire(fs::path("Assemblage") / (base + "-placement.csv"), csvPlacement(c));
   ecrire(fs::path("Assemblage") / (base + "-placement-en.csv"), csvPlacement(c, true));  // en-têtes des assembleurs (Designator, Mid X…)
   ecrire(fs::path("Nomenclature") / (base + "-nomenclature.csv"), csvNomenclature(c));
@@ -692,7 +993,7 @@ std::string ipcD356(const ConceptionElec& c, const Connectivite& k) {
   const bool metallises = nc > 1;
   auto ligne = [&](bool traversante, const std::string& reseau, const std::string& reference, const std::string& numero, bool milieu, Nm percage, const std::string& acces, Pt position, Nm l,
                    Nm h, double rotation, int vernis) {
-    const Pt q = versRepereFabrication(carte, position);
+    const Pt q = versRepereFabrication(repereFichiers(c), position);
     std::string x = traversante ? "317" : "327";
     x += champ(nomReseau(reseau), 14) + "   ";
     x += champ(reference, 6) + "-" + champ(numero, 4) + (milieu ? "M" : " ");
@@ -746,11 +1047,20 @@ std::string gerberJob(const ConceptionElec& c, const ModeleFabrication& m, const
   const Empilage& e = c.circuit.empilage;
   int nCuivre = 0;
   for (const auto& cf : m.couches) nCuivre += estCuivre(cf.couche);
+  const std::vector<CoucheEmpilage> pileReelle = pileEmpilage(e);
   j["GeneralSpecs"] = {{"ProjectId", {{"Name", c.nom}, {"GUID", c.uuid}, {"Revision", c.cartouche.revision.empty() ? std::string("rev?") : c.cartouche.revision}}},
                        {"Size", {{"X", mm(m.boite.largeur())}, {"Y", mm(m.boite.hauteur())}}},
                        {"LayerNumber", nCuivre},
-                       {"BoardThickness", e.epaisseur},
+                       {"BoardThickness", e.pile.empty() ? e.epaisseur : epaisseurPile(pileReelle)},
                        {"Finish", finitionNormee(e.finition)}};
+  // Usinages de la carte nue (8.12) : demi-trous, bord métallisé, connecteur de tranche biseauté
+  {
+    const UsinagesCarte u = usinagesCarte(c);
+    if (u.castellee) j["GeneralSpecs"]["Castellated"] = true;
+    if (u.bordMetallise) j["GeneralSpecs"]["EdgePlating"] = true;
+    if (u.connecteurBord) j["GeneralSpecs"]["EdgeConnector"] = true;
+    if (u.biseau) j["GeneralSpecs"]["EdgeConnectorBevelled"] = true;
+  }
   const Regles& R = c.circuit.regles;
   auto regles = [&](const char* couches) {
     return nlohmann::ordered_json{{"Layers", couches},
@@ -782,13 +1092,18 @@ std::string gerberJob(const ConceptionElec& c, const ModeleFabrication& m, const
   };
   if (present[static_cast<int>(Couche::SerigraphieDessus)]) enduit("Legend", e.serigraphie, "Top Silk Screen");
   if (present[static_cast<int>(Couche::VernisDessus)]) enduit("SolderMask", e.vernis, "Top Solder Mask");
-  const std::vector<Couche> cuivres = couchesCuivre(e.couchesCuivre);
-  const double dielectrique = std::max(0.0, e.epaisseur - static_cast<double>(cuivres.size()) * e.cuivre) / static_cast<double>(std::max<std::size_t>(1, cuivres.size() - (cuivres.size() > 1 ? 1 : 0)));
-  auto isolant = [&](const char* nom) { pile.push_back({{"Type", "Dielectric"}, {"Thickness", dielectrique}, {"Material", e.materiau}, {"Name", nom}}); };
-  if (cuivres.size() == 1) isolant("Core");
-  for (std::size_t i = 0; i < cuivres.size(); ++i) {
-    if (i > 0) isolant(cuivres.size() > 2 && i != cuivres.size() / 2 ? "Prepreg" : "Core");
-    pile.push_back({{"Type", "Copper"}, {"Thickness", e.cuivre}, {"Name", codeCouche(cuivres[i])}});
+  // Empilage réel, du dessus vers le dessous (8.20) : cuivres, diélectriques avec leur permittivité, âme métallique
+  for (const auto& x : pileReelle) {
+    if (x.genre == GenreCoucheEmpilage::Cuivre) pile.push_back({{"Type", "Copper"}, {"Thickness", x.epaisseur}, {"Name", x.nom}});
+    else {
+      nlohmann::ordered_json d = {{"Type", "Dielectric"}, {"Thickness", x.epaisseur}, {"Material", x.genre == GenreCoucheEmpilage::AmeMetallique ? x.materiau : x.materiau}};
+      if (x.genre == GenreCoucheEmpilage::Dielectrique) {
+        d["DielectricConstant"] = x.permittivite;
+        d["LossTangent"] = x.pertes;
+      }
+      d["Name"] = x.genre == GenreCoucheEmpilage::AmeMetallique ? std::string("Metal core") : x.preimpregne ? std::string("Prepreg") : std::string("Core");
+      pile.push_back(std::move(d));
+    }
   }
   if (present[static_cast<int>(Couche::VernisDessous)]) enduit("SolderMask", e.vernis, "Bottom Solder Mask");
   if (present[static_cast<int>(Couche::SerigraphieDessous)]) enduit("Legend", e.serigraphie, "Bottom Silk Screen");
@@ -872,9 +1187,15 @@ ModeleTypon modeleTypon(const ConceptionElec& c, const Connectivite& k, const Re
   m.miroir = (L == Couche::CuivreDessous) != o.miroirTransfert;
   const Polygone carte = c.circuit.contour.polygone();
   const Boite b = boite(carte).gonflee(nm(o.marge));
+  const double ex = o.echelleX > 0 ? o.echelleX : 1, ey = o.echelleY > 0 ? o.echelleY : 1;
+  m.echelleX = ex;
+  m.echelleY = ey;
   auto place = [&](Pt p) {
     Pt q = p - Pt{b.x0, b.y0};
     if (m.miroir) q.x = b.largeur() - q.x;
+    // Compensation de l'imprimante (8.29)
+    q.x = static_cast<Nm>(std::llround(static_cast<double>(q.x) * ex));
+    q.y = static_cast<Nm>(std::llround(static_cast<double>(q.y) * ey));
     return q;
   };
   auto placerPoly = [&](const Polygone& poly) {
@@ -883,8 +1204,8 @@ ModeleTypon modeleTypon(const ConceptionElec& c, const Connectivite& k, const Re
     if (m.miroir) std::reverse(x.begin(), x.end());
     return x;
   };
-  m.largeur = std::max(90.0, mm(b.largeur()));
-  m.hauteurCarte = mm(b.hauteur());
+  m.largeur = std::max(90.0, mm(b.largeur()) * ex);
+  m.hauteurCarte = mm(b.hauteur()) * ey;
   m.hauteur = m.hauteurCarte + 14;  // règle de contrôle et légende sous la carte
   m.contour = placerPoly(carte);
   for (const auto& d : c.circuit.contour.decoupes) m.decoupes.push_back(placerPoly(d));
@@ -897,7 +1218,7 @@ ModeleTypon modeleTypon(const ConceptionElec& c, const Connectivite& k, const Re
         m.cuivre.push_back(region);
       }
   for (const auto& t : c.circuit.pistes)
-    if (t.couche == L) m.traits.push_back({place(t.a), place(t.b), t.largeur});
+    if (t.couche == L) m.traits.push_back({place(t.a), place(t.b), std::max<Nm>(1'000, t.largeur + nm(o.correctionLargeur))});
   const Nm centrage = nm(std::max(0.0, o.trouCentrage));
   auto trou = [&](Pt p, Nm percage) {
     if (percage <= 0) return;
@@ -963,8 +1284,9 @@ std::string svgTypon(const ModeleTypon& m, const OptionsTypon& o, const std::str
   s << "</g>\n";
   // Règle de 50 mm et légende : l'impression doit être à 100 %, sans ajustement à la page
   const double y = hc + 4;
-  s << "<g stroke=\"#000000\" stroke-width=\"0.2\"><line x1=\"2\" y1=\"" << y << "\" x2=\"52\" y2=\"" << y << "\"/>";
-  for (int k = 0; k <= 50; k += 10) s << "<line x1=\"" << 2 + k << "\" y1=\"" << y - 1.5 << "\" x2=\"" << 2 + k << "\" y2=\"" << y + 1.5 << "\"/>";
+  const double ex = m.echelleX;  // la règle suit la compensation : elle mesure 50 mm une fois imprimée
+  s << "<g stroke=\"#000000\" stroke-width=\"0.2\"><line x1=\"2\" y1=\"" << y << "\" x2=\"" << 2 + 50 * ex << "\" y2=\"" << y << "\"/>";
+  for (int k = 0; k <= 50; k += 10) s << "<line x1=\"" << 2 + k * ex << "\" y1=\"" << y - 1.5 << "\" x2=\"" << 2 + k * ex << "\" y2=\"" << y + 1.5 << "\"/>";
   s << "</g>\n<text x=\"2\" y=\"" << y + 6 << "\" font-family=\"sans-serif\" font-size=\"2\">" << echapperXml(titre) << " · " << codeCouche(o.couche)
     << (m.miroir ? " · miroir" : "") << (o.negatif ? " · négatif" : "") << " · 50 mm entre les traits : imprime à 100 %</text>\n";
   s << "</svg>\n";

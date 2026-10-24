@@ -17,6 +17,9 @@
 #include <AIS_ViewCube.hxx>
 #include <V3d_TypeOfOrientation.hxx>
 #include <V3d_View.hxx>
+#include <memory>
+
+#include "Navigation3D.hpp"
 #include <gp_Pnt.hxx>
 
 #include "Document.hpp"
@@ -43,6 +46,8 @@ public:
   void masquerSelection();
   void toutAfficher();
   void vueStandard(V3d_TypeOfOrientation orientation);  // transition animée vers une vue normalisée
+  // Navigation commune aux deux vues 3D (6.11) : six vues, quart de tour, pivot, projection, grille, points de vue
+  Navigation3D& navigation() { return *m_navigation; }
   const QString& infoGl() const { return m_infoGl; }
   gp_Dir directionCamera() const { return m_vue->Camera()->Direction(); }
   QSize minimumSizeHint() const override { return {240, 200}; }
@@ -77,6 +82,7 @@ private:
   Document* m_doc;
   Handle(V3d_Viewer) m_visu;
   Handle(V3d_View) m_vue;
+  std::unique_ptr<Navigation3D> m_navigation;
   Handle(AIS_InteractiveContext) m_ctx;
   Handle(AIS_Shape) m_corps, m_couvercle, m_carte;
   Handle(AIS_ViewCube) m_cube;

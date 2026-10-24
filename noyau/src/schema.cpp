@@ -1003,4 +1003,76 @@ GenreComposant genreComposantDepuisCode(const std::string& code) {
   return GenreComposant::Standard;
 }
 
+
+std::vector<Pt> contourTrace(const Trace& t, int pas) {
+  const auto& p = t.points;
+  pas = std::max(pas, 4);
+  auto rond = [](double x, double y) { return Pt{static_cast<Nm>(std::llround(x)), static_cast<Nm>(std::llround(y))}; };
+  switch (t.forme) {
+    case Trace::Forme::Polyligne: {
+      std::vector<Pt> r = p;
+      if (t.ferme && !r.empty()) r.push_back(r.front());
+      return r;
+    }
+    case Trace::Forme::Rectangle:
+    case Trace::Forme::CadreTexte: {
+      if (p.size() < 2) return p;
+      const Nm x0 = std::min(p[0].x, p[1].x), x1 = std::max(p[0].x, p[1].x), y0 = std::min(p[0].y, p[1].y), y1 = std::max(p[0].y, p[1].y);
+      const Nm r = std::min({t.arrondi, (x1 - x0) / 2, (y1 - y0) / 2});
+      if (r <= 0) return {{x0, y0}, {x1, y0}, {x1, y1}, {x0, y1}, {x0, y0}};
+      std::vector<Pt> q;
+      const double pi = 3.14159265358979323846;
+      auto coin = [&](double cx, double cy, double a0) {
+        for (int i = 0; i <= 8; ++i) {
+          const double a = a0 + (pi / 2) * i / 8;
+          q.push_back(rond(cx + static_cast<double>(r) * std::cos(a), cy + static_cast<double>(r) * std::sin(a)));
+        }
+      };
+      coin(static_cast<double>(x1 - r), static_cast<double>(y0 + r), -pi / 2);
+      coin(static_cast<double>(x1 - r), static_cast<double>(y1 - r), 0);
+      coin(static_cast<double>(x0 + r), static_cast<double>(y1 - r), pi / 2);
+      coin(static_cast<double>(x0 + r), static_cast<double>(y0 + r), pi);
+      q.push_back(q.front());
+      return q;
+    }
+    case Trace::Forme::Cercle:
+    case Trace::Forme::Ellipse: {
+      if (p.empty()) return {};
+      const double rx = static_cast<double>(t.rayon), ry = t.forme == Trace::Forme::Ellipse && t.rayonY > 0 ? static_cast<double>(t.rayonY) : rx;
+      std::vector<Pt> q;
+      for (int i = 0; i <= pas; ++i) {
+        const double a = 2 * 3.14159265358979323846 * i / pas;
+        q.push_back(rond(static_cast<double>(p[0].x) + rx * std::cos(a), static_cast<double>(p[0].y) + ry * std::sin(a)));
+      }
+      return q;
+    }
+    case Trace::Forme::Arc: {
+      if (p.empty()) return {};
+      std::vector<Pt> q;
+      double d0 = t.debut, d1 = t.fin;
+      if (d1 < d0) d1 += 360;
+      for (int i = 0; i <= pas; ++i) {
+        const double a = (d0 + (d1 - d0) * i / pas) * 3.14159265358979323846 / 180;
+        // Sens direct à l'écran (y vers le bas) : l'angle tourne vers −y
+        q.push_back(rond(static_cast<double>(p[0].x) + static_cast<double>(t.rayon) * std::cos(a), static_cast<double>(p[0].y) - static_cast<double>(t.rayon) * std::sin(a)));
+      }
+      return q;
+    }
+    case Trace::Forme::Bezier: {
+      if (p.size() < 4) return p;
+      std::vector<Pt> q;
+      for (int i = 0; i <= pas; ++i) {
+        const double s = static_cast<double>(i) / pas, u = 1 - s;
+        const double x = u * u * u * static_cast<double>(p[0].x) + 3 * u * u * s * static_cast<double>(p[1].x) + 3 * u * s * s * static_cast<double>(p[2].x) + s * s * s * static_cast<double>(p[3].x);
+        const double y = u * u * u * static_cast<double>(p[0].y) + 3 * u * u * s * static_cast<double>(p[1].y) + 3 * u * s * s * static_cast<double>(p[2].y) + s * s * s * static_cast<double>(p[3].y);
+        q.push_back(rond(x, y));
+      }
+      return q;
+    }
+    case Trace::Forme::Texte:
+    case Trace::Forme::Image: return p.empty() ? std::vector<Pt>{} : std::vector<Pt>{p[0]};
+  }
+  return p;
+}
+
 }  // namespace prom::ecad

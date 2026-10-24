@@ -53,6 +53,12 @@ class VueSchema : public QWidget {
     for (const auto& z : m_zonesRenvoi) r.push_back({z.zone, z.feuille});
     return r;
   }
+  // 0.34 (lot L7) : fil d'Ariane de la hiérarchie en haut à gauche (une zone par niveau, un clic y mène) ; double clic
+  // sur un bloc : sa feuille fille. Le dessin montre aussi les formes (7.19), les blocs et leurs ports (7.2), les
+  // tableaux et images (7.6), les zones de règles (7.14), les renvois sous les bobines (7.10) et les textes riches
+  std::vector<std::pair<QRectF, int>> zonesAriane() const { return m_zonesAriane; }
+  bool ouvrirAriane(QPointF q);
+  bool entrerDansBloc(QPointF q);
   void setConnectivite(const prom::ecad::Connectivite* k) {
     m_k = k;
     invaliderCache();
@@ -462,6 +468,11 @@ class VueSchema : public QWidget {
     std::string nom;
   };
   std::vector<ZoneRenvoi> m_zonesRenvoi;
+  std::vector<std::pair<QRectF, int>> m_zonesAriane;
+  void dessinerObjets034(class QPainter& g, const prom::ecad::Feuille& f, const prom::ecad::ConceptionElec& c);  // DessinSchema034.cpp
+  void dessinerRenvois034(class QPainter& g, const prom::ecad::Feuille& f, const prom::ecad::ConceptionElec& c);
+  void dessinerFilAriane(class QPainter& g);
+  void texteRiche(class QPainter& g, QPointF p, const prom::ecad::ConceptionElec& c, const std::string& source, double taille, const QColor& couleur, int alignement);
   bool ouvrirRenvoi(QPointF q);  // un clic sur un renvoi : la feuille partenaire, le connecteur choisi
   void textesDe(const prom::ecad::Feuille& f, const prom::ecad::SymbolePlace& s, const prom::ecad::DefSymbole& d, QString& ref, QString& val) const;
   struct PlacesChamps {

@@ -90,6 +90,8 @@ RegistreActions::RegistreActions() {
   ajouter("trace.coude", QStringLiteral("Inverser le coude du fil ou de la piste"), P::Canevas, k(Qt::Key_Slash), k(Qt::Key_Space));
   ajouter("trace.mode", QStringLiteral("Mode du fil : équerre, 45°, libre"), P::Schema, k(MAJ | Qt::Key_Space));
   ajouter("trace.terminer", QStringLiteral("Terminer la piste ou fermer le contour"), P::Canevas, k(Qt::Key_Return), k(Qt::Key_End));
+  ajouter("trace.largeur", QStringLiteral("Pendant le tracé : largeur suivante (celle de la classe, puis les courantes)"), P::Circuit, k(Qt::Key_W));
+  ajouter("trace.largeurPrecedente", QStringLiteral("Pendant le tracé : largeur précédente"), P::Circuit, k(MAJ | Qt::Key_W));
   ajouter("edition.copier", QStringLiteral("Copier"), P::Canevas, k(CTRL | Qt::Key_C));
   ajouter("edition.couper", QStringLiteral("Couper"), P::Canevas, k(CTRL | Qt::Key_X));
   ajouter("edition.coller", QStringLiteral("Coller sous la souris"), P::Canevas, k(CTRL | Qt::Key_V));
@@ -145,6 +147,12 @@ RegistreActions::RegistreActions() {
   ajouter("bibliotheque.articles", QStringLiteral("Choisir un article réel dans la fenêtre de choix"), P::Atelier, {});
   ajouter("bibliotheque.standardiser", QStringLiteral("Standardiser les composants sans article réel"), P::Atelier, {});
   ajouter("bibliotheque.misesAJour", QStringLiteral("Mettre à jour les composants depuis leurs articles"), P::Atelier, {});
+  ajouter("bibliotheque.gerer", QStringLiteral("Bibliothèque d'articles en tableau : séries E, import, renommage, copie"), P::Atelier, {});
+  ajouter("bibliotheque.serieEmpreintes", QStringLiteral("Empreintes générées d'après une liste de noms"), P::Atelier, {});
+  ajouter("bibliotheque.affecter", QStringLiteral("Affecter les empreintes en tableau et par règles d'équivalence"), P::Atelier, {});
+  ajouter("bibliotheque.achats", QStringLiteral("Reste à acheter pour N cartes, d'après le stock et les catalogues"), P::Atelier, {});
+  ajouter("circuit.gabaritsPastilles", QStringLiteral("Piles de pastilles du projet : une cote changée, toutes leurs pastilles suivent"), P::Atelier, {});
+  ajouter("circuit.echangerEmpreintesMasse", QStringLiteral("Échanger en masse l'empreinte des composants visés"), P::Atelier, {});
   ajouter("circuit.aPlacer", QStringLiteral("Liste des composants à placer sur la carte"), P::Circuit, {});
   ajouter("circuit.disposerCercle", QStringLiteral("Disposer les empreintes choisies en cercle"), P::Circuit, {});
   ajouter("verification.rapport", QStringLiteral("Rapport de vérification, groupé par règle"), P::Atelier, {});
@@ -155,7 +163,25 @@ RegistreActions::RegistreActions() {
   ajouter("boitier.impression", QStringLiteral("Pièces du boîtier pour l’impression 3D"), P::Atelier, {});
   ajouter("schema.repeterFeuille", QStringLiteral("Feuille de canal : répéter la feuille"), P::Schema, {});
   ajouter("schema.deplacerVersFeuille", QStringLiteral("Déplacer les symboles choisis vers une autre feuille"), P::Schema, {});
+  // 0.34, lot L7 : hiérarchie, échange de portes, directives, graphe, formes, extraits, styles, assistant
+  ajouter("schema.migrerHierarchie", QStringLiteral("Migrer les feuilles à plat en hiérarchie"), P::Schema, {});
+  ajouter("schema.synchroniserPorts", QStringLiteral("Synchroniser les ports des blocs avec leurs feuilles filles"), P::Schema, {});
+  ajouter("schema.feuilleMere", QStringLiteral("Feuille mère (un niveau plus haut)"), P::Schema, {});
+  ajouter("schema.echangerPortes", QStringLiteral("Échanger les deux portes choisies"), P::Schema, {});
+  ajouter("schema.directives", QStringLiteral("Appliquer les directives aux règles du circuit"), P::Schema, {});
+  ajouter("schema.grapheReseaux", QStringLiteral("Graphe des réseaux"), P::Schema, {});
+  ajouter("schema.importerFormes", QStringLiteral("Formes depuis un DXF ou un SVG"), P::Schema, {});
+  ajouter("schema.enregistrerExtrait", QStringLiteral("Enregistrer la sélection en extrait réutilisable"), P::Atelier, {});
+  ajouter("schema.poserExtrait", QStringLiteral("Poser un extrait réutilisable"), P::Atelier, {});
+  ajouter("schema.jeuxStyles", QStringLiteral("Jeux de styles et de réglages"), P::Atelier, {});
+  ajouter("schema.assistantSymbole", QStringLiteral("Assistant de symboles normalisés"), P::Schema, {});
   ajouter("circuit.reproduireCanal", QStringLiteral("Reproduire le placement et le routage du canal sur ses copies"), P::Circuit, {});
+  ajouter("circuit.recopierDisposition", QStringLiteral("Recopier la disposition des composants choisis sur les voies semblables"), P::Circuit, {});
+  ajouter("circuit.copieLocale", QStringLiteral("Cuivre propre au composant : copie locale de son empreinte"), P::Circuit, {});
+  ajouter("circuit.revenirBibliotheque", QStringLiteral("Revenir à l'empreinte de la bibliothèque"), P::Circuit, {});
+  ajouter("circuit.eclaterEmpreinte", QStringLiteral("Éclater l'empreinte en objets libres"), P::Circuit, {});
+  ajouter("circuit.generateurs", QStringLiteral("Bobine planaire, piste résistive, capteur capacitif"), P::Circuit, {});
+  ajouter("bibliotheque.pastilles", QStringLiteral("Tableau des pastilles de l'empreinte"), P::Atelier, {});
   ajouter("regles.contraintes", QStringLiteral("Gestionnaire de contraintes : règles et classes, communes au schéma et au circuit"), P::Atelier, {});
   ajouter("circuit.routerComplet", QStringLiteral("Router tout : recherche de chemin pour chaque liaison"), P::Atelier, {});
   ajouter("fabrication.panneau", QStringLiteral("Mise en panneau en languettes perforées"), P::Atelier, {});
@@ -224,11 +250,38 @@ RegistreActions::RegistreActions() {
   ajouter("circuit.coucheActive", QStringLiteral("Couche active et couches visibles"), P::Atelier, {});
   ajouter("circuit.grilleUnite", QStringLiteral("Grille et unité"), P::Atelier, {});
   ajouter("vue3d.recadrer", QStringLiteral("Recadrer la vue 3D"), P::Atelier, {});
+  ajouter("vue3d.dessus", QStringLiteral("Vue 3D de dessus"), P::Atelier, {});
+  ajouter("vue3d.dessous", QStringLiteral("Vue 3D de dessous"), P::Atelier, {});
+  ajouter("vue3d.avant", QStringLiteral("Vue 3D de face"), P::Atelier, {});
+  ajouter("vue3d.arriere", QStringLiteral("Vue 3D de l'arrière"), P::Atelier, {});
+  ajouter("vue3d.gauche", QStringLiteral("Vue 3D de gauche"), P::Atelier, {});
+  ajouter("vue3d.droite", QStringLiteral("Vue 3D de droite"), P::Atelier, {});
+  ajouter("vue3d.iso", QStringLiteral("Vue 3D isométrique"), P::Atelier, {});
+  ajouter("vue3d.quartDeTour", QStringLiteral("Quart de tour autour de l'axe de visée"), P::Atelier, {});
+  ajouter("vue3d.projection", QStringLiteral("Perspective ou orthographique"), P::Atelier, {});
+  ajouter("vue3d.grille", QStringLiteral("Grille au sol de 1 à 10 mm"), P::Atelier, {});
+  ajouter("vue3d.enregistrerVue", QStringLiteral("Enregistrer le point de vue dans le projet"), P::Atelier, {});
+  ajouter("vue3d.pointsDeVue", QStringLiteral("Revenir à un point de vue enregistré"), P::Atelier, {});
+  ajouter("vue3d.apparence", QStringLiteral("Apparence de la 3D : vernis, familles, boîtes, pièces"), P::Atelier, {});
+  ajouter("vue3d.mesurer", QStringLiteral("Mesure exacte entre les deux composants choisis"), P::Atelier, {});
+  ajouter("vue3d.rendu", QStringLiteral("Rendu de la carte par lancer de rayons, images clés"), P::Atelier, {});
+  ajouter("carte.boitierCommerce", QStringLiteral("Boîtier du commerce importé en STEP pour les contrôles"), P::Atelier, {});
+  ajouter("carte.pieceMontee", QStringLiteral("Pièce mécanique montée sur la carte"), P::Atelier, {});
+  ajouter("carte.exporterIdf", QStringLiteral("Exporter la carte en IDF 3.0 (.emn et .emp)"), P::Atelier, {});
+  ajouter("carte.importerIdf", QStringLiteral("Importer une carte IDF 3.0"), P::Atelier, {});
   ajouter("fabrication.valider", QStringLiteral("Valider la conception"), P::Atelier, {});
   ajouter("fabrication.publier", QStringLiteral("Publier pour la fabrication"), P::Atelier, {});
   ajouter("fabrication.dossier", QStringLiteral("Dossier de fabrication (brouillon)"), P::Atelier, {});
   ajouter("fabrication.dessinSchema", QStringLiteral("Dessin du schéma (PDF)"), P::Atelier, {});
   ajouter("fabrication.typon", QStringLiteral("Typon de gravure (PDF, SVG)"), P::Atelier, {});
+  ajouter("fabrication.pdfCouches", QStringLiteral("PDF du circuit par couches"), P::Atelier, {});
+  ajouter("fabrication.signauxXlsx", QStringLiteral("Récapitulatif des signaux (XLSX)"), P::Atelier, {});
+  ajouter("fabrication.preparerSerigraphie", QStringLiteral("Préparer la sérigraphie pour la fabrication"), P::Atelier, {});
+  ajouter("regles.signauxSerie", QStringLiteral("Signaux à travers les composants série"), P::Atelier, {});
+  ajouter("regles.gabaritInterface", QStringLiteral("Gabarit d'interface (USB, HDMI, PCIe, DDR…)"), P::Atelier, {});
+  ajouter("regles.profilImpedance", QStringLiteral("Profil d'impédance d'une classe"), P::Atelier, {});
+  ajouter("circuit.routerStrategies", QStringLiteral("Routage par stratégies comparées"), P::Atelier, {});
+  ajouter("circuit.echangesBroches", QStringLiteral("Optimiser les échanges de broches"), P::Atelier, {});
   ajouter("fabrication.planMontage", QStringLiteral("Plan de montage (PDF)"), P::Atelier, {});
   ajouter("fabrication.nomenclature", QStringLiteral("Nomenclature (CSV)"), P::Atelier, {});
   ajouter("fabrication.reseaux", QStringLiteral("Liste des réseaux (netlist)"), P::Atelier, {});
@@ -236,6 +289,53 @@ RegistreActions::RegistreActions() {
   ajouter("fabrication.netlistKicad", QStringLiteral("Liste de réseaux KiCad (.net)"), P::Atelier, {});
   ajouter("fabrication.ipc", QStringLiteral("Liste IPC-D-356 (test électrique)"), P::Atelier, {});
   ajouter("fabrication.boitier", QStringLiteral("Concevoir le boîtier de cette carte"), P::Atelier, {});
+
+  // Lot L5 (0.34) : cuivre, zones, placement, dessin de la carte (OutilsCuivre.cpp)
+  ajouter("vue.reseaux", QStringLiteral("Navigateur de réseaux"), P::Atelier, {});
+  ajouter("circuit.poserEmpreinte", QStringLiteral("Poser une empreinte sans schéma (carte seule)"), P::Circuit, {});
+  ajouter("circuit.renumeroter", QStringLiteral("Renuméroter les repères selon leur place sur la carte"), P::Circuit, {});
+  ajouter("circuit.importerPlacement", QStringLiteral("Importer un placement (CSV, texte, XLSX ; KiCad, Altium, PADS, Allegro)"), P::Circuit, {});
+  ajouter("circuit.placerReperes", QStringLiteral("Placer les repères de sérigraphie autour des corps"), P::Circuit, {});
+  ajouter("circuit.decouplages", QStringLiteral("Placer les condensateurs de découplage du circuit choisi"), P::Circuit, {});
+  ajouter("circuit.serrer", QStringLiteral("Serrer les empreintes choisies vers leur centre"), P::Circuit, {});
+  ajouter("circuit.echangerEmpreintes", QStringLiteral("Échanger la place de deux empreintes"), P::Circuit, {});
+  ajouter("circuit.ecarterVoisines", QStringLiteral("Écarter les voisines de l’empreinte choisie (placement poussé)"), P::Circuit, {});
+  ajouter("circuit.nettoyer", QStringLiteral("Nettoyer les pistes (segments nuls, doublons, alignés, vias orphelines)"), P::Circuit, {});
+  ajouter("circuit.lisser", QStringLiteral("Lisser les pistes choisies (coins à 45°)"), P::Circuit, {});
+  ajouter("circuit.derouter", QStringLiteral("Dérouter une connexion, un réseau, un composant ou la carte"), P::Circuit, {});
+  ajouter("circuit.pinceauReseau", QStringLiteral("Donner un réseau aux objets choisis"), P::Circuit, {});
+  ajouter("circuit.couperPiste", QStringLiteral("Couper les pistes choisies en leur milieu"), P::Circuit, {});
+  ajouter("circuit.routerChoisies", QStringLiteral("Router les liaisons des composants choisis"), P::Circuit, {});
+  ajouter("circuit.routerPaire", QStringLiteral("Router une paire différentielle à écart constant"), P::Circuit, {});
+  ajouter("circuit.accorder", QStringLiteral("Accorder la longueur d’un réseau"), P::Circuit, {});
+  ajouter("circuit.accorderGroupe", QStringLiteral("Accorder un groupe de réseaux (longueur ou retard)"), P::Circuit, {});
+  ajouter("circuit.regenererMotifs", QStringLiteral("Refaire les motifs d’accord d’après les règles"), P::Circuit, {});
+  ajouter("circuit.gouttes", QStringLiteral("Poser les gouttes sur les pastilles et les vias"), P::Circuit, {});
+  ajouter("circuit.retirerGouttes", QStringLiteral("Retirer les gouttes"), P::Circuit, {});
+  ajouter("circuit.zoneCarte", QStringLiteral("Zone sur toute la carte, couche active"), P::Circuit, {});
+  ajouter("circuit.planReseau", QStringLiteral("Plan d’un réseau sur toutes les couches"), P::Circuit, {});
+  ajouter("circuit.coudre", QStringLiteral("Coudre la zone choisie de vias"), P::Circuit, {});
+  ajouter("circuit.relierIlots", QStringLiteral("Relier les îlots de la zone par des vias"), P::Circuit, {});
+  ajouter("circuit.dupliquerZone", QStringLiteral("Dupliquer la zone choisie sur une autre couche"), P::Circuit, {});
+  ajouter("circuit.fusionnerZones", QStringLiteral("Fusionner les zones choisies"), P::Circuit, {});
+  ajouter("circuit.soustraireZone", QStringLiteral("Soustraire la seconde zone choisie de la première"), P::Circuit, {});
+  ajouter("circuit.couperZone", QStringLiteral("Couper la zone choisie en deux"), P::Circuit, {});
+  ajouter("circuit.zoneDepuisPistes", QStringLiteral("Zone qui épouse les pistes choisies"), P::Circuit, {});
+  ajouter("circuit.arrondirZone", QStringLiteral("Arrondir ou chanfreiner les coins de la zone"), P::Circuit, {});
+  ajouter("circuit.figerZones", QStringLiteral("Figer les zones (cuivre gardé)"), P::Circuit, {});
+  ajouter("circuit.mettreDeCote", QStringLiteral("Mettre les zones de côté (sans cuivre)"), P::Circuit, {});
+  ajouter("circuit.zonesNormales", QStringLiteral("Rendre les zones à la normale"), P::Circuit, {});
+  ajouter("circuit.collageSpecial", QStringLiteral("Collage spécial du circuit (réseaux, classe, composants)"), P::Circuit, {});
+  ajouter("circuit.codeQR", QStringLiteral("Poser un code QR ou Micro QR"), P::Circuit, {});
+  ajouter("circuit.code128", QStringLiteral("Poser un code-barres (Code 128)"), P::Circuit, {});
+  ajouter("circuit.logo", QStringLiteral("Poser un logo tiré d’une image"), P::Circuit, {});
+  ajouter("circuit.gabarit", QStringLiteral("Appliquer un gabarit de carte (Arduino, Raspberry Pi, Eurocarte…)"), P::Circuit, {});
+  ajouter("circuit.reprendreReglages", QStringLiteral("Reprendre les réglages d’une autre carte"), P::Circuit, {});
+  ajouter("circuit.echangerCouches", QStringLiteral("Échanger deux couches"), P::Circuit, {});
+  ajouter("circuit.textesMasse", QStringLiteral("Hauteur de tous les textes"), P::Circuit, {});
+  ajouter("circuit.origineTravail", QStringLiteral("Origine de travail sous la souris, y vers le haut"), P::Circuit, {});
+  ajouter("circuit.origineFichiers", QStringLiteral("Fichiers de fabrication dans le repère de travail (ou depuis le coin de la carte)"), P::Circuit, {});
+  ajouter("circuit.contourPoints", QStringLiteral("Contour de la carte par ses sommets"), P::Circuit, {});
   // Touches qui ouvrent un menu au curseur (ERG-03)
   ajouter("schema.menuPoser", QStringLiteral("Menu Poser, au curseur"), P::Schema, k(MAJ | Qt::Key_A));
   ajouter("circuit.menuPoser", QStringLiteral("Menu Poser, au curseur"), P::Circuit, k(MAJ | Qt::Key_A));
@@ -248,11 +348,62 @@ RegistreActions::RegistreActions() {
     const char* bulle;
   };
   static constexpr Presentation presentations[] = {
+      {"vue.reseaux", "Réseaux", "fil", "tous les réseaux, par classe ou par motif ; un clic les surligne partout"},
+      {"circuit.poserEmpreinte", "Empreinte seule…", "composants", "son réseau vient des pistes tirées entre les pastilles"},
+      {"circuit.renumeroter", "Renuméroter…", "proprietes", "huit parcours, préfixe du dessous, aperçu ; le schéma suit"},
+      {"circuit.importerPlacement", "Importer un placement…", "composants", "positions et faces relues, journal de ce qui est fait"},
+      {"circuit.placerReperes", "Repères…", "texte", "pavé numérique autour du corps, ou la place libre la plus proche"},
+      {"circuit.decouplages", "Découplages", "composants", "chacun au plus près de sa broche, le plus petit d’abord, puis relié"},
+      {"circuit.serrer", "Serrer", "composants", "elles se rapprochent sans se recouvrir"},
+      {"circuit.echangerEmpreintes", "Échanger", "pivoter", "positions, rotations et faces échangées"},
+      {"circuit.ecarterVoisines", "Écarter", "composants", "les voisines qui la touchent s’écartent ; un verrou bloque"},
+      {"circuit.nettoyer", "Nettoyer…", "piste", "changements prévus, puis choisis"},
+      {"circuit.lisser", "Lisser", "piste", "coins droits coupés à 45°, isolement tenu"},
+      {"circuit.derouter", "Dérouter…", "gomme", "le cuivre verrouillé reste"},
+      {"circuit.pinceauReseau", "Réseau…", "fil", "pinceau de réseau : pistes, vias et zones"},
+      {"circuit.couperPiste", "Couper", "piste", "les deux morceaux restent reliés"},
+      {"circuit.routerChoisies", "Router le choix", "piste", "plusieurs liaisons en une commande, les plus courtes d’abord"},
+      {"circuit.routerPaire", "Paire…", "piste", "le brin négatif suit le positif à écart constant"},
+      {"circuit.accorder", "Accorder…", "piste", "accordéon, trombone ou dents de scie sur le plus long segment"},
+      {"circuit.accorderGroupe", "Accorder un groupe…", "piste", "chaque réseau du groupe amené à la cible"},
+      {"circuit.regenererMotifs", "Refaire les motifs", "piste", "largeur et pas repris des règles, cible tenue"},
+      {"circuit.gouttes", "Gouttes", "piste", "refaites à chaque appel, isolement tenu"},
+      {"circuit.retirerGouttes", "Retirer les gouttes", "gomme", ""},
+      {"circuit.zoneCarte", "Zone carte…", "zone", "le contour de la carte, nommée d’office"},
+      {"circuit.planReseau", "Plan…", "zone", "une zone par cuivre, sauf celles qui y sont déjà"},
+      {"circuit.coudre", "Coudre…", "zone", "grille de vias dans le cuivre rempli, refaite à chaque appel"},
+      {"circuit.relierIlots", "Relier les îlots", "zone", "une via vers le plan du même réseau de l’autre face"},
+      {"circuit.dupliquerZone", "Dupliquer…", "zone", ""},
+      {"circuit.fusionnerZones", "Fusionner", "zone", "même réseau, même couche"},
+      {"circuit.soustraireZone", "Soustraire", "zone", ""},
+      {"circuit.couperZone", "Couper la zone…", "zone", ""},
+      {"circuit.zoneDepuisPistes", "Depuis les pistes…", "zone", ""},
+      {"circuit.arrondirZone", "Arrondir…", "zone", ""},
+      {"circuit.figerZones", "Figer", "zone", "une vérification signale celles devenues périmées"},
+      {"circuit.mettreDeCote", "De côté", "zone", ""},
+      {"circuit.zonesNormales", "Normales", "zone", ""},
+      {"circuit.collageSpecial", "Collage spécial…", "coller", "réseaux gardés ou retirés, classe, composants neufs"},
+      {"circuit.codeQR", "Code QR…", "texte", "sérigraphie, vernis ou cuivre"},
+      {"circuit.code128", "Code-barres…", "texte", ""},
+      {"circuit.logo", "Logo…", "texte", "seuil, puis contours lissés"},
+      {"circuit.gabarit", "Gabarit…", "proprietes", "contour et trous de fixation"},
+      {"circuit.reprendreReglages", "Reprendre les réglages…", "proprietes", "règles, classes, contraintes, empilage, couches, vues, fabrication"},
+      {"circuit.echangerCouches", "Échanger les couches…", "proprietes", "pistes, zones, vias, textes et dessins"},
+      {"circuit.textesMasse", "Textes…", "texte", "textes et repères en une commande"},
+      {"circuit.origineTravail", "Origine…", "point", ""},
+      {"circuit.origineFichiers", "Origine des fichiers", "point", "les fichiers de fabrication et de placement depuis l’origine de travail, ou depuis le coin de la carte"},
+      {"circuit.contourPoints", "Contour par sommets…", "proprietes", "tableau de coordonnées dans le repère de travail"},
       {"schema.choisirComposant", "Placer un composant", "composants", "bibliothèque de symboles, avec aperçu"},
       {"composant.creer", "Créer un composant…", "creer-composant", "son symbole est dessiné depuis la liste de ses broches"},
       {"bibliotheque.articles", "Articles…", "composants", "composants réels : valeur, empreinte, fabricant, hauteur ; recherche « 10k 0603 »"},
       {"bibliotheque.standardiser", "Standardiser…", "proprietes", "remplace les composants sans article réel par l’article trouvé"},
       {"bibliotheque.misesAJour", "Mises à jour…", "proprietes", "composants dont l’article a changé dans la bibliothèque"},
+      {"bibliotheque.gerer", "Articles en tableau…", "proprietes", "séries E, import CSV ou XLSX, renommage par gabarit, copie avec les dépendances"},
+      {"bibliotheque.serieEmpreintes", "Empreintes par noms…", "creer-composant", "une liste de noms donne des empreintes IPC aux densités M, N et L"},
+      {"bibliotheque.affecter", "Affecter les empreintes…", "proprietes", "tableau des composants et règles « Résistance 0603 → R_0603 »"},
+      {"bibliotheque.achats", "Reste à acheter…", "proprietes", "pour N cartes, d’après le stock de l’atelier et les catalogues importés"},
+      {"circuit.gabaritsPastilles", "Piles de pastilles…", "proprietes", "gabarits IPC-7351 : une cote changée, les pastilles qui les citent suivent en une commande"},
+      {"circuit.echangerEmpreintesMasse", "Empreintes en masse…", "proprietes", "une empreinte donnée aux composants visés, remplacée en place"},
       {"circuit.aPlacer", "À placer", "composants", "empreintes qui attendent hors de la carte, par feuille ; elles se glissent sur la carte"},
       {"circuit.disposerCercle", "En cercle…", "pivoter", "les empreintes choisies sur un cercle ou un arc, tournées vers le centre"},
       {"verification.rapport", "Rapport…", "drc", "rapport HTML groupé par règle, exclusions à part ; chaque ligne mène à l’objet"},
@@ -263,7 +414,24 @@ RegistreActions::RegistreActions() {
       {"boitier.impression", "Impression 3D…", "composants", "pièces du boîtier à plat en STL, volume, masse et coût"},
       {"schema.repeterFeuille", "Canal ×…", "composants", "la feuille répétée en copies liées, repères par canal"},
       {"schema.deplacerVersFeuille", "Vers la feuille…", "composants", "symboles déplacés, repères, empreintes et pistes gardés"},
+      {"schema.migrerHierarchie", "En hiérarchie", "plan", "une racine, un bloc par feuille ; mêmes réseaux"},
+      {"schema.synchroniserPorts", "Synchroniser les ports", "etiquette", "ports des blocs ajoutés ou retirés d’après les feuilles filles"},
+      {"schema.feuilleMere", "Feuille mère", "recadrer", "un niveau plus haut ; le fil d’Ariane y mène aussi"},
+      {"schema.echangerPortes", "Échanger les portes", "pivoter", "deux unités choisies d’un même composant ; le circuit suit"},
+      {"schema.directives", "Appliquer les directives", "proprietes", "classes des directives reprises par les règles du circuit"},
+      {"schema.grapheReseaux", "Graphe des réseaux", "vue", "composants et réseaux rangés par ressorts"},
+      {"schema.importerFormes", "Formes DXF, SVG…", "importer", "dessin importé en formes modifiables, calques choisis"},
+      {"schema.enregistrerExtrait", "Enregistrer l’extrait…", "exporter", "la sélection du schéma ou du circuit, réutilisable"},
+      {"schema.poserExtrait", "Poser un extrait…", "coller", "un extrait enregistré, posé au centre"},
+      {"schema.jeuxStyles", "Jeux de styles…", "proprietes", "styles des fils, jonctions, textes ; valeurs par défaut de la carte"},
+      {"schema.assistantSymbole", "Assistant de symboles…", "creer-composant", "MOSFET, transistor, diode, AOP, régulateur numérotés comme l’empreinte"},
       {"circuit.reproduireCanal", "Reproduire le canal", "composants", "placement et routage du canal source recopiés sur les autres"},
+      {"circuit.recopierDisposition", "Recopier la disposition…", "repetition-lineaire", "voies semblables d’une conception à plat, composants appariés seuls"},
+      {"circuit.copieLocale", "Cuivre propre", "piste", "copie locale de l’empreinte du composant, écart à la bibliothèque affiché"},
+      {"circuit.revenirBibliotheque", "Revenir à la bibliothèque", "annuler", "la copie locale abandonnée"},
+      {"circuit.eclaterEmpreinte", "Éclater l’empreinte", "convertir", "pastilles et traits en objets libres (composant sans schéma)"},
+      {"circuit.generateurs", "Générateurs…", "piste", "bobine planaire, piste résistive, capteur capacitif"},
+      {"bibliotheque.pastilles", "Pastilles…", "pcb", "tableau des pastilles, doublons, renumérotation, coordonnées"},
       {"regles.contraintes", "Contraintes…", "proprietes", "règles de la carte et des classes, les mêmes au schéma et au circuit ; un changement, un pas"},
       {"circuit.routerComplet", "Router tout", "piste", "recherche de chemin autour des obstacles, sur les deux faces ; jamais sous l’isolement"},
       {"fabrication.panneau", "Panneau…", "exporter", "cartes en lignes et colonnes, languettes perforées, contrôle avant la sortie"},
@@ -333,11 +501,38 @@ RegistreActions::RegistreActions() {
       {"circuit.changerFace", "Retourner", "symetrie", "passe le composant sur l’autre face"},
       {"circuit.drc", "Vérification des règles (DRC)", "drc", "isolements, bords, perçages, liaisons non routées…"},
       {"vue3d.recadrer", "Recadrer", "recadrer", ""},
+      {"vue3d.dessus", "Dessus", "vue", ""},
+      {"vue3d.dessous", "Dessous", "vue", ""},
+      {"vue3d.avant", "Face", "vue", ""},
+      {"vue3d.arriere", "Arrière", "vue", ""},
+      {"vue3d.gauche", "Gauche", "vue", ""},
+      {"vue3d.droite", "Droite", "vue", ""},
+      {"vue3d.iso", "Iso", "vue", ""},
+      {"vue3d.quartDeTour", "Quart de tour", "pivoter", "90° autour de l’axe de visée"},
+      {"vue3d.projection", "Projection", "vue", "perspective ou orthographique"},
+      {"vue3d.grille", "Grille…", "grille", "grille au sol de 1 à 10 mm"},
+      {"vue3d.enregistrerVue", "Garder la vue…", "point", "point de vue nommé, gardé dans le projet"},
+      {"vue3d.pointsDeVue", "Points de vue…", "point", "revenir à un point de vue enregistré"},
+      {"vue3d.apparence", "Apparence…", "proprietes", "vernis, familles masquées, boîtes à la place des modèles"},
+      {"vue3d.mesurer", "Mesurer", "mesure", "distance exacte entre deux corps, ΔX ΔY ΔZ et distance à la carte"},
+      {"vue3d.rendu", "Rendu…", "exporter", "image par lancer de rayons, fond transparent ; images clés"},
+      {"carte.boitierCommerce", "Boîtier du commerce…", "importer", "fichier STEP du fabricant, pour les contrôles de collision"},
+      {"carte.pieceMontee", "Pièce montée…", "composants", "dissipateur, entretoise, blindage : dans la nomenclature commune"},
+      {"carte.exporterIdf", "IDF…", "exporter", "IDF 3.0 pour la CAO mécanique"},
+      {"carte.importerIdf", "Lire un IDF…", "importer", "carte IDF 3.0 ajoutée au projet"},
       {"fabrication.valider", "Valider la conception", "valider", "intégrité, bibliothèques, ERC, DRC, nomenclature, fabrication, documentation"},
       {"fabrication.publier", "Publier pour la fabrication…", "publier", "dossier complet, révision verrouillée, empreinte de la conception"},
       {"fabrication.dossier", "Dossier de fabrication (brouillon)…", "exporter", "Gerber, perçage, placement, nomenclature, sans publier"},
       {"fabrication.dessinSchema", "Dessin du schéma (PDF)…", "plan", "toutes les feuilles, avec leur cartouche"},
       {"fabrication.typon", "Typon de gravure (PDF, SVG)…", "pcb", "une couche de cuivre à l’échelle 1, miroir, négatif, perçages réduits : insoleuse ou transfert de toner"},
+      {"fabrication.pdfCouches", "PDF par couches…", "plan", "une page par couche, repères cherchables, empreintes cliquables, signets et métadonnées"},
+      {"fabrication.signauxXlsx", "Signaux (XLSX)…", "exporter", "signaux, paires et groupes d’accord avec leurs longueurs et retards"},
+      {"fabrication.preparerSerigraphie", "Préparer la sérigraphie…", "texte", "traits rognés autour des pastilles, repères écartés, hors carte supprimé ; la liste d’abord"},
+      {"regles.signauxSerie", "Signaux série", "fil", "un signal suivi à travers les résistances, condensateurs et ferrites série"},
+      {"regles.gabaritInterface", "Gabarit d’interface…", "contraintes", "USB, HDMI, PCIe, MIPI, Ethernet, DDR3, DDR4 : signaux, paires, classes et règles d’un geste"},
+      {"regles.profilImpedance", "Profil d’impédance…", "calcul", "largeur par couche pour une impédance visée, suivie par le routeur au changement de couche"},
+      {"circuit.routerStrategies", "Router par stratégies…", "piste", "deux stratégies essayées sur une copie, la meilleure appliquée en une commande"},
+      {"circuit.echangesBroches", "Échanges de broches…", "convertir", "affectation optimale des broches d’un même groupe qui démêle le chevelu"},
       {"fabrication.planMontage", "Plan de montage (PDF)…", "pcb", "faces dessus et dessous à l’échelle, repères, cotes de la carte"},
       {"fabrication.nomenclature", "Nomenclature (CSV)…", "composants", "quantités, références, valeurs, fabricants"},
       {"fabrication.reseaux", "Liste des réseaux (netlist)…", "fil", "chaque réseau et ses broches, en texte"},

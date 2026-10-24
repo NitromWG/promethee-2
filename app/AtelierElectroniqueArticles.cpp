@@ -11,6 +11,7 @@
 
 #include "AtelierElectronique.hpp"
 #include "DialoguesArticles.hpp"
+#include "FenetresBibliotheque.hpp"
 #include "FenetreChoixComposant.hpp"
 #include "FenetreChoixEmpreinte.hpp"
 #include "SelectionElectronique.hpp"
@@ -187,4 +188,78 @@ int AtelierElectronique::signalerMisesAJourArticles() {
                     NiveauMessage::Information, [this] { ouvrirMisesAJourArticles(); });
   if (m_misesAJour && m_misesAJour->isVisible()) m_misesAJour->refaire();
   return articles;
+}
+
+// ---------- 0.34, lot L4 ----------
+DialogueAchats* AtelierElectronique::achats() const { return m_achats; }
+DialogueGestionBibliotheque* AtelierElectronique::gestionBibliotheque() const { return m_gestionBibliotheque; }
+DialogueSerieEmpreintes* AtelierElectronique::serieEmpreintes() const { return m_serieEmpreintes; }
+FenetreAffectation* AtelierElectronique::affectation() const { return m_affectation; }
+
+int AtelierElectronique::rangerEmpreintesPerso(const std::vector<DefEmpreinte>& empreintes) {
+  if (empreintes.empty()) return 0;
+  const std::filesystem::path chemin = prom::cheminFichier(cheminBibliothequePerso().toStdString());
+  LectureBibliotheque l = lectureBibliothequePerso();
+  int n = 0;
+  QStringList gardees;
+  for (const auto& d : empreintes) {
+    const auto it = std::find_if(l.empreintes.begin(), l.empreintes.end(), [&](const DefEmpreinte& x) { return x.id == d.id; });
+    if (it == l.empreintes.end()) {
+      l.empreintes.push_back(d);
+      ++n;
+    } else if (*it == d)
+      ++n;  // déjà la même
+    else
+      gardees << q(d.id);  // jamais remplacée en silence (B10)
+  }
+  try {
+    if (l.abimee && std::filesystem::exists(chemin)) mettreDeCoteBibliotheque(chemin);
+    ecrireFichierBibliotheque(chemin, l.symboles, l.empreintes);
+  } catch (const std::exception& e) {
+    afficherMessage(QStringLiteral("Bibliothèque personnelle non écrite : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+    return 0;
+  }
+  if (!gardees.isEmpty())
+    afficherMessage(QStringLiteral("%1 empreinte(s) gardée(s) telles quelles, leur nom étant déjà pris par une autre géométrie : %2").arg(gardees.size()).arg(gardees.mid(0, 8).join(QStringLiteral(", ")).toHtmlEscaped()),
+                    NiveauMessage::Information);
+  return n;
+}
+
+void AtelierElectronique::ouvrirAchats() {
+  if (!m_achats) m_achats = new DialogueAchats(*this, this);
+  else m_achats->refaire();
+  montrerAuCentre(m_achats, this);
+}
+
+void AtelierElectronique::ouvrirEchangeEmpreintes() {
+  std::vector<std::string> ids;
+  for (const auto& id : m_selection->composants()) ids.push_back(id);
+  auto* d = new DialogueEchangeEmpreintes(*this, ids, this);
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  montrerAuCentre(d, this);
+}
+
+void AtelierElectronique::ouvrirGestionBibliotheque() {
+  if (!m_gestionBibliotheque) m_gestionBibliotheque = new DialogueGestionBibliotheque(*this, this);
+  else m_gestionBibliotheque->refaire();
+  montrerAuCentre(m_gestionBibliotheque, this);
+}
+
+void AtelierElectronique::ouvrirSerieEmpreintes() {
+  if (!m_serieEmpreintes) m_serieEmpreintes = new DialogueSerieEmpreintes(*this, this);
+  montrerAuCentre(m_serieEmpreintes, this);
+}
+
+void AtelierElectronique::ouvrirAffectation() {
+  if (!m_affectation) m_affectation = new FenetreAffectation(*this, this);
+  else m_affectation->refaire();
+  montrerAuCentre(m_affectation, this);
+}
+
+DialogueGabaritsPastilles* AtelierElectronique::gabaritsPastilles() const { return m_gabaritsPastilles; }
+
+void AtelierElectronique::ouvrirGabaritsPastilles() {
+  if (!m_gabaritsPastilles) m_gabaritsPastilles = new DialogueGabaritsPastilles(*this, this);
+  else m_gabaritsPastilles->refaire();
+  montrerAuCentre(m_gabaritsPastilles, this);
 }

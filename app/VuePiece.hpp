@@ -16,6 +16,9 @@
 #include <Graphic3d_ClipPlane.hxx>
 #include <gp_Pln.hxx>
 #include <V3d_View.hxx>
+#include <memory>
+
+#include "Navigation3D.hpp"
 #include <Bnd_Box.hxx>
 #include <gp_Ax3.hxx>
 #include <gp_Pnt.hxx>
@@ -106,6 +109,8 @@ public:
   void zoomer(const QPointF& ecran, double crans);
   void recadrer();
   void vueStandard(V3d_TypeOfOrientation o);
+  // Navigation commune aux deux vues 3D (6.11) : six vues, quart de tour, pivot, projection, grille, points de vue
+  Navigation3D& navigation() { return *m_navigation; }
   QSize minimumSizeHint() const override { return {240, 200}; }
 
 signals:
@@ -139,6 +144,7 @@ private:
 
   Handle(V3d_Viewer) m_visu;
   Handle(V3d_View) m_vue;
+  std::unique_ptr<Navigation3D> m_navigation;
   Handle(AIS_InteractiveContext) m_ctx;
   Handle(AIS_ViewCube) m_cube;
   Handle(AIS_Shape) m_solide;

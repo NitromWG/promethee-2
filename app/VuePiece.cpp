@@ -46,6 +46,7 @@ Quantity_Color rgb(int r, int g, int b) { return Quantity_Color(r / 255.0, g / 2
 }  // namespace
 
 VuePiece::VuePiece(QWidget* parent) : QOpenGLWidget(parent) {
+  m_navigation = std::make_unique<Navigation3D>([this] { return m_vue; }, [this] { update(); }, [this](const gp_Pnt& p) { m_pivot = p; });
   Handle(Aspect_DisplayConnection) affichage;
 #ifdef PROMETHEE_X11
   affichage = new Xw_DisplayConnection();

@@ -7,7 +7,7 @@
       "titre": "Schéma",
       "groupes": [
         {"titre": "Composant", "forme": "grand", "actions": ["schema.choisirComposant", "bibliotheque.articles", "composant.creer"]},
-        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour"]},
+        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats"]},
         {"titre": "Fil", "forme": "grand", "actions": ["schema.fil"]},
         {"titre": "Étiquette", "forme": "grand", "actions": ["schema.etiquette", "schema.etiquetteGlobale"]},
         {"titre": "Alimentation", "forme": "grand", "actions": ["schema.alimentation.gnd", "schema.alimentation.5v", "schema.alimentation.3v3", "schema.alimentation.12v", "schema.alimentation.vcc", "schema.drapeauAlimentation"]},
@@ -24,7 +24,8 @@
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
         {"titre": "Circuit", "forme": "grand", "actions": ["schema.creerCircuit"]},
         {"titre": "Feuille", "forme": "grand", "actions": ["schema.feuilleNouvelle", "schema.feuilleSuivante", "schema.feuillePrecedente", "schema.feuilleSupprimer"]},
-        {"titre": "Structure", "forme": "grille", "actions": ["schema.repeterFeuille", "schema.deplacerVersFeuille"]}
+        {"titre": "Structure", "forme": "grille", "actions": ["schema.repeterFeuille", "schema.deplacerVersFeuille", "schema.migrerHierarchie", "schema.synchroniserPorts", "schema.feuilleMere"]},
+        {"titre": "Avancé", "forme": "grille", "actions": ["schema.echangerPortes", "schema.directives", "schema.grapheReseaux", "schema.importerFormes", "schema.enregistrerExtrait", "schema.poserExtrait", "schema.jeuxStyles", "schema.assistantSymbole"]}
       ]
     },
     {
@@ -32,23 +33,36 @@
       "titre": "Circuit imprimé",
       "groupes": [
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
-        {"titre": "Placer", "forme": "grand", "actions": ["circuit.aPlacer", "circuit.disposerCercle", "circuit.reproduireCanal"]},
-        {"titre": "Router", "forme": "grand", "actions": ["circuit.router", "circuit.via", "circuit.routerAuto", "circuit.routerComplet"]},
-        {"titre": "Zone", "forme": "grand", "actions": ["circuit.zone", "circuit.contour", "circuit.decoupe", "circuit.texte"]},
+        {"titre": "Placer", "forme": "grand", "actions": ["circuit.aPlacer", "circuit.disposerCercle", "circuit.reproduireCanal", "circuit.poserEmpreinte", "circuit.importerPlacement"]},
+        {"titre": "Placement", "forme": "grille", "actions": ["circuit.renumeroter", "circuit.placerReperes", "circuit.decouplages", "circuit.serrer", "circuit.echangerEmpreintes", "circuit.echangerEmpreintesMasse", "circuit.gabaritsPastilles", "circuit.ecarterVoisines", "circuit.recopierDisposition"]},
+        {"titre": "Cuivre propre", "forme": "grille", "actions": ["circuit.copieLocale", "circuit.revenirBibliotheque", "circuit.eclaterEmpreinte", "circuit.generateurs", "bibliotheque.pastilles", "schema.enregistrerExtrait", "schema.poserExtrait"]},
+        {"titre": "Router", "forme": "grand", "actions": ["circuit.router", "circuit.via", "circuit.routerAuto", "circuit.routerComplet", "circuit.routerChoisies", "circuit.routerPaire", "circuit.routerStrategies", "circuit.echangesBroches"]},
+        {"titre": "Accorder", "forme": "grand", "actions": ["circuit.accorder", "circuit.accorderGroupe", "circuit.regenererMotifs", "circuit.gouttes", "circuit.retirerGouttes"]},
+        {"titre": "Pistes", "forme": "grille", "actions": ["circuit.nettoyer", "circuit.lisser", "circuit.derouter", "circuit.pinceauReseau", "circuit.couperPiste"]},
+        {"titre": "Zone", "forme": "grand", "actions": ["circuit.zone", "circuit.contour", "circuit.decoupe", "circuit.texte", "circuit.zoneCarte", "circuit.planReseau"]},
+        {"titre": "Zones", "forme": "grille", "actions": ["circuit.coudre", "circuit.relierIlots", "circuit.dupliquerZone", "circuit.fusionnerZones", "circuit.soustraireZone", "circuit.couperZone", "circuit.zoneDepuisPistes", "circuit.arrondirZone", "circuit.figerZones", "circuit.mettreDeCote", "circuit.zonesNormales"]},
+        {"titre": "Dessin", "forme": "grand", "actions": ["circuit.codeQR", "circuit.code128", "circuit.logo", "circuit.gabarit", "circuit.contourPoints", "circuit.origineTravail", "circuit.origineFichiers"]},
+        {"titre": "Réglages", "forme": "grille", "actions": ["circuit.reprendreReglages", "circuit.echangerCouches", "circuit.textesMasse"]},
         {"titre": "Modifier", "forme": "grille", "actions": ["objet.tourner", "objet.tournerInverse", "circuit.changerFace", "selection.supprimer", "circuit.mesurer"]},
-        {"titre": "Presse-papiers", "forme": "grille", "actions": ["edition.copier", "edition.coller", "edition.dupliquer", "edition.couper", "selection.tout"]},
+        {"titre": "Presse-papiers", "forme": "grille", "actions": ["edition.copier", "edition.coller", "edition.dupliquer", "edition.couper", "selection.tout", "circuit.collageSpecial"]},
         {"titre": "Vue", "forme": "grille", "actions": ["vue.toutVoir", "commun.inspecteur", "vue.zoomPlus", "vue.zoomMoins", "atelier.raccourcis"]},
         {"titre": "Couche active", "forme": "controle", "actions": ["circuit.coucheActive"]},
         {"titre": "Grille et unité", "forme": "controle", "actions": ["circuit.grilleUnite"]},
-        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes"]},
-        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression"]}
+        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes", "regles.signauxSerie", "regles.gabaritInterface", "regles.profilImpedance"]},
+        {"titre": "Réseaux", "forme": "grand", "actions": ["vue.reseaux"]},
+        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf"]}
       ]
     },
     {
       "id": "3d",
       "titre": "3D",
       "groupes": [
-        {"titre": "Recadrer", "forme": "grand", "actions": ["vue3d.recadrer"]}
+        {"titre": "Recadrer", "forme": "grand", "actions": ["vue3d.recadrer"]},
+        {"titre": "Vues", "forme": "grille", "actions": ["vue3d.dessus", "vue3d.dessous", "vue3d.avant", "vue3d.arriere", "vue3d.gauche", "vue3d.droite", "vue3d.iso", "vue3d.quartDeTour"]},
+        {"titre": "Caméra", "forme": "grille", "actions": ["vue3d.projection", "vue3d.grille", "vue3d.enregistrerVue", "vue3d.pointsDeVue"]},
+        {"titre": "Apparence", "forme": "grand", "actions": ["vue3d.apparence"]},
+        {"titre": "Mesurer", "forme": "grand", "actions": ["vue3d.mesurer"]},
+        {"titre": "Rendu", "forme": "grand", "actions": ["vue3d.rendu"]}
       ]
     },
     {
@@ -58,8 +72,8 @@
         {"titre": "Valider", "forme": "grand", "actions": ["fabrication.valider"]},
         {"titre": "Publier", "forme": "grand", "actions": ["fabrication.publier"]},
         {"titre": "Dossier", "forme": "grand", "actions": ["fabrication.dossier"]},
-        {"titre": "Dessins", "forme": "grand", "actions": ["fabrication.dessinSchema", "fabrication.typon", "fabrication.planMontage"]},
-        {"titre": "Listes", "forme": "grand", "actions": ["fabrication.nomenclature", "fabrication.reseaux"]},
+        {"titre": "Dessins", "forme": "grand", "actions": ["fabrication.dessinSchema", "fabrication.typon", "fabrication.planMontage", "fabrication.pdfCouches", "fabrication.preparerSerigraphie"]},
+        {"titre": "Listes", "forme": "grand", "actions": ["fabrication.nomenclature", "fabrication.reseaux", "fabrication.signauxXlsx"]},
         {"titre": "Échanges", "forme": "grand", "actions": ["fabrication.kicad", "fabrication.netlistKicad", "fabrication.ipc"]},
         {"titre": "Autres logiciels", "forme": "grille", "actions": ["fabrication.importerNetlist", "fabrication.dsn", "fabrication.ses", "fabrication.dxfMeca", "fabrication.boardview", "fabrication.ipc2581", "fabrication.gerberCarte"]},
         {"titre": "Boîtier", "forme": "grand", "actions": ["fabrication.boitier"]},

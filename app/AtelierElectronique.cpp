@@ -3,6 +3,11 @@
 // publication (PublicationElectronique.cpp) ont leurs fichiers (1.15, A1). Licence GPL-3.0-only.
 #include "FilDeFond.hpp"
 #include "AtelierElectronique.hpp"
+#include <TopoDS_Compound.hxx>
+#include <BRep_Builder.hxx>
+#include "FenetresBibliotheque.hpp"
+#include "FenetresMeca034.hpp"
+#include "promethee/distances3d.hpp"
 #include "ChienDeGarde.hpp"
 
 #include <algorithm>
@@ -77,6 +82,7 @@
 #include "ZoneMessages.hpp"
 #include "PanneauBibliotheque.hpp"
 #include "PanneauAPlacer.hpp"
+#include "PanneauReseaux.hpp"
 #include "DialogueCercle.hpp"
 #include "FenetreRapport.hpp"
 #include "promethee/placement_circuit.hpp"
@@ -246,6 +252,12 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
   connect(m_doc, &Document::change, m_aPlacer, [this] {
     if (m_dockAPlacer && m_dockAPlacer->isVisible()) m_aPlacer->refaire();
   });
+  // Réseaux (5.15, 5.32) : à gauche, avec le projet ; un réseau cliqué est surligné au schéma et au circuit
+  m_reseaux = new PanneauReseaux(*this);
+  m_dockReseaux = panneau("dockReseaux", QStringLiteral("Réseaux"), m_reseaux);
+  connect(m_dockReseaux, &QDockWidget::visibilityChanged, this, [this](bool oui) {
+    if (oui) m_reseaux->refaire();
+  });
   // Apprendre (2.17) : à droite, avec l'inspecteur, fermé sauf au premier lancement
   m_apprendre = new PanneauApprendre(*this);
   m_dockApprendre = panneau("dockApprendre", QStringLiteral("Apprendre"), m_apprendre);
@@ -266,6 +278,8 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
   m_fenetre->tabifyDockWidget(m_dockInspecteur, m_dockApprendre);
   m_fenetre->addDockWidget(Qt::LeftDockWidgetArea, m_dockAPlacer);
   m_fenetre->tabifyDockWidget(m_dockProjet, m_dockAPlacer);
+  m_fenetre->addDockWidget(Qt::LeftDockWidgetArea, m_dockReseaux);
+  m_fenetre->tabifyDockWidget(m_dockAPlacer, m_dockReseaux);
   m_dockMessages->hide();
   m_dockVerifications->hide();
   m_dockRecherche->hide();
@@ -273,9 +287,10 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
   m_dockChamps->hide();
   m_dockApprendre->hide();
   m_dockAPlacer->hide();
+  m_dockReseaux->hide();
   m_dockInspecteur->raise();
   m_dispositions = new DispositionsAtelier(m_fenetre, m_doc, QStringLiteral("electronique"), [this] { dispositionOrigine(); }, this);
-  for (QDockWidget* d : {m_dockProjet, m_dockBibliotheque, m_dockInspecteur, m_dockMessages, m_dockVerifications, m_dockRecherche, m_dockApprendre, m_dockEcarts, m_dockChamps, m_dockAPlacer}) m_dispositions->suivre(d);
+  for (QDockWidget* d : {m_dockProjet, m_dockBibliotheque, m_dockInspecteur, m_dockMessages, m_dockVerifications, m_dockRecherche, m_dockApprendre, m_dockEcarts, m_dockChamps, m_dockAPlacer, m_dockReseaux}) m_dispositions->suivre(d);
   // La bibliothèque, que le mode cache hors du schéma : « ouverte » est le choix de l'utilisateur, gardé avec la
   // disposition
   m_dispositions->setComplement([this] { return QJsonObject{{QStringLiteral("bibliotheque"), m_bibliothequeOuverte}}; },
@@ -751,6 +766,8 @@ AtelierElectronique::Resultat calculerConception(const ConceptionElec& c, int ni
     // La DRC calcule l'état du routage en même temps que ses contrôles et le rend : il n'est pas refait
     const EtatRoutageRendu rendu(r.calculs.etat);
     r.calculs.drc = verifierDRCReglee(c, r.calculs.k, r.calculs.zones);  // gravités et exclusions du projet (2.33)
+    // Distances exactes en 3D (6.7, 6.12) : boîtier du commerce importé et écarts entre corps, sur ce même fil
+    for (auto& v : prom::verifierDistances3D(c)) r.calculs.drc.push_back(std::move(v));
   } else
     r.calculs.etat = etatRoutage(c, r.calculs.k, r.calculs.zones);
   r.erc = erc.get();
@@ -793,6 +810,7 @@ void AtelierElectronique::recalculerApresModification() {
     majTableauChamps();
     if (m_tableauObjets && m_vues->visibleDansMosaique(m_tableauObjets)) m_tableauObjets->recharger();
     if (m_aPlacer && m_dockAPlacer && !m_dockAPlacer->isHidden()) m_aPlacer->refaire();
+    if (m_affectation && m_affectation->isVisible()) m_affectation->refaire();
   }
   const ChangementConception ch = std::exchange(m_enAttente, ChangementConception{});
   // Une valeur, un fabricant, une hauteur, le cartouche : la connectivité, le cuivre et la DRC restent valables ;
@@ -907,6 +925,7 @@ void AtelierElectronique::appliquerResultat(Resultat&& r) {
   // L'inspecteur lit les réseaux, l'ERC et la DRC : ce qui en dépend se relit, sans reconstruire la page (P1)
   m_inspecteur->resultats();
   if (m_verifications && m_dockVerifications->isVisible()) m_verifications->majPlusTard();
+  if (m_reseaux && m_dockReseaux && m_dockReseaux->isVisible() && r.niveau >= 1) m_reseaux->refaire();
 }
 
 // ---------- Vérification à trois niveaux (2.11, S9) ----------
@@ -1048,19 +1067,50 @@ void AtelierElectronique::majVue3D() {
   std::string sig = prom::ecad::versJson(*c)["circuit"].dump();
   for (const auto& x : c->composants) sig += x.uuid + ':' + std::to_string(hauteurComposant(*c, x).mm) + ':' + x.modele3D + ':' + x.empreinte + ';';
   for (const auto& [id, m] : c->modeles3D) sig += id + ',' + std::to_string(m.dx) + ',' + std::to_string(m.dy) + ',' + std::to_string(m.dz) + ',' + std::to_string(m.quarts) + ';';
+  // Apparence (6.11) : vernis du rendu, familles masquées, boîtes à la place des modèles, pièces et boîtier importé
+  const ApparenceCarte3D& ap = apparence3D();
+  sig += "|" + ap.vernis + "|" + std::to_string(ap.boites) + std::to_string(ap.pieces) + std::to_string(ap.boitierImporte);
+  for (const auto& f : ap.famillesMasquees) sig += "|" + f;
+  for (const auto& pm : c->piecesMontees) sig += pm.uuid + std::to_string(pm.x) + std::to_string(pm.y) + std::to_string(pm.z) + ';';
+  if (c->boitierImporte) sig += "boitier" + std::to_string(c->boitierImporte->x) + std::to_string(c->boitierImporte->z);
   if (sig == m_signature3D) {
     m_3dAJour = true;
     return;
   }
   m_signature3D = std::move(sig);
   ++m_constructions3D;
-  const prom::Carte3D m = prom::modele3DCarte(*c);
+  ConceptionElec vue = *c;
+  if (!ap.vernis.empty()) vue.circuit.empilage.vernis = ap.vernis;
+  if (!ap.famillesMasquees.empty())
+    std::erase_if(vue.circuit.empreintes, [&](const EmpreintePlacee& e) {
+      const DefEmpreinte* d = vue.empreinte(e.empreinte);
+      return d && ap.famillesMasquees.count(d->famille.empty() ? std::string("Autres") : d->famille);
+    });
+  if (ap.boites)
+    for (auto& k : vue.composants) k.modele3D.clear();
+  const prom::Carte3D m = prom::modele3DCarte(vue);
   std::vector<std::pair<TopoDS_Shape, QColor>> couleurs;
   for (const auto& [forme, couleur] : m.couleurs) couleurs.push_back({forme, QColor(QString::fromStdString(couleur))});
+  // Pièces montées et boîtier importé, ajoutés au composé montré
+  TopoDS_Compound tout;
+  BRep_Builder bb;
+  bb.MakeCompound(tout);
+  bb.Add(tout, m.forme);
+  if (ap.pieces)
+    for (const auto& pm : vue.piecesMontees)
+      if (const TopoDS_Shape f = prom::formePieceMontee(vue, pm); !f.IsNull()) {
+        bb.Add(tout, f);
+        couleurs.push_back({f, QColor(0xB0, 0xB4, 0xBA)});
+      }
+  if (ap.boitierImporte)
+    if (const TopoDS_Shape f = prom::formeBoitierImporte(vue); !f.IsNull()) {
+      bb.Add(tout, f);
+      couleurs.push_back({f, QColor(0xD8, 0xDC, 0xE2)});
+    }
   m_3d->setCouleursSousFormes(couleurs);
   m_3d->setApparence(QColor(0x1F, 0x6B, 0x45), 0);
   prom::ResultatPiece r;
-  r.forme = m.forme;
+  r.forme = tout;
   m_3d->afficher(r, true);
   m_3dAJour = true;
 }
@@ -1195,6 +1245,7 @@ QDockWidget* AtelierElectronique::panneau(Panneau p) const {
     case Panneau::Ecarts: return m_dockEcarts;
     case Panneau::Champs: return m_dockChamps;
     case Panneau::APlacer: return m_dockAPlacer;
+    case Panneau::Reseaux: return m_dockReseaux;
   }
   return nullptr;
 }
@@ -1881,6 +1932,16 @@ void AtelierElectronique::routerAutomatiquement(bool complet) {
                        .arg(q(l.reseau), QLocale().toString(mm(l.a.x), 'f', 2), QLocale().toString(mm(l.a.y), 'f', 2), QLocale().toString(mm(l.b.x), 'f', 2),
                             QLocale().toString(mm(l.b.y), 'f', 2), q(l.raison)));
   liste->setWordWrap(true);
+  liste->setObjectName(QStringLiteral("liaisonsRestantes"));
+  // Un clic sur une liaison restante la montre : la vue du circuit la centre et son réseau est surligné (5.16, C23)
+  const auto restantes = b.nonRoutees;
+  connect(liste, &QListWidget::currentRowChanged, this, [this, restantes](int i) {
+    if (i < 0 || i >= static_cast<int>(restantes.size())) return;
+    const auto& l = restantes[static_cast<std::size_t>(i)];
+    setMode(Circuit);
+    m_circuit->centrerSur({(l.a.x + l.b.x) / 2, (l.a.y + l.b.y) / 2});
+    surligner(q(l.reseau));
+  });
   col->addWidget(liste);
   auto* ok = new QDialogButtonBox(QDialogButtonBox::Close);
   connect(ok, &QDialogButtonBox::rejected, d, &QDialog::close);

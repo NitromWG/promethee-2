@@ -5,6 +5,7 @@
 // tests/verifier_fabrication.py. Les fentes rejoindront le corpus avec le lot L4 qui les fabrique.
 // Utilisation : corpus_fabrication <dossier> <données d'essai> ; code 0 si chaque dossier passe le contrôle du noyau.
 // Licence GPL-3.0-only.
+#include <algorithm>
 #include <cstdio>
 #include <filesystem>
 #include <iostream>
@@ -12,7 +13,9 @@
 #include <utility>
 #include <vector>
 
+#include "promethee/circuit_edition.hpp"
 #include "promethee/electronique.hpp"
+#include "promethee/fabrication_detaillee.hpp"
 #include "promethee/fichiers.hpp"
 #include "promethee/kicad_electronique.hpp"
 
@@ -143,6 +146,56 @@ ConceptionElec zonesDecoupe() {
   return c;
 }
 
+// Segment effilé de 0,3 à 1,5 mm à bouts carrés (5.22) : la carte d'exemple, sa première piste du dessus effilée
+ConceptionElec effilee() {
+  ConceptionElec c = exempleElectronique();
+  c.nom = "Corpus segment effilé";
+  for (auto& p : c.circuit.pistes)
+    if (p.couche == Couche::CuivreDessus && !p.milieu) {
+      p.largeur = nm(0.3);
+      p.largeurFin = nm(1.5);
+      p.boutsCarres = true;
+      break;
+    }
+  return c;
+}
+
+// Fentes (4.13) : un jack à deux pastilles, l'une percée d'une fente de 1,0 × 2,2 mm, l'autre d'un trou rond
+ConceptionElec fentes() {
+  ConceptionElec c = nouvelleConception("Corpus fentes");
+  c.circuit.contour.rayon = 0;
+  c.circuit.contour.largeur = nm(40);
+  c.circuit.contour.hauteur = nm(30);
+  c.cartouche.date = "2026-10-24";
+  DefEmpreinte d;
+  d.id = "perso:Jack";
+  d.famille = "jack";
+  Pastille p;
+  p.numero = "1";
+  p.type = TypePastille::Traversante;
+  p.forme = FormePastille::Ovale;
+  p.largeur = nm(3.0);
+  p.hauteur = nm(1.8);
+  p.percage = nm(1.0);
+  p.longueurPercage = nm(2.2);
+  d.pastilles.push_back(p);
+  Pastille q = p;
+  q.numero = "2";
+  q.position = ptMm(5, 0);
+  q.longueurPercage = 0;
+  q.forme = FormePastille::Rond;
+  q.largeur = q.hauteur = nm(1.8);
+  d.pastilles.push_back(q);
+  d.encombrement = {-nm(3), -nm(2), nm(8), nm(2)};
+  d.corps.largeur = nm(10);
+  d.corps.profondeur = nm(4);
+  d.corps.hauteur = nm(6);
+  c.empreintes[d.id] = d;
+  poserEmpreinteSeule(c, d.id, ptMm(15, 15), 90, false, "J");
+  poserEmpreinteSeule(c, "R_0805", ptMm(28, 15));
+  return c;
+}
+
 // Faits attendus de la conception, tirés du modèle (pas des fichiers écrits)
 std::string attendu(const ConceptionElec& c) {
   const Connectivite k = connectivite(c);
@@ -154,8 +207,53 @@ std::string attendu(const ConceptionElec& c) {
   if (nc == 1) npth += static_cast<int>(c.circuit.vias.size());
   const Boite b = boite(c.circuit.contour.polygone());
   char t[160];
-  std::snprintf(t, sizeof t, "--couches %d --composants %d --trous-npth %d --carte %.3f %.3f\n", nc, composants, npth, mm(b.largeur()), mm(b.hauteur()));
-  return t;
+  std::snprintf(t, sizeof t, "--couches %d --composants %d --trous-npth %d --carte %.3f %.3f", nc, composants, npth, mm(b.largeur()), mm(b.hauteur()));
+  std::string r = t;
+  // Segment effilé à bouts carrés : son trapèze exact, dans le repère des fichiers (origine en bas à gauche, y vers le haut)
+  for (const auto& p : c.circuit.pistes)
+    if (p.largeurFin > 0 && p.boutsCarres && !p.milieu) {
+      const Pt a = versRepereFabrication(b, p.a), z = versRepereFabrication(b, p.b);
+      char u[200];
+      std::snprintf(u, sizeof u, " --trapeze %.6f %.6f %.6f %.6f %.6f %.6f", mm(a.x), mm(a.y), mm(z.x), mm(z.y), mm(p.largeur), mm(p.largeurFin));
+      r += u;
+      break;
+    }
+  // Fente (4.13) : la première de la conception, longueur hors tout et diamètre
+  for (const auto& p : pastilles(c, k))
+    if (p.pastille.fente()) {
+      char u[96];
+      std::snprintf(u, sizeof u, " --fente %.4f %.4f", mm(p.pastille.longueurPercage), mm(p.pastille.percage));
+      r += u;
+      break;
+    }
+  return r + "\n";
+}
+
+// Sept jeux d'options Excellon (4.27) : le perçage métallisé de la carte écrit sept fois, relu par l'analyseur
+// indépendant qui doit y retrouver les mêmes trous, les mêmes fentes et les mêmes diamètres
+void jeuxExcellon(const ConceptionElec& c, const fs::path& dossier) {
+  fs::remove_all(dossier);
+  fs::create_directories(dossier);
+  const Connectivite k = connectivite(c);
+  const ModeleFabrication m = modeleFabrication(c, k, remplirZones(c, k));
+  const PairePercage pth = pairesPercage(m).front();
+  std::vector<std::pair<std::string, OptionsExcellon>> jeux(7);
+  jeux[0].first = "1-metrique";
+  jeux[1].first = "2-g85";
+  jeux[1].second.g85 = true;
+  jeux[2].first = "3-pouces";
+  jeux[2].second.pouces = true;
+  jeux[2].second.decimales = 5;
+  jeux[3].first = "4-zeros-de-tete";
+  jeux[3].second.zerosEntiers = true;
+  jeux[4].first = "5-xnc";
+  jeux[4].second.xnc = true;
+  jeux[5].first = "6-eia";
+  jeux[5].second.eia = true;
+  jeux[6].first = "7-sans-attributs";
+  jeux[6].second.attributs = false;
+  jeux[6].second.decimales = 6;
+  for (const auto& [nom, o] : jeux) prom::ecrireFichierAtomique(dossier / (nom + ".drl"), excellonPaire(m, pth, o, "corpus"));
 }
 
 }  // namespace
@@ -173,6 +271,8 @@ int main(int argc, char** argv) {
     corpus.emplace_back("quatre-couches", quatreCouches());
     corpus.emplace_back("dessous", retournee(exempleElectronique()));
     corpus.emplace_back("zones-decoupe", zonesDecoupe());
+    corpus.emplace_back("effilee", effilee());
+    corpus.emplace_back("fentes", fentes());
     for (const char* nom : {"StickHub", "ecc83-pp"}) {
       const fs::path f = donnees / "kicad" / (std::string(nom) + ".kicad_pcb");
       if (!fs::exists(f)) {
@@ -201,6 +301,14 @@ int main(int argc, char** argv) {
       std::cout << nom << " : " << e.what() << '\n';
       ++echecs;
     }
+  }
+  try {
+    const auto f = std::find_if(corpus.begin(), corpus.end(), [](const auto& x) { return x.first == "fentes"; });
+    jeuxExcellon(f->second, racine / "percage-options");
+    std::cout << "percage-options : sept jeux d'options Excellon écrits\n";
+  } catch (const std::exception& e) {
+    std::cout << "percage-options : " << e.what() << '\n';
+    ++echecs;
   }
   return echecs == 0 ? 0 : 1;
 }

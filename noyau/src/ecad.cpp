@@ -78,7 +78,12 @@ double distancePointSegment(Pt p, Pt a, Pt b) {
 }
 
 namespace {
-double orient(Pt a, Pt b, Pt c) { return static_cast<double>(b.x - a.x) * static_cast<double>(c.y - a.y) - static_cast<double>(b.y - a.y) * static_cast<double>(c.x - a.x); }
+// Orientation exacte (9.6, R16) : le produit vectoriel en entiers de 128 bits ; le signe seul compte (-1, 0, 1), sans
+// l'arrondi d'un double sur des coordonnées de carte en nanomètres
+int orient(Pt a, Pt b, Pt c) {
+  const Entier128 v = static_cast<Entier128>(b.x - a.x) * (c.y - a.y) - static_cast<Entier128>(b.y - a.y) * (c.x - a.x);
+  return v > 0 ? 1 : v < 0 ? -1 : 0;
+}
 }  // namespace
 
 bool surSegment(Pt p, Pt a, Pt b) {
@@ -89,9 +94,11 @@ bool surSegment(Pt p, Pt a, Pt b) {
 }
 
 bool segmentsSeCoupent(Pt a1, Pt a2, Pt b1, Pt b2) {
-  const double d1 = orient(b1, b2, a1), d2 = orient(b1, b2, a2), d3 = orient(a1, a2, b1), d4 = orient(a1, a2, b2);
-  if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) return true;
-  return surSegment(a1, b1, b2) || surSegment(a2, b1, b2) || surSegment(b1, a1, a2) || surSegment(b2, a1, a2);
+  const int d1 = orient(b1, b2, a1), d2 = orient(b1, b2, a2), d3 = orient(a1, a2, b1), d4 = orient(a1, a2, b2);
+  if (d1 * d2 < 0 && d3 * d4 < 0) return true;
+  // Contact exact : un bout aligné sur l'autre segment et dans sa boîte (sans la tolérance de surSegment)
+  auto sur = [](int o, Pt p, Pt a, Pt b) { return o == 0 && std::min(a.x, b.x) <= p.x && p.x <= std::max(a.x, b.x) && std::min(a.y, b.y) <= p.y && p.y <= std::max(a.y, b.y); };
+  return sur(d1, a1, b1, b2) || sur(d2, a2, b1, b2) || sur(d3, b1, a1, a2) || sur(d4, b2, a1, a2);
 }
 
 double distanceSegments(Pt a1, Pt a2, Pt b1, Pt b2) {
@@ -212,7 +219,11 @@ bool dedans(const Polygone& p, Pt q) { return positionPoint(p, q) >= 0; }
 bool dedans(const Polygones& p, Pt q) {
   int enroulement = 0;
   for (const auto& x : p) {
-    if (x.size() < 3 || positionPoint(x, q) < 0) continue;
+    if (x.size() < 3) continue;
+    const int pos = positionPoint(x, q);
+    if (pos < 0) continue;
+    // Point sur le bord d'un contour ou d'un trou (9.6) : il touche le cuivre, il est dedans
+    if (pos == 0) return true;
     enroulement += aireDouble(x) >= 0 ? 1 : -1;
   }
   return enroulement != 0;
@@ -312,9 +323,8 @@ double distancePolygoneSegment(const Polygone& p, Pt a, Pt b) {
 
 double distancePolygones(const Polygone& a, const Polygone& b) {
   if (a.size() < 3 || b.size() < 3) return 1e18;
-  if (!boite(a).gonflee(1).touche(boite(b)) || true) {
-    if (dedans(a, b.front()) || dedans(b, a.front())) return 0;
-  }
+  // Test de boîtes (9.6, R16) : sans recouvrement des boîtes, aucun des deux ne contient l'autre
+  if (boite(a).touche(boite(b)) && (dedans(a, b.front()) || dedans(b, a.front()))) return 0;
   double d = 1e18;
   for (std::size_t i = 0; i < a.size(); ++i) {
     d = std::min(d, distancePolygoneSegment(b, a[i], a[(i + 1) % a.size()]));

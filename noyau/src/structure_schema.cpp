@@ -3,6 +3,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <functional>
 #include <map>
 #include <regex>
 
@@ -23,19 +24,52 @@ std::optional<NomBus> lireNomBus(const std::string& texte) {
   return b;
 }
 
-std::vector<BusFeuille> busDeFeuille(const Feuille& f) {
+std::vector<std::string> membresFaisceau(const std::string& nom0, const std::map<std::string, std::vector<std::string>>& alias) {
+  std::vector<std::string> r;
+  std::set<std::string> vus;
+  // Développement récursif, une boucle d'alias s'arrête
+  std::function<void(const std::string&, bool)> developper = [&](const std::string& nom, bool racine) {
+    if (const auto b = lireNomBus(nom)) {
+      for (int i = b->debut; i <= b->fin; ++i) r.push_back(b->prefixe + std::to_string(i));
+      return;
+    }
+    if (nom.size() >= 2 && nom.front() == '{' && nom.back() == '}') {
+      std::string mot;
+      for (char ch : nom.substr(1, nom.size() - 2) + " ") {
+        if (ch == ' ' || ch == ',' || ch == '\t') {
+          if (!mot.empty()) developper(mot, false);
+          mot.clear();
+        } else
+          mot += ch;
+      }
+      return;
+    }
+    if (const auto it = alias.find(nom); it != alias.end() && vus.insert(nom).second) {
+      for (const auto& m : it->second) developper(m, false);
+      return;
+    }
+    if (!racine) r.push_back(nom);
+  };
+  developper(nom0, true);
+  return r;
+}
+
+std::vector<BusFeuille> busDeFeuille(const Feuille& f, const std::map<std::string, std::vector<std::string>>* alias) {
+  static const std::map<std::string, std::vector<std::string>> aucun;
+  const auto& al = alias ? *alias : aucun;
+  auto estBus = [&](const std::string& t) { return lireNomBus(t).has_value() || !membresFaisceau(t, al).empty(); };
   std::vector<BusFeuille> r;
   auto toucheBout = [](const Fil& w, Pt p) { return w.a == p || w.b == p; };
   auto touche = [](const Fil& w, Pt p) { return w.a == p || w.b == p || surSegment(p, w.a, w.b); };
   // Points où une étiquette non-bus est posée : un fil qui en porte une est une entrée, pas le bus
   std::vector<Pt> membres;
   for (const auto& e : f.etiquettes)
-    if (!lireNomBus(e.texte)) membres.push_back(e.p);
+    if (!estBus(e.texte)) membres.push_back(e.p);
   for (const auto& e : f.etiquettes) {
-    const auto nom = lireNomBus(e.texte);
-    if (!nom) continue;
+    if (!estBus(e.texte)) continue;
     BusFeuille b;
-    b.nom = *nom;
+    if (const auto nom = lireNomBus(e.texte)) b.nom = *nom;
+    b.membres = membresFaisceau(e.texte, al);
     b.etiquette = e.uuid;
     std::vector<const Fil*> pile;
     for (const auto& w : f.fils)
@@ -58,7 +92,7 @@ std::vector<BusFeuille> busDeFeuille(const Feuille& f) {
       if (!surBus) continue;
       std::string porte;
       for (const auto& et : f.etiquettes)
-        if (!lireNomBus(et.texte) && touche(w, et.p)) porte = et.texte;
+        if (!estBus(et.texte) && touche(w, et.p)) porte = et.texte;
       b.entrees.push_back({w.uuid, porte});
     }
     r.push_back(std::move(b));

@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <cmath>
 #include <optional>
+#include <set>
 
 #include <QInputDialog>
 #include <QKeyEvent>
@@ -24,6 +25,8 @@
 #include "SelectionElectronique.hpp"
 #include "VueCircuit.hpp"
 #include "CartoucheRoutage.hpp"
+#include "promethee/lignes_transmission.hpp"
+#include "promethee/circuit_edition.hpp"
 #include "promethee/modele.hpp"
 #include "promethee/routeur.hpp"
 
@@ -109,6 +112,19 @@ class VueCircuit::OutilSelection : public OutilBase {
         return;
       }
     const ObjetChoisi sous = m_vue.objetSous(g.ecran);
+    // Sommet du contour de la carte ou d'une découpe, rien d'autre dessous : il se glisse (5.4)
+    if (sous.genre == Genre::Rien && !(g.mods & (Qt::ShiftModifier | Qt::ControlModifier))) {
+      m_sommetContour = m_vue.sommetContourSous(g.ecran);
+      if (m_sommetContour.first >= -1) {
+        if (m_vue.refuseVerrou()) {
+          m_sommetContour = {-2, -1};
+          return;
+        }
+        m_appuye = true;
+        m_cadre = false;
+        return;
+      }
+    }
     const auto mode = m_vue.m_sel->modeClic(g.mods);  // Maj, Ctrl, ou le mode du bandeau
     m_mode = static_cast<int>(mode);
     // Dans le vide : l'état neutre, puis un cadre si la souris glisse ; un objet n'est glissé que par un clic simple
@@ -142,6 +158,21 @@ class VueCircuit::OutilSelection : public OutilBase {
         if (ci < 0 || ci >= static_cast<int>(pr.electronique.size())) return;
         for (auto& e : pr.electronique[static_cast<std::size_t>(ci)].circuit.empreintes)
           if (e.composant == id) e.repere = versEmpreinte(e, p);
+      }, true);
+      return;
+    }
+    if (m_appuye && m_sommetContour.first >= -1) {
+      if (!m_glisse) {
+        if ((m_souris - m_pression).manhattanLength() <= 3) return;
+        v.m_doc->debutGesteConception(v.m_conception);
+        m_glisse = true;
+      }
+      const Pt p = v.surGrilleRoutage(v.monde(m_souris));
+      const int ci = v.m_conception;
+      const auto [b, k] = m_sommetContour;
+      v.m_doc->pendantGeste([&](prom::Projet& pr) {
+        if (ci < 0 || ci >= static_cast<int>(pr.electronique.size())) return;
+        deplacerSommetContour(pr.electronique[static_cast<std::size_t>(ci)], b, static_cast<std::size_t>(k), p);
       }, true);
       return;
     }
@@ -182,7 +213,12 @@ class VueCircuit::OutilSelection : public OutilBase {
         return;
       }
       v.m_circuitDepart = c->circuit;
-      v.m_accroches = v.accroches(v.m_selection);
+      // Une seule piste droite, libre : elle glisse parallèlement à elle-même, ses voisines la suivent (5.9)
+      m_pisteGlissee.clear();
+      if (v.m_selection.size() == 1 && v.m_selection.front().genre == Genre::Piste && !(g.mods & Qt::ShiftModifier))
+        for (const auto& t : c->circuit.pistes)
+          if (t.uuid == v.m_selection.front().id && !t.milieu && t.verrou == Verrou::Aucun) m_pisteGlissee = t.uuid;
+      v.m_accroches = m_pisteGlissee.empty() ? v.accroches(v.m_selection) : std::vector<Accroche>{};
       v.m_doc->debutGesteConception(v.m_conception);
       m_glisse = true;
       v.commencerGlissement();  // grande carte : fond peint une fois, zones suivies sur place (9.4, 9.9)
@@ -196,9 +232,16 @@ class VueCircuit::OutilSelection : public OutilBase {
     const Pt brut = v.monde(m_souris) - v.m_departGlisse;
     const Pt d = surGrille(v.m_positionDepart + brut, empreinte ? v.pasPlacement() : v.pasRoutage()) - v.m_positionDepart;
     const int ci = v.m_conception;
+    const std::string piste = m_pisteGlissee;
     v.m_doc->pendantGeste([&](prom::Projet& pr) {
       if (ci < 0 || ci >= static_cast<int>(pr.electronique.size())) return;
-      v.appliquerDeplacement(pr.electronique[static_cast<std::size_t>(ci)], d);
+      ConceptionElec& x = pr.electronique[static_cast<std::size_t>(ci)];
+      if (piste.empty()) {
+        v.appliquerDeplacement(x, d);
+        return;
+      }
+      x.circuit.pistes = v.m_circuitDepart.pistes;
+      glisserSegment(x, piste, d);
     }, true);
     m_delta = d;
   }
@@ -212,6 +255,8 @@ class VueCircuit::OutilSelection : public OutilBase {
       return;
     }
     m_sommet = -1;
+    m_sommetContour = {-2, -1};
+    m_pisteGlissee.clear();
     m_repere.clear();
     if (m_glisse) {
       m_glisse = false;
@@ -245,6 +290,17 @@ class VueCircuit::OutilSelection : public OutilBase {
     // Double-clic sur une piste : la chaîne de segments ; avec Maj, tout le cuivre du réseau (SAI-18)
     std::string reseau;
     const ObjetChoisi o = v.objetSous(g.ecran, &reseau);
+    // Contour de la carte (5.4) : double-clic sur un sommet pour le retirer, sur un côté pour en ajouter un
+    if (o.genre == Genre::Rien) {
+      if (const auto [b, k] = v.sommetContourSous(g.ecran); b >= -1) {
+        if (!v.refuseVerrou()) v.modifier([&, b = b, k = k](ConceptionElec& c) { supprimerSommetContour(c, b, static_cast<std::size_t>(k)); });
+        return;
+      }
+      if (const auto [b, i, p] = v.areteContourSous(g.ecran); b >= -1) {
+        if (!v.refuseVerrou()) v.modifier([&, b = b, i = i, p = p](ConceptionElec& c) { insererSommetContour(c, b, static_cast<std::size_t>(i), p); });
+        return;
+      }
+    }
     if (o.genre == Genre::Piste) v.choisirChaine(o.id, g.mods & Qt::ShiftModifier);
   }
   bool agir(std::string_view a, bool faire) override {
@@ -282,6 +338,8 @@ class VueCircuit::OutilSelection : public OutilBase {
     if (m_glisse) {
       m_glisse = m_appuye = false;
       m_sommet = -1;
+      m_sommetContour = {-2, -1};
+      m_pisteGlissee.clear();
       m_vue.m_accroches.clear();
       m_vue.finirGlissement();
       m_vue.m_doc->annulerGeste();
@@ -297,10 +355,32 @@ class VueCircuit::OutilSelection : public OutilBase {
   void gesteInterrompu() override {
     m_glisse = m_appuye = false;
     m_sommet = -1;
+    m_sommetContour = {-2, -1};
+    m_pisteGlissee.clear();
     m_vue.m_accroches.clear();
     m_vue.finirGlissement();
   }
   void dessiner(QPainter& g) const override {
+    // Collisions d'encombrement en direct pendant le glisser d'empreintes (5.4) : les voisines touchées en rouge
+    if (m_glisse && m_vue.m_genre == Genre::Empreinte)
+      if (const ConceptionElec* c = m_vue.conception()) {
+        std::set<std::string> touchees;
+        for (const auto& o : m_vue.m_selection)
+          if (o.genre == Genre::Empreinte)
+            for (const auto& x : collisionsEncombrement(*c, o.id)) touchees.insert(x);
+        g.setPen(QPen(QColor(0xC2, 0x40, 0x2E), 2));
+        QColor f(0xC2, 0x40, 0x2E);
+        f.setAlpha(50);
+        g.setBrush(f);
+        for (const auto& e : c->circuit.empreintes)
+          if (touchees.count(e.composant))
+            if (const DefEmpreinte* d = c->empreinte(e.empreinte)) {
+              QPolygonF poly;
+              for (const Pt p : encombrementSurCarte(e, *d)) poly << m_vue.ecran(p);
+              g.drawPolygon(poly);
+            }
+        g.setBrush(Qt::NoBrush);
+      }
     if (!m_cadre || (m_souris - m_pression).manhattanLength() <= 3) return;
     // Cadre de sélection : plein de gauche à droite (objets entiers), pointillé de droite à gauche (objets touchés)
     const bool touches = m_souris.x() < m_pression.x();
@@ -314,8 +394,10 @@ class VueCircuit::OutilSelection : public OutilBase {
   ContenuBandeau bandeau() const override {
     if (!m_glisse) return bandeauSelection(m_vue.m_sel, sortie());
     ContenuBandeau c;
-    c.titre = QStringLiteral("Déplacement");
+    c.titre = m_pisteGlissee.empty() ? QStringLiteral("Déplacement") : QStringLiteral("Glissement de la piste");
     c.detail = QStringLiteral("Δx %1, Δy %2").arg(m_vue.longueur(static_cast<double>(m_delta.x)), m_vue.longueur(static_cast<double>(m_delta.y)));
+    // Longueur totale du chevelu, refaite à chaque calcul pendant le glisser (5.6) : le placement se juge à elle
+    if (m_vue.m_calc) c.detail += QStringLiteral(" · chevelu %1 (%2 liaison(s))").arg(m_vue.longueur(longueurChevelu(m_vue.m_calc->etat))).arg(m_vue.m_calc->etat.chevelu.size());
     c.actions.push_back(sortie(QStringLiteral("Annuler")));
     return c;
   }
@@ -323,6 +405,8 @@ class VueCircuit::OutilSelection : public OutilBase {
  private:
   QPointF m_pression, m_souris;
   int m_mode = 0, m_sommet = -1;
+  std::pair<int, int> m_sommetContour{-2, -1};  // sommet du contour tenu (5.4)
+  std::string m_pisteGlissee;                  // piste qui glisse parallèlement à elle-même (5.9)
   bool m_appuye = false, m_glisse = false, m_cadre = false, m_surChoisi = false, m_surVerrou = false;
   Pt m_delta{};
   std::string m_repere;  // composant dont le repère de sérigraphie se glisse
@@ -388,6 +472,20 @@ class VueCircuit::OutilRoutage : public OutilBase {
     } else if (a == "circuit.coucheDessus" || a == "circuit.coucheDessous") {
       // Changer de couche pendant un tracé pose une via au dernier point, comme V (C11, ROU-05)
       if (faire) poserVia(a == "circuit.coucheDessus" ? Couche::CuivreDessus : Couche::CuivreDessous);
+    } else if (a == "trace.largeur" || a == "trace.largeurPrecedente") {
+      // W : la largeur suivante de la liste (celle de la classe, puis les largeurs courantes), Maj+W la précédente (5.8)
+      if (faire) {
+        const ConceptionElec* c = m_vue.conception();
+        std::vector<Nm> l{c ? largeurPiste(c->circuit.regles, m_reseau) : m_largeur};
+        for (const Nm x : {150'000, 200'000, 250'000, 300'000, 400'000, 500'000, 800'000, 1'000'000, 1'500'000})
+          if (std::find(l.begin(), l.end(), x) == l.end()) l.push_back(x);
+        std::sort(l.begin(), l.end());
+        auto it = std::find(l.begin(), l.end(), m_largeur);
+        if (a == "trace.largeur") it = it == l.end() || it + 1 == l.end() ? l.begin() : it + 1;
+        else it = it == l.end() || it == l.begin() ? l.end() - 1 : it - 1;
+        setLargeur(*it);
+        emit m_vue.message(QStringLiteral("Largeur des segments suivants : %1.").arg(mmTexte(static_cast<double>(*it))));
+      }
     } else if (a == "trace.retirerCoude") {
       if (faire) retirerCoude();
     } else if (a == "trace.terminer") {
@@ -532,10 +630,12 @@ class VueCircuit::OutilRoutage : public OutilBase {
     if (!c || !v.m_calc || v.refuseVerrou()) return false;
     m_coupures.clear();
     const int i = v.pastilleSous(p);
+    m_depart = {};
     if (i >= 0) {
       const auto& x = v.m_calc->pastilles[static_cast<std::size_t>(i)];
       m_reseau = x.reseau;
       m_courant = x.pastille.position;
+      m_depart = {x.composant, x.numero};
       if (x.pastille.type == TypePastille::CMS) v.m_coucheActive = x.dessous ? Couche::CuivreDessous : Couche::CuivreDessus;
     } else {
       bool trouve = false;
@@ -571,7 +671,7 @@ class VueCircuit::OutilRoutage : public OutilBase {
         return false;
       }
     }
-    m_largeur = largeurPiste(c->circuit.regles, m_reseau);
+    m_largeur = largeurSurCouche(*c, m_reseau, v.m_coucheActive);  // profil d'impédance du réseau (8.21), sinon sa classe
     m_route = true;
     m_segments.clear();
     m_vias.clear();
@@ -639,9 +739,25 @@ class VueCircuit::OutilRoutage : public OutilBase {
       m_vue.update();
       return;
     }
+    // Carte sans schéma (5.17) : une piste tirée entre deux pastilles crée leur réseau, ou celui de l'une réunit l'autre
+    std::pair<std::string, std::string> arrivee;
+    if (!m_depart.first.empty() && m_vue.m_calc) {
+      const Pt fin = !segments.empty() ? segments.back().b : m_courant;
+      const Couche couche = !segments.empty() ? segments.back().couche : m_vue.m_coucheActive;
+      for (const auto& x : m_vue.m_calc->pastilles)
+        if ((x.couches & bit(couche)) && !(x.composant == m_depart.first && x.numero == m_depart.second) && dedans(x.forme, fin)) arrivee = {x.composant, x.numero};
+    }
+    const auto depart = m_depart;
+    m_depart = {};
     m_vue.modifier([&](ConceptionElec& c) {
-      for (const auto& s : segments) c.circuit.pistes.push_back({nouvelUuid(), reseau, s.couche, s.a, s.b, s.largeur});
-      for (const Pt& p : vias) c.circuit.vias.push_back({nouvelUuid(), reseau, p, viaDiametre(c.circuit.regles, reseau), viaPercage(c.circuit.regles, reseau)});
+      std::string net = reseau;
+      if (!arrivee.first.empty()) {
+        const ComposantElec* xa = c.composant(depart.first);
+        const ComposantElec* xb = c.composant(arrivee.first);
+        if ((xa && xa->carteSeule) || (xb && xb->carteSeule)) net = reseauParPiste(c, depart.first, depart.second, arrivee.first, arrivee.second);
+      }
+      for (const auto& s : segments) c.circuit.pistes.push_back({nouvelUuid(), net, s.couche, s.a, s.b, s.largeur});
+      for (const Pt& p : vias) c.circuit.vias.push_back({nouvelUuid(), net, p, viaDiametre(c.circuit.regles, net), viaPercage(c.circuit.regles, net)});
       // Raccords en T : la piste touchée se coupe en deux au point de raccord, qui devient une extrémité commune
       for (const Coupure& k : coupures) {
         auto& v = c.circuit.pistes;
@@ -669,6 +785,8 @@ class VueCircuit::OutilRoutage : public OutilBase {
     if (suivante == v.m_coucheActive) return;
     m_vias.push_back(m_courant);
     v.m_coucheActive = suivante;
+    // Profil d'impédance (8.21) : la largeur suit la couche d'arrivée
+    if (profilDuReseau(*c, m_reseau)) m_largeur = largeurSurCouche(*c, m_reseau, suivante);
     emit v.message(QStringLiteral("Via posée : la piste continue sur %1.").arg(QString::fromUtf8(nomCouche(v.m_coucheActive))));
     emit v.coucheActiveChangee();
     m_cacheValide = false;
@@ -767,6 +885,10 @@ class VueCircuit::OutilRoutage : public OutilBase {
         }
       for (const auto& p : v.m_calc->pastilles) {
         if (!(p.couches & bit(v.m_coucheActive)) || (!p.reseau.empty() && p.reseau == m_reseau)) continue;
+        // Carte sans schéma (5.17) : la pastille de départ, et celle d'arrivée encore sans réseau, ne gênent pas la piste
+        // qui va leur donner le sien
+        const bool depart = !m_depart.first.empty() && p.composant == m_depart.first && p.numero == m_depart.second;
+        if (depart || (m_reseau.empty() && p.reseau.empty() && dedans(p.forme, b))) continue;
         if (distancePolygoneSegment(p.forme, a, b) - w < static_cast<double>(isolementEntre(R, m_reseau, p.reseau))) {
           if (avec) *avec = "la pastille " + p.reference + "." + p.numero;
           return true;
@@ -802,6 +924,7 @@ class VueCircuit::OutilRoutage : public OutilBase {
   bool m_route = false, m_droitDabord = false;
   std::string m_reseau;
   Nm m_largeur = 250'000;
+  std::pair<std::string, std::string> m_depart;  // pastille de départ (composant, numéro) : carte sans schéma (5.17)
   Pt m_courant{};
   std::vector<Segment> m_segments;
   std::vector<Pt> m_vias;
@@ -1024,6 +1147,29 @@ class VueCircuit::OutilMesure : public OutilBase {
     ContenuBandeau c;
     c.titre = QStringLiteral("Mesure");
     c.detail = m_points.size() == 2 ? m_resultat : QStringLiteral("clic sur deux points");
+    // Deux points mesurés : la mesure devient une cote posée (5.15, 5.31)
+    if (m_points.size() == 2) {
+      ActionBandeau cote;
+      cote.id = QStringLiteral("poserCote");
+      cote.libelle = QStringLiteral("Poser une cote");
+      VueCircuit* v = &m_vue;
+      const std::vector<Pt> pts = m_points;
+      auto poser = [v, pts](GenreCote genre) {
+        return [v, pts, genre] {
+          if (v->refuseVerrou()) return;
+          v->modifier([&](ConceptionElec& x) { poserCote(x, genre, pts); });
+          emit v->message(QStringLiteral("Cote posée sur la couche des dessins."));
+        };
+      };
+      cote.choix.push_back({QStringLiteral("Alignée"), poser(GenreCote::Alignee), false});
+      cote.choix.push_back({QStringLiteral("Horizontale"), poser(GenreCote::Horizontale), false});
+      cote.choix.push_back({QStringLiteral("Verticale"), poser(GenreCote::Verticale), false});
+      cote.choix.push_back({QStringLiteral("Rayon (centre, puis bord)"), poser(GenreCote::Rayon), false});
+      cote.choix.push_back({QStringLiteral("Diamètre (centre, puis bord)"), poser(GenreCote::Diametre), false});
+      cote.choix.push_back({QStringLiteral("Marque de centre"), poser(GenreCote::Centre), false});
+      cote.choix.push_back({QStringLiteral("Ordonnée depuis le premier point"), poser(GenreCote::Ordonnee), false});
+      c.actions.push_back(cote);
+    }
     c.actions.push_back(sortie());
     return c;
   }

@@ -27,6 +27,9 @@ ConceptionElec conceptionDepuisKicad(const std::string& texte, const std::string
 // empreintes avec leurs pastilles (réseau de chaque pastille), sérigraphie, encombrement et repères, pistes,
 // vias, zones (réglages thermiques compris), contour et découpes, textes de la carte, cartouche.
 std::string kicadDepuisConception(const ConceptionElec& c, const Connectivite& k);
+// Projet KiCad (.kicad_pro) qui accompagne la carte exportée : règles de conception, classes de réseaux et leurs
+// motifs (10.2), pour que la DRC de KiCad juge la carte avec les règles de Prométhée
+std::string projetKicadDepuisConception(const ConceptionElec& c);
 
 // Empreinte d'une bibliothèque KiCad (fichier .kicad_mod) : identifiant « kicad:<nom> », pastilles, sérigraphie,
 // encombrement et corps comme à l'import d'une carte. Rien si le texte n'est pas une empreinte ou n'a pas de pastille.

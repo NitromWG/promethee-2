@@ -4,10 +4,14 @@
 #include "promethee/remplacement.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <map>
 #include <set>
+#include <tuple>
 
+#include "promethee/approvisionnement.hpp"
 #include "promethee/formules.hpp"
+#include "promethee/synchronisation.hpp"
 
 namespace prom::ecad {
 
@@ -349,6 +353,233 @@ bool appliquerPinceau(ConceptionElec& c, const ComposantElec& m, const std::stri
     x->sourceHauteur = m.sourceHauteur;
   }
   return !(*x == avant);
+}
+
+// ---------- Mise à jour et échange en masse (4.20) ----------
+namespace {
+std::string minusculesAscii(const std::string& s) {
+  std::string r;
+  for (std::size_t i = 0; i < s.size(); ++i) {
+    const unsigned char ch = static_cast<unsigned char>(s[i]);
+    // Lettres accentuées courantes ramenées à leur base (é, è, ê → e ; à → a ; ç → c ; ô → o ; î → i ; û, ù → u)
+    if (ch == 0xC3 && i + 1 < s.size()) {
+      const unsigned char d = static_cast<unsigned char>(s[i + 1]);
+      const char base = (d >= 0xA8 && d <= 0xAB) || (d >= 0x88 && d <= 0x8B) ? 'e' : (d >= 0xA0 && d <= 0xA5) || (d >= 0x80 && d <= 0x85) ? 'a'
+                      : d == 0xA7 || d == 0x87 ? 'c' : (d >= 0xB2 && d <= 0xB6) || (d >= 0x92 && d <= 0x96) ? 'o' : (d >= 0xAC && d <= 0xAF) || (d >= 0x8C && d <= 0x8F) ? 'i'
+                      : (d >= 0xB9 && d <= 0xBC) || (d >= 0x99 && d <= 0x9C) ? 'u' : '\0';
+      if (base) {
+        r += base;
+        ++i;
+        continue;
+      }
+    }
+    r += static_cast<char>(std::tolower(ch));
+  }
+  return r;
+}
+bool aJoker(const std::string& m) { return m.find_first_of("*?") != std::string::npos; }
+// Valeur visée : jokers sur le texte, sinon même clé de nomenclature (« 10k », « 10 kΩ », « 10K »)
+bool valeurVisee(const ConceptionElec& c, const ComposantElec& k, const std::string& motif) {
+  if (motif.empty()) return true;
+  if (aJoker(motif)) return correspondJoker(motif, k.valeur);
+  const FamilleValeur f = familleDe(c, k);
+  const std::string a = cleValeur(lireValeurComposant(motif, f), motif), b = cleValeur(lireValeurComposant(k.valeur, f), k.valeur);
+  return a == b || minusculesAscii(motif) == minusculesAscii(k.valeur);
+}
+}  // namespace
+
+bool correspondJoker(const std::string& motif, const std::string& texte) {
+  const std::string m = minusculesAscii(motif), t = minusculesAscii(texte);
+  // Parcours glouton avec retour au dernier « * »
+  std::size_t i = 0, j = 0, etoile = std::string::npos, reprise = 0;
+  while (j < t.size()) {
+    if (i < m.size() && (m[i] == '?' || m[i] == t[j])) {
+      ++i;
+      ++j;
+    } else if (i < m.size() && m[i] == '*') {
+      etoile = i++;
+      reprise = j;
+    } else if (etoile != std::string::npos) {
+      i = etoile + 1;
+      j = ++reprise;
+    } else
+      return false;
+  }
+  while (i < m.size() && m[i] == '*') ++i;
+  return i == m.size();
+}
+
+std::vector<std::string> composantsVises(const ConceptionElec& c, const PorteeMasse& p) {
+  std::vector<std::string> r;
+  const std::set<std::string> sel(p.selection.begin(), p.selection.end());
+  for (const auto& k : c.composants) {
+    if (!sel.empty() && !sel.count(k.uuid)) continue;
+    if (!p.reference.empty() && !correspondJoker(p.reference, k.reference)) continue;
+    if (!p.symbole.empty() && !correspondJoker(p.symbole, k.symbole)) continue;
+    if (!p.empreinte.empty() && !correspondJoker(p.empreinte, k.empreinte)) continue;
+    if (!valeurVisee(c, k, p.valeur)) continue;
+    r.push_back(k.uuid);
+  }
+  return r;
+}
+
+int echangerEmpreintesEnMasse(ConceptionElec& c, const std::vector<std::string>& composants, const std::string& empreinte, const RegleEchangeEmpreinte& r, std::string* erreur) {
+  exigerModifiable(c);
+  const DefEmpreinte* neuve = c.empreinte(empreinte);
+  if (!neuve) {
+    if (erreur) *erreur = "empreinte inconnue : " + empreinte;
+    return 0;
+  }
+  const DefEmpreinte def = *neuve;
+  if (!c.empreintes.count(empreinte)) c.empreintes[empreinte] = def;  // la version utilisée est figée dans le projet
+  int n = 0;
+  for (const auto& id : composants) {
+    ComposantElec* k = c.composant(id);
+    if (!k || k->empreinte == empreinte) continue;
+    auto it = std::find_if(c.circuit.empreintes.begin(), c.circuit.empreintes.end(), [&](const EmpreintePlacee& e) { return e.composant == id; });
+    if (it == c.circuit.empreintes.end()) {
+      k->empreinte = empreinte;  // pas encore sur la carte : la synchronisation la posera
+      ++n;
+      continue;
+    }
+    // Marges des pastilles retouchées sur la carte (copie locale) : reportées, numéro par numéro, sur une copie de
+    // la nouvelle empreinte
+    std::map<std::string, std::pair<std::optional<Nm>, std::optional<Nm>>> marges;
+    if (!it->copieLocale.empty())
+      if (const auto cl = c.empreintes.find(it->empreinte); cl != c.empreintes.end())
+        for (const auto& p : cl->second.pastilles)
+          if (p.margeVernis || p.margePate) marges[p.numero] = {p.margeVernis, p.margePate};
+    const std::optional<Pt> repere = it->repere;
+    if (!remplacerEmpreinteEnPlace(c, id, empreinte)) continue;
+    k->empreinte = empreinte;
+    it = std::find_if(c.circuit.empreintes.begin(), c.circuit.empreintes.end(), [&](const EmpreintePlacee& e) { return e.composant == id; });
+    it->repere = r.garderTextes ? repere : std::nullopt;
+    it->copieLocale.clear();
+    if (r.garderMarges && !marges.empty()) {
+      // Nouvelle copie locale (7.24) de la nouvelle empreinte, qui reprend les marges retouchées
+      DefEmpreinte copie = def;
+      copie.id = empreinte + "~local~" + k->reference;
+      for (auto& p : copie.pastilles)
+        if (const auto m = marges.find(p.numero); m != marges.end()) std::tie(p.margeVernis, p.margePate) = m->second;
+      c.empreintes[copie.id] = copie;
+      it->empreinte = copie.id;
+      it->copieLocale = empreinte;
+    }
+    if (!r.garderAttributs) {
+      k->horsNomenclature = k->horsPlacement = false;
+      it->couleur.clear();
+    }
+    if (!r.garderModele3D) k->modele3D.clear();
+    ++n;
+  }
+  return n;
+}
+
+// ---------- Règles d'équivalence (4.28) ----------
+std::optional<RegleEquivalence> lireRegleEquivalence(const std::string& texte, std::string* erreur) {
+  auto echec = [&](const std::string& m) -> std::optional<RegleEquivalence> {
+    if (erreur) *erreur = m;
+    return std::nullopt;
+  };
+  std::size_t fleche = std::string::npos, largeur = 0;
+  for (const char* f : {"\xE2\x86\x92", "->", "=>"})
+    if (const auto i = texte.find(f); i != std::string::npos && i < fleche) {
+      fleche = i;
+      largeur = std::char_traits<char>::length(f);
+    }
+  if (fleche == std::string::npos) return echec("règle sans flèche « → » : « " + texte + " »");
+  auto jetons = [](const std::string& s) {
+    std::vector<std::string> r;
+    std::string m;
+    for (char ch : s + " ") {
+      if (ch == ' ' || ch == '\t' || ch == ',') {
+        if (!m.empty()) r.push_back(m);
+        m.clear();
+      } else
+        m += ch;
+    }
+    return r;
+  };
+  const auto gauche = jetons(texte.substr(0, fleche)), droite = jetons(texte.substr(fleche + largeur));
+  if (droite.size() != 1) return echec("une seule empreinte après la flèche : « " + texte + " »");
+  if (gauche.empty()) return echec("rien avant la flèche : « " + texte + " »");
+  RegleEquivalence r;
+  r.texte = texte;
+  r.empreinte = droite.front();
+  static const std::map<std::string, FamilleValeur> familles = {
+      {"resistance", FamilleValeur::Resistance}, {"resistances", FamilleValeur::Resistance}, {"resistor", FamilleValeur::Resistance},
+      {"condensateur", FamilleValeur::Condensateur}, {"condensateurs", FamilleValeur::Condensateur}, {"capacitor", FamilleValeur::Condensateur},
+      {"inductance", FamilleValeur::Inductance}, {"inductances", FamilleValeur::Inductance}, {"self", FamilleValeur::Inductance}, {"inductor", FamilleValeur::Inductance},
+      {"ferrite", FamilleValeur::Ferrite}, {"fusible", FamilleValeur::Fusible}, {"fuse", FamilleValeur::Fusible}, {"quartz", FamilleValeur::Quartz},
+      {"crystal", FamilleValeur::Quartz}, {"zener", FamilleValeur::Zener}};
+  std::size_t i = 0;
+  if (const auto f = familles.find(minusculesAscii(gauche[0])); f != familles.end()) r.famille = f->second;
+  else r.reference = gauche[0];
+  for (i = 1; i < gauche.size(); ++i) {
+    const std::string& m = gauche[i];
+    if (r.boitier.empty() && m.size() == 4 && std::all_of(m.begin(), m.end(), [](char ch) { return ch >= '0' && ch <= '9'; })) r.boitier = m;
+    else if (r.valeur.empty()) r.valeur = m;
+    else return echec("trop de critères avant la flèche : « " + texte + " »");
+  }
+  return r;
+}
+
+std::string boitierDeComposant(const ComposantElec& k) {
+  for (const char* cle : {"Boîtier", "Boitier", "boitier", "Package", "package", "Taille", "Case"}) {
+    if (const auto it = k.champs.find(cle); it != k.champs.end() && !it->second.empty()) return codeTaille(it->second).empty() ? it->second : codeTaille(it->second);
+    if (const auto it = k.parametres.find(cle); it != k.parametres.end() && !it->second.empty()) return codeTaille(it->second).empty() ? it->second : codeTaille(it->second);
+  }
+  if (const std::string t = codeTaille(k.empreinte); !t.empty()) return t;
+  // « 10k 0603 » : le boîtier écrit dans la valeur
+  std::string mot;
+  for (char ch : k.valeur + " ") {
+    if (ch == ' ') {
+      if (mot.size() == 4 && std::all_of(mot.begin(), mot.end(), [](char x) { return x >= '0' && x <= '9'; })) return mot;
+      mot.clear();
+    } else
+      mot += ch;
+  }
+  return {};
+}
+
+std::vector<std::string> composantsDeRegle(const ConceptionElec& c, const RegleEquivalence& r, bool aussiAffectes) {
+  std::vector<std::string> v;
+  for (const auto& k : c.composants) {
+    if (k.horsCarte || (!aussiAffectes && !k.empreinte.empty())) continue;
+    if (r.famille != FamilleValeur::Aucune && familleDe(c, k) != r.famille) continue;
+    if (!r.reference.empty() && !correspondJoker(r.reference, k.reference)) continue;
+    if (!r.boitier.empty() && boitierDeComposant(k) != r.boitier) continue;
+    if (!r.valeur.empty()) {
+      // « 100n* » : le motif sur la valeur sans le boîtier qu'elle peut porter
+      std::string val = k.valeur;
+      if (const auto b = boitierDeComposant(k); !b.empty())
+        if (const auto i = val.find(" " + b); i != std::string::npos) val.erase(i);
+      ComposantElec sans = k;
+      sans.valeur = val;
+      if (!valeurVisee(c, sans, r.valeur)) continue;
+    }
+    v.push_back(k.uuid);
+  }
+  return v;
+}
+
+int appliquerEquivalences(ConceptionElec& c, const std::vector<RegleEquivalence>& regles, bool aussiAffectes, std::vector<std::string>* journal) {
+  exigerModifiable(c);
+  std::set<std::string> faits;
+  int n = 0;
+  for (const auto& r : regles) {
+    if (!c.empreinte(r.empreinte)) {
+      if (journal) journal->push_back("« " + r.texte + " » : empreinte « " + r.empreinte + " » introuvable");
+      continue;
+    }
+    std::vector<std::string> vises;
+    for (const auto& id : composantsDeRegle(c, r, aussiAffectes))
+      if (faits.insert(id).second) vises.push_back(id);
+    const int k = echangerEmpreintesEnMasse(c, vises, r.empreinte);
+    if (journal) journal->push_back("« " + r.texte + " » : " + std::to_string(k) + " composant" + (k > 1 ? "s" : "") + " affecté" + (k > 1 ? "s" : ""));
+    n += k;
+  }
+  return n;
 }
 
 }  // namespace prom::ecad

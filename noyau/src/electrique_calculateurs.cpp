@@ -1,6 +1,7 @@
 // Prométhée : boîte à calculs de l'électricien. Formules et règles : NF C 15-100 (CEI 60364), guide UTE C 15-105
 // (courts-circuits, longueurs protégées), CEI 60269 (fusibles gG), CEI/TR 60890 (échauffement des enveloppes), EN
 // 12464-1 (éclairements usuels), règlement de sécurité ERP (éclairage de sécurité). Licence GPL-3.0-only.
+#include "promethee/lignes_transmission.hpp"
 #include "promethee/electrique_calculateurs.hpp"
 
 #include <algorithm>
@@ -640,6 +641,80 @@ std::vector<Calculateur> construire() {
     };
     v.push_back(c);
   }
+  // ----- Lignes de transmission (8.21) : analyse et synthèse, moteur de lignes_transmission.cpp -----
+  {
+    const std::string LIGNES = "Lignes de transmission";
+    const std::vector<std::string> genres = {"Microruban", "Ruban (entre deux plans)", "Paire en microruban", "Paire en ruban"};
+    auto champsCommuns = [&](bool synthese) {
+      std::vector<ChampCalcul> ch = {liste("genre", "Ligne", genres, 0),
+                                     nombre("er", "Permittivité εr", "", 4.3, 1, 15, 2, "à la fréquence de référence"),
+                                     nombre("tand", "Pertes tan δ", "", 0.02, 0, 0.1, 4),
+                                     nombre("h", "Diélectrique (microruban) ou écart entre plans (ruban)", "mm", 0.2, 0.01, 10, 3),
+                                     nombre("t", "Épaisseur du cuivre", "mm", 0.035, 0.005, 0.2, 3),
+                                     nombre(synthese ? "z" : "w", synthese ? "Impédance visée (Zdiff pour une paire)" : "Largeur", synthese ? "Ω" : "mm", synthese ? 50 : 0.35, synthese ? 10 : 0.01,
+                                            synthese ? 300 : 20, synthese ? 1 : 3),
+                                     nombre("s", "Écart de la paire", "mm", 0.15, 0.01, 10, 3),
+                                     nombre("f", "Fréquence", "GHz", 1, 0.001, 100, 3),
+                                     nombre("rq", "Rugosité (Hammerstad, RMS)", "µm", 0, 0, 10, 2),
+                                     liste("ds", "Diélectrique large bande (Djordjevic et Sarkar)", {"Non", "Oui"}, 1)};
+      return ch;
+    };
+    auto ligne = [](const V& x) {
+      return prom::ecad::LigneTransmission(static_cast<prom::ecad::GenreLigne>(choixDe(x[0])), {x[1], x[2], 1e9, 1e3, 1e12, choixDe(x[9]) == 1},
+                                           {0, 0, 0, x[8] * 1e-6});
+    };
+    auto lignes = [](const prom::ecad::ResultatLigne& R, bool paire, ResultatCalcul& r) {
+      if (paire) {
+        r.lignes.push_back({"Impédance différentielle", n(R.zDiff, 1) + " Ω", true});
+        r.lignes.push_back({"Mode impair / mode pair", n(R.zImpair, 1) + " / " + n(R.zPair, 1) + " Ω"});
+        r.lignes.push_back({"Mode commun", n(R.zCommun, 1) + " Ω"});
+      } else
+        r.lignes.push_back({"Impédance Z0", n(R.z0, 1) + " Ω", true});
+      r.lignes.push_back({"Permittivité effective", n(R.erEff, 3)});
+      r.lignes.push_back({"Retard", n(R.retard, 3) + " ps/mm"});
+      r.lignes.push_back({"Pertes du conducteur", n(R.pertesConducteur / 100, 4) + " dB/cm"});
+      r.lignes.push_back({"Pertes du diélectrique", n(R.pertesDielectrique / 100, 4) + " dB/cm"});
+    };
+    {
+      Calculateur c = fiche("ligne", "Impédance d’une ligne", LIGNES, "Impédance, retard et pertes d’une piste ou d’une paire au-dessus d’un plan ou entre deux plans.",
+                            "Hammerstad et Jensen, Kirschning et Jansen, Wadell, Cohn ; Djordjevic et Sarkar ; Hammerstad (rugosité)");
+      c.champs = champsCommuns(false);
+      c.calculer = [=](const V& x) {
+        ResultatCalcul r;
+        const bool paire = choixDe(x[0]) >= 2;
+        const prom::ecad::ResultatLigne R = ligne(x).analyser({x[5] * 1e-3, paire ? x[6] * 1e-3 : 0, x[3] * 1e-3, 0, x[4] * 1e-3, 0}, x[7] * 1e9);
+        lignes(R, paire, r);
+        r.formule = paire ? "Kirschning et Jansen (microruban) ou Cohn (ruban), modes pair et impair, dispersion comprise" : "Hammerstad et Jensen (microruban, dispersion de Kirschning et Jansen) ou Wadell (ruban)";
+        r.explication = "Les mêmes formules que le calculateur de KiCad, à moins de 2 % près ; le retard donne la vitesse de la couche aux règles d’accord.";
+        return r;
+      };
+      v.push_back(c);
+    }
+    {
+      Calculateur c = fiche("ligne-synthese", "Largeur pour une impédance", LIGNES, "La largeur de piste qui donne l’impédance visée (Zdiff pour une paire, à écart fixé).",
+                            "Synthèse par dichotomie sur le moteur d’analyse");
+      c.champs = champsCommuns(true);
+      c.calculer = [=](const V& x) {
+        ResultatCalcul r;
+        const bool paire = choixDe(x[0]) >= 2;
+        const prom::ecad::GeometrieLigne g{0, paire ? x[6] * 1e-3 : 0, x[3] * 1e-3, 0, x[4] * 1e-3, 0};
+        const auto w = ligne(x).largeurPour(x[5], g, x[7] * 1e9);
+        if (!w) {
+          r.lignes.push_back({"Largeur", "hors d’atteinte", true});
+          r.explication = "Aucune largeur raisonnable ne donne cette impédance sur ce diélectrique : change l’épaisseur ou l’écart.";
+          return r;
+        }
+        r.lignes.push_back({"Largeur", n(*w * 1e3, 3) + " mm", true});
+        prom::ecad::GeometrieLigne gw = g;
+        gw.largeur = *w;
+        lignes(ligne(x).analyser(gw, x[7] * 1e9), paire, r);
+        r.formule = "Z(w) décroissante : dichotomie sur w jusqu’à Z(w) = Z visée";
+        r.explication = "Arrondis la largeur au pas de ton fabricant puis reviens à l’analyse pour lire l’écart.";
+        return r;
+      };
+      v.push_back(c);
+    }
+  }
   return v;
 }
 
@@ -657,7 +732,7 @@ const Calculateur* calculateur(const std::string& id) {
 }
 
 const std::vector<std::string>& famillesCalculateurs() {
-  static const std::vector<std::string> f = {"Câbles et protections", "Puissance et réseau", "Terre et sécurité", "Éclairage", "Bases et conversions"};
+  static const std::vector<std::string> f = {"Câbles et protections", "Puissance et réseau", "Terre et sécurité", "Éclairage", "Bases et conversions", "Lignes de transmission"};
   return f;
 }
 

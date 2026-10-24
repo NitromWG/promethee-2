@@ -10,6 +10,8 @@
 #include <vector>
 
 #include <QDialog>
+#include <QPixmap>
+#include <QWidget>
 
 #include "promethee/remplacement.hpp"
 
@@ -33,6 +35,15 @@ class DialogueRemplacer : public QDialog {
   QTreeWidget* apercu() const { return m_apercu; }
   // Applique (rend le nombre de composants remplacés) ; l'erreur s'écrit dans la fenêtre
   int appliquer();
+  // Portée de la mise à jour en masse (4.20) : motifs à jokers sur le repère et la valeur, dans toute la conception ;
+  // rend le nombre de composants visés
+  int appliquerPortee(const QString& repere, const QString& valeur);
+  const std::vector<std::string>& composants() const { return m_composants; }
+  // Comparaison en superposition : ancien symbole (A) et nouveau (B), transparence de 0 (A seul) à 100 (B seul)
+  void reglerTransparence(int pourcent);
+  int transparence() const;
+  void basculerAB();
+  class Superposition* superposition() const { return m_superposition; }
 
  private:
   void majApercu();
@@ -48,4 +59,27 @@ class DialogueRemplacer : public QDialog {
   QTreeWidget* m_apercu;
   QLabel* m_bilan;
   QPushButton* m_ok;
+  QLineEdit *m_porteeRepere, *m_porteeValeur;
+  QLabel* m_porteeBilan;
+  class Superposition* m_superposition;
+  class QSlider* m_transparence;
+  QPushButton* m_ab;
+};
+
+// Deux images superposées, la seconde fondue sur la première selon la transparence (0 : A seule, 1 : B seule)
+class Superposition : public QWidget {
+  Q_OBJECT
+ public:
+  explicit Superposition(QWidget* parent = nullptr);
+  void montrer(const QPixmap& a, const QPixmap& b);
+  void reglerFondu(double t);
+  double fondu() const { return m_t; }
+  QImage image() { return grab().toImage(); }
+
+ protected:
+  void paintEvent(QPaintEvent*) override;
+
+ private:
+  QPixmap m_a, m_b;
+  double m_t = 0.5;
 };

@@ -143,8 +143,8 @@ bool AtelierElectronique::exporterTypon(const QString& chemin, const OptionsTypo
   // Règle de contrôle : 50 mm entre les traits extrêmes
   g.setPen(QPen(Qt::black, 0.2 * u));
   const double y = (hc + 4) * u;
-  g.drawLine(QPointF(2 * u, y), QPointF(52 * u, y));
-  for (int k2 = 0; k2 <= 50; k2 += 10) g.drawLine(QPointF((2 + k2) * u, y - 1.5 * u), QPointF((2 + k2) * u, y + 1.5 * u));
+  g.drawLine(QPointF(2 * u, y), QPointF((2 + 50 * m.echelleX) * u, y));
+  for (int k2 = 0; k2 <= 50; k2 += 10) g.drawLine(QPointF((2 + k2 * m.echelleX) * u, y - 1.5 * u), QPointF((2 + k2 * m.echelleX) * u, y + 1.5 * u));
   QFont f(QStringLiteral("Sans"));
   f.setPixelSize(static_cast<int>(2 * u));
   g.setFont(f);
@@ -178,6 +178,25 @@ void AtelierElectronique::exporterTyponInteractif() {
   centrage->setSuffix(QStringLiteral(" mm"));
   centrage->setSpecialValueText(QStringLiteral("trous réels"));
   fl->addRow(QStringLiteral("Point de centrage des perçages"), centrage);
+  // Compensation de l'imprimante (8.29) : longueur lue sur la règle de 50 mm d'une première impression
+  auto* regleX = new QDoubleSpinBox;
+  regleX->setRange(40, 60);
+  regleX->setDecimals(2);
+  regleX->setValue(50);
+  regleX->setSuffix(QStringLiteral(" mm"));
+  fl->addRow(QStringLiteral("Règle de 50 mm mesurée en X"), regleX);
+  auto* regleY = new QDoubleSpinBox;
+  regleY->setRange(40, 60);
+  regleY->setDecimals(2);
+  regleY->setValue(50);
+  regleY->setSuffix(QStringLiteral(" mm"));
+  fl->addRow(QStringLiteral("Règle de 50 mm mesurée en Y"), regleY);
+  auto* correction = new QDoubleSpinBox;
+  correction->setRange(-0.2, 0.2);
+  correction->setDecimals(3);
+  correction->setSingleStep(0.01);
+  correction->setSuffix(QStringLiteral(" mm"));
+  fl->addRow(QStringLiteral("Correction de largeur des pistes"), correction);
   auto* aide = new QLabel(QStringLiteral("La face dessous se lit côté cuivre, donc déjà en miroir. Imprime à 100 % et vérifie la règle de 50 mm."));
   aide->setWordWrap(true);
   fl->addRow(aide);
@@ -193,6 +212,9 @@ void AtelierElectronique::exporterTyponInteractif() {
   o.miroirTransfert = miroir->isChecked();
   o.negatif = negatif->isChecked();
   o.trouCentrage = centrage->value();
+  o.echelleX = facteurEchelleTypon(regleX->value());
+  o.echelleY = facteurEchelleTypon(regleY->value());
+  o.correctionLargeur = correction->value();
   const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Typon"), q(c->nom) + QStringLiteral(" - typon ") + QString::fromUtf8(codeCouche(o.couche)) + QStringLiteral(".pdf"),
                                                  QStringLiteral("PDF (*.pdf);;SVG (*.svg)"));
   if (f.isEmpty()) return;

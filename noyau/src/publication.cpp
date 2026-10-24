@@ -12,6 +12,7 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "promethee/controles_fabrication.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/fabrication_avancee.hpp"
 #include "promethee/fichiers.hpp"
@@ -183,6 +184,10 @@ Validation valider(const ConceptionElec& c, const Connectivite& k, const EtatRou
       if (pistes) signaler(fabrication, Gravite::Erreur, "DFM-15", std::to_string(pistes) + " piste(s) plus fine(s) que " + mmTexte(M.largeurMin), "Élargis-les : le fabricant ne sait pas les graver.");
       if (vias) signaler(fabrication, Gravite::Erreur, "DFM-16", std::to_string(vias) + " via(s) percée(s) sous " + mmTexte(M.percageMin), "Agrandis leur perçage.");
     }
+    // Contrôles de fabrication et d'assemblage décrits en données (8.17) : pièges à acide, copeaux de vernis, écarts
+    // de machine et de retouche, soulèvement, pâte sur via, MSL ; la nomenclature a déjà son étape (BOM-02)
+    for (const auto& x : controlerFabrication(c).constats)
+      if (x.code != "DFM-27") signaler(fabrication, x.gravite, x.code, x.message, x.conseil, x.objets);
     fabrication.score = borne(100 - 30.0 * fabrication.erreurs - 5.0 * fabrication.avertissements);
   }
   // Documentation : cartouche
@@ -332,7 +337,7 @@ std::vector<std::string> controlerDossierFabrication(const ConceptionElec& c, co
       for (std::size_t i = g.find("\nX"); i != std::string::npos; i = g.find("\nX", i + 2)) {
         long long x = 0, y = 0;
         if (std::sscanf(g.c_str() + i + 1, "X%lldY%lld", &x, &y) != 2) continue;
-        const Pt q = depuisRepereFabrication(boite(m.contour), {static_cast<Nm>(x), static_cast<Nm>(y)});
+        const Pt q = depuisRepereFabrication(m.repere, {static_cast<Nm>(x), static_cast<Nm>(y)});
         const Nm px = q.x, py = q.y;
         if (premier) { x0 = x1 = px; y0 = y1 = py; premier = false; }
         x0 = std::min(x0, px); x1 = std::max(x1, px); y0 = std::min(y0, py); y1 = std::max(y1, py);
@@ -358,7 +363,7 @@ std::vector<std::string> controlerDossierFabrication(const ConceptionElec& c, co
       double x = 0, y = 0;
       if (std::sscanf(e.c_str() + i + 1, "X%lfY%lf", &x, &y) != 2) continue;
       ++coups;
-      const Pt p = depuisRepereFabrication(carte, {static_cast<Nm>(std::llround(x * 1e6)), static_cast<Nm>(std::llround(y * 1e6))});
+      const Pt p = depuisRepereFabrication(m.repere, {static_cast<Nm>(std::llround(x * 1e6)), static_cast<Nm>(std::llround(y * 1e6))});
       if (!carte.gonflee(1000).contient(p)) d.push_back(nom + " : un trou hors de la carte");
     }
     const std::size_t attendus = static_cast<std::size_t>(std::count_if(m.trous.begin(), m.trous.end(), [&](const TrouFab& t) { return t.metallise == metallises; }));

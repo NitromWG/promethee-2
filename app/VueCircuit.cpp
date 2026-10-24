@@ -15,6 +15,7 @@
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QDragEnterEvent>
+#include <QClipboard>
 #include <QMimeData>
 #include <QInputDialog>
 #include <QMenu>
@@ -138,6 +139,9 @@ void VueCircuit::setConception(int i) {
     if (m_sel == m_selPropre) m_sel->vider();
     majSelectionVue();
     m_outils.actif()->annulerTrace();  // un tracé commencé sur une autre carte ne se pose pas sur celle-ci
+    // Couches visibles telles que le projet les a gardées (5.12, C24)
+    if (const ConceptionElec* c = conception())
+      for (std::size_t k = 0; k < m_visibles.size() && k < 64; ++k) m_visibles[k] = (c->circuit.affichage.couchesVisibles >> k) & 1U;
     recadrer();
   }
   // Couche active absente de l'empilage (carte simple face : cuivre dessous seulement)
@@ -469,7 +473,23 @@ void VueCircuit::setCoucheActive(Couche c) {
 }
 
 void VueCircuit::setCoucheVisible(Couche c, bool v) {
+  if (m_visibles[static_cast<std::size_t>(c)] == v) return;
   m_visibles[static_cast<std::size_t>(c)] = v;
+  // Visibilité gardée dans l'affichage du projet, d'une ouverture à l'autre (5.12, C24), sans pas d'annulation ;
+  // écrite une fois les clics finis, pour ne pas relancer les calculs à chaque couche
+  const std::uint64_t gen = ++m_generationVisibles;
+  QTimer::singleShot(600, this, [this, gen] {
+    if (gen != m_generationVisibles) return;
+    const int ci = m_conception;
+    Couches visibles = 0;
+    for (std::size_t i = 0; i < m_visibles.size() && i < 64; ++i)
+      if (m_visibles[i]) visibles |= Couches{1} << i;
+    const ConceptionElec* c = conception();
+    if (!c || c->circuit.affichage.couchesVisibles == visibles) return;
+    m_doc->reglerSansHistorique([&](prom::Projet& p) {
+      if (ci >= 0 && ci < static_cast<int>(p.electronique.size())) p.electronique[static_cast<std::size_t>(ci)].circuit.affichage.couchesVisibles = visibles;
+    });
+  });
   update();
 }
 
@@ -1075,73 +1095,109 @@ std::string VueCircuit::poserTexte(Pt p, const std::string& texte) {
 }
 
 // ---------- Presse-papiers du cuivre (EL-22) ----------
+namespace {
+const QString MIME_CIRCUIT = QStringLiteral("application/x-promethee-circuit");
+}  // namespace
+
 void VueCircuit::copier() {
   const ConceptionElec* c = conception();
   if (!c) return;
-  PressePapiers p;
-  Boite b;
-  for (const auto& t : c->circuit.pistes)
-    if (estChoisi(Genre::Piste, t.uuid)) { p.pistes.push_back(t); b.etendre(t.a); b.etendre(t.b); }
-  for (const auto& v : c->circuit.vias)
-    if (estChoisi(Genre::Via, v.uuid)) { p.vias.push_back(v); b.etendre(v.p); }
-  for (const auto& z : c->circuit.zones)
-    if (estChoisi(Genre::Zone, z.uuid)) { p.zones.push_back(z); b.etendre(boite(z.contour)); }
-  for (const auto& t : c->circuit.textes)
-    if (estChoisi(Genre::Texte, t.uuid)) { p.textes.push_back(t); b.etendre(t.p); }
-  if (p.pistes.empty() && p.vias.empty() && p.zones.empty() && p.textes.empty()) {
-    emit message(QStringLiteral("Rien à copier : choisis des pistes, des vias ou des zones (les empreintes se copient dans le schéma)."));
+  std::set<std::string> ids;
+  for (const auto& o : m_selection) ids.insert(o.id);
+  PressePapiersCircuit p = copierCircuit(*c, ids);
+  if (p.vide()) {
+    emit message(QStringLiteral("Rien à copier : choisis des empreintes, des pistes, des vias, des zones ou des textes."));
     return;
   }
-  p.origine = surGrille(b.centre(), pasPlacement());
+  // Point de référence sur la grille : le collage le pose sous la souris
+  p.reference = surGrille(p.reference, pasPlacement());
   m_presse = p;
-  emit message(QStringLiteral("%1 piste(s), %2 via(s), %3 zone(s) copiée(s).").arg(p.pistes.size()).arg(p.vias.size()).arg(p.zones.size()));
+  const QByteArray json = QByteArray::fromStdString(presseCircuitVersJson(p).dump());
+  auto* mime = new QMimeData;
+  mime->setData(MIME_CIRCUIT, json);
+  QApplication::clipboard()->setMimeData(mime);
+  emit message(QStringLiteral("%1 empreinte(s), %2 piste(s), %3 via(s), %4 zone(s) copiée(s) ; elles se collent dans une autre vue ou un autre projet.")
+                   .arg(p.empreintes.size())
+                   .arg(p.pistes.size())
+                   .arg(p.vias.size())
+                   .arg(p.zones.size()));
 }
 
-void VueCircuit::coller() {
-  if (!peutColler() || refuseVerrou()) return;
+bool VueCircuit::peutColler() const {
+  if (!m_presse.vide()) return true;
+  const QMimeData* m = QApplication::clipboard()->mimeData();
+  return m && m->hasFormat(MIME_CIRCUIT);
+}
+
+void VueCircuit::coller() { collerAvec({}); }
+
+void VueCircuit::collerAvec(const OptionsCollageCircuit& o) {
+  if (refuseVerrou()) return;
+  PressePapiersCircuit p = m_presse;
+  if (const QMimeData* m = QApplication::clipboard()->mimeData(); m && m->hasFormat(MIME_CIRCUIT)) {
+    const auto j = nlohmann::ordered_json::parse(m->data(MIME_CIRCUIT).toStdString(), nullptr, false);
+    if (!j.is_discarded()) {
+      PressePapiersCircuit lu = presseCircuitDepuisJson(j);
+      if (!lu.vide()) p = std::move(lu);
+    }
+  }
+  if (p.vide()) return;
   const QPointF souris = rect().contains(m_souris.toPoint()) ? m_souris : QPointF(width() / 2.0, height() / 2.0);
-  const Pt d = surGrille(monde(souris), pasPlacement()) - m_presse.origine;
+  const Pt ou = surGrille(monde(souris), pasPlacement());
+  std::set<std::string> crees;
+  modifier([&](ConceptionElec& c) { crees = collerCircuit(c, p, ou, o); });
   std::vector<ObjetChoisi> colles;
-  modifier([&](ConceptionElec& c) {
-    for (Piste t : m_presse.pistes) {
-      t.uuid = nouvelUuid();
-      t.a = t.a + d;
-      t.b = t.b + d;
-      colles.push_back({Genre::Piste, t.uuid});
-      c.circuit.pistes.push_back(t);
-    }
-    for (Via v : m_presse.vias) {
-      v.uuid = nouvelUuid();
-      v.p = v.p + d;
-      colles.push_back({Genre::Via, v.uuid});
-      c.circuit.vias.push_back(v);
-    }
-    for (Zone z : m_presse.zones) {
-      z.uuid = nouvelUuid();
-      for (Pt& p : z.contour) p = p + d;
-      colles.push_back({Genre::Zone, z.uuid});
-      c.circuit.zones.push_back(z);
-    }
-    for (TexteCircuit t : m_presse.textes) {
-      t.uuid = nouvelUuid();
-      t.p = t.p + d;
-      colles.push_back({Genre::Texte, t.uuid});
-      c.circuit.textes.push_back(t);
-    }
-  });
+  if (const ConceptionElec* c = conception()) {
+    for (const auto& e : c->circuit.empreintes)
+      if (crees.count(e.composant)) colles.push_back({Genre::Empreinte, e.composant});
+    for (const auto& t : c->circuit.pistes)
+      if (crees.count(t.uuid)) colles.push_back({Genre::Piste, t.uuid});
+    for (const auto& v : c->circuit.vias)
+      if (crees.count(v.uuid)) colles.push_back({Genre::Via, v.uuid});
+    for (const auto& z : c->circuit.zones)
+      if (crees.count(z.uuid)) colles.push_back({Genre::Zone, z.uuid});
+    for (const auto& t : c->circuit.textes)
+      if (crees.count(t.uuid)) colles.push_back({Genre::Texte, t.uuid});
+  }
   setSelection(colles);
-  emit message(QStringLiteral("Collé sous la souris : le cuivre garde son réseau ; la DRC signale tout court-circuit."));
+  emit message(o.garderReseaux ? QStringLiteral("Collé sous la souris : le cuivre garde son réseau ; la DRC signale tout court-circuit.")
+                               : QStringLiteral("Collé sous la souris, sans réseau : le cuivre prendra celui des pastilles qu’il touche."));
+}
+
+Pt VueCircuit::pointSouris() const {
+  const QPointF souris = rect().contains(m_souris.toPoint()) ? m_souris : QPointF(width() / 2.0, height() / 2.0);
+  return surGrille(monde(souris), pasPlacement());
 }
 
 void VueCircuit::dupliquer() {
-  const PressePapiers garde = m_presse;
-  copier();
-  if (!peutColler()) { m_presse = garde; return; }
+  const PressePapiersCircuit garde = m_presse;
+  const ConceptionElec* c = conception();
+  if (!c) return;
+  std::set<std::string> ids;
+  for (const auto& o : m_selection) ids.insert(o.id);
+  PressePapiersCircuit p = copierCircuit(*c, ids);
+  if (p.vide()) return;
+  // Dupliquer ne passe pas par le presse-papiers du système et le laisse tel quel
+  m_presse = p;
   const QPointF ancienne = m_souris;
-  m_souris = ecran(m_presse.origine + Pt{NM_PAR_MM, NM_PAR_MM});
-  coller();
+  m_souris = ecran(p.reference + Pt{NM_PAR_MM, NM_PAR_MM});
+  std::set<std::string> crees;
+  OptionsCollageCircuit o;
+  modifier([&](ConceptionElec& x) { crees = collerCircuit(x, p, p.reference + Pt{NM_PAR_MM, NM_PAR_MM}, o); });
   m_souris = ancienne;
-  m_presse = garde;  // dupliquer ne touche pas au presse-papiers
+  m_presse = garde;
+  std::vector<ObjetChoisi> colles;
+  if (const ConceptionElec* x = conception()) {
+    for (const auto& e : x->circuit.empreintes)
+      if (crees.count(e.composant)) colles.push_back({Genre::Empreinte, e.composant});
+    for (const auto& t : x->circuit.pistes)
+      if (crees.count(t.uuid)) colles.push_back({Genre::Piste, t.uuid});
+    for (const auto& v : x->circuit.vias)
+      if (crees.count(v.uuid)) colles.push_back({Genre::Via, v.uuid});
+    for (const auto& z : x->circuit.zones)
+      if (crees.count(z.uuid)) colles.push_back({Genre::Zone, z.uuid});
+  }
+  setSelection(colles);
 }
 
 // ---------- Routage ----------
@@ -1197,14 +1253,26 @@ void VueCircuit::dessinerCouche(QPainter& g, Couche couche, double opacite) {
   }
   // Pistes groupées par largeur, un seul appel par largeur (9.2 : une grande carte se repeint en une fraction du temps)
   std::map<Nm, QVector<QLineF>> parLargeur;
+  std::vector<const Piste*> formees;  // segments effilés ou à bouts carrés : leur contour exact (5.22)
   for (const auto& t : c->circuit.pistes) {
     if (t.couche != couche || exclu(t.uuid)) continue;
-    parLargeur[t.largeur].append(QLineF(ecran(t.a), ecran(t.b)));
+    if (!t.milieu && (t.largeurFin > 0 || t.boutsCarres)) {
+      formees.push_back(&t);
+      continue;
+    }
+    if (t.milieu)
+      for (const auto& [a, b] : segmentsPiste(t)) parLargeur[t.largeur].append(QLineF(ecran(a), ecran(b)));  // arc (8.4)
+    else
+      parLargeur[t.largeur].append(QLineF(ecran(t.a), ecran(t.b)));
   }
   for (const auto& [largeur, traits] : parLargeur) {
     g.setPen(QPen(col, std::max(1.0, mm(largeur) * m_echelle), Qt::SolidLine, Qt::RoundCap));
     g.drawLines(traits);
   }
+  for (const Piste* t : formees) g.fillPath(chemin(formePiste(*t), e), col);
+  // Régions de cuivre : gouttes, logos, cuivre propre à la carte (5.22, 5.31, 7.24)
+  for (const auto& r : c->circuit.regions)
+    if (r.couche == couche && r.forme.size() >= 3) g.fillPath(chemin({r.forme}, e), col);
   g.setPen(Qt::NoPen);
   g.setBrush(col);
   QPolygonF poly;
@@ -1428,9 +1496,31 @@ void VueCircuit::peindreFixe(QPainter& g, const ConceptionElec& cref) {
         for (const Pt q : d.points) poly << ecran(q);
         g.drawPolygon(poly);
         break;
+      case DessinCircuit::Forme::Rectangle:
+      case DessinCircuit::Forme::Bezier:
+        for (const Pt q : contourDessin(d)) poly << ecran(q);
+        if (d.forme == DessinCircuit::Forme::Rectangle) g.drawPolygon(poly);
+        else g.drawPolyline(poly);
+        break;
     }
   }
   g.setBrush(Qt::NoBrush);
+  // Cotes (5.15, 5.31) : traits, flèches et valeur, sur leur couche de dessin
+  for (const auto& k : c->circuit.cotes) {
+    if (!coucheVisible(k.couche)) continue;
+    const GeometrieCote gc = geometrieCote(k);
+    g.setPen(QPen(QColor(0xD0, 0xB0, 0x60), std::max(1.0, mm(k.epaisseur) * m_echelle)));
+    for (const auto& [a, b] : gc.traits) g.drawLine(ecran(a), ecran(b));
+    if (gc.valeur.empty()) continue;
+    QFont f = g.font();
+    f.setPixelSize(std::max(8, static_cast<int>(mm(k.hauteurTexte) * m_echelle)));
+    g.save();
+    g.setFont(f);
+    g.translate(ecran(gc.texte));
+    g.rotate(-gc.angle);
+    g.drawText(QRectF(-400, -f.pixelSize(), 800, 2.0 * f.pixelSize()), Qt::AlignCenter, QString::fromStdString(gc.valeur));
+    g.restore();
+  }
   // Chevelu (pas pendant un glissement rapide : il suit à la fin du geste)
   if (m_calc && !m_exclus) {
     g.setPen(QPen(CHEVELU, 1));
@@ -1929,6 +2019,7 @@ void VueCircuit::mouseReleaseEvent(QMouseEvent* ev) {
       if (outil() == Outil::Router && m_outils.actif()->geste()) menuRoutage(ev->position());
       else if (const auto l = outil() == Outil::Selection ? liaisonSous(ev->position()) : std::nullopt) menuLiaison(ev->position(), *l);
       else if (const auto coin = outil() == Outil::Selection ? coinSous(ev->position()) : std::nullopt) menuCoin(ev->position(), coin->first, coin->second);
+      else if (const ObjetChoisi op = outil() == Outil::Selection ? objetSous(ev->position()) : ObjetChoisi{}; op.genre == Genre::Piste) menuPiste(ev->position(), op.id);
       else if (const int ie = outil() == Outil::Selection ? empreinteSous(monde(ev->position())) : -1; ie >= 0 && conception())
         menuEmpreinte(ev->position(), conception()->circuit.empreintes[static_cast<std::size_t>(ie)].composant);
       else if (!m_outils.actif()->echap() && outil() != Outil::Selection) setOutil(Outil::Selection);
@@ -2344,6 +2435,67 @@ std::string VueCircuit::routerLiaisonChoisie(const Liaison& l) {
   return {};
 }
 
+void VueCircuit::menuPiste(QPointF q, const std::string& id) {
+  auto* menu = new QMenu(this);
+  menu->setObjectName(QStringLiteral("menuPiste"));
+  menu->setAttribute(Qt::WA_DeleteOnClose);
+  std::string reseau;
+  if (const ConceptionElec* c = conception())
+    for (const auto& t : c->circuit.pistes)
+      if (t.uuid == id) reseau = t.reseau;
+  menu->addSection(QStringLiteral("Piste %1").arg(QString::fromStdString(reseau)));
+  const Pt w = monde(q);
+  menu->addAction(QStringLiteral("Couper ici"), this, [this, id, w] {
+        if (!refuseVerrou()) modifier([&](ConceptionElec& c) { couperPiste(c, id, w); });
+      })->setObjectName(QStringLiteral("couperIci"));
+  menu->addAction(QStringLiteral("Trancher ici (0,5 mm)"), this, [this, id, w] {
+        if (!refuseVerrou()) modifier([&](ConceptionElec& c) { trancherPiste(c, id, w, 500'000); });
+      })->setObjectName(QStringLiteral("trancherIci"));
+  menu->addAction(QStringLiteral("Choisir la connexion"), this, [this, id] { choisirChaine(id, false); });
+  menu->addAction(QStringLiteral("Lisser la connexion"), this, [this, id, reseau] {
+        if (refuseVerrou()) return;
+        int n = 0;
+        modifier([&](ConceptionElec& c) {
+          std::set<std::string> ids;
+          for (const auto& t : c.circuit.pistes)
+            if (t.reseau == reseau) ids.insert(t.uuid);
+          n = lisser(c, ids);
+        });
+        emit message(QStringLiteral("%1 coin(s) coupé(s) à 45° sur « %2 ».").arg(n).arg(QString::fromStdString(reseau).toHtmlEscaped()));
+      })->setObjectName(QStringLiteral("lisserConnexion"));
+  menu->addAction(QStringLiteral("Dérouter la connexion"), this, [this, id] {
+        if (!refuseVerrou()) modifier([&](ConceptionElec& c) { derouter(c, "connexion:" + id); });
+      })->setObjectName(QStringLiteral("derouterConnexion"));
+  menu->addAction(QStringLiteral("Surligner le réseau"), this, [this, reseau] { setReseauSurligne(reseau); });
+  menu->popup(mapToGlobal(q.toPoint()));
+}
+
+std::pair<int, int> VueCircuit::sommetContourSous(QPointF q) const {
+  const ConceptionElec* c = conception();
+  if (!c) return {-2, -1};
+  for (int b = -1; b < static_cast<int>(c->circuit.contour.decoupes.size()); ++b) {
+    const auto s = sommetsContour(*c, b);
+    for (std::size_t i = 0; i < s.size(); ++i)
+      if (QLineF(ecran(s[i]), q).length() <= 6) return {b, static_cast<int>(i)};
+  }
+  return {-2, -1};
+}
+
+std::tuple<int, int, Pt> VueCircuit::areteContourSous(QPointF q) const {
+  const ConceptionElec* c = conception();
+  if (!c) return {-2, -1, {}};
+  const Pt w = monde(q);
+  const double tol = 5.0 / std::max(m_echelle, 1e-9) * 1e6;
+  for (int b = -1; b < static_cast<int>(c->circuit.contour.decoupes.size()); ++b) {
+    const auto s = sommetsContour(*c, b);
+    for (std::size_t i = 0; i < s.size(); ++i) {
+      const Pt a = s[i], z = s[(i + 1) % s.size()];
+      if (distancePointSegment(w, a, z) <= tol) return {b, static_cast<int>(i), surGrille(projeteSurSegment(w, a, z), pasRoutage())};
+    }
+  }
+  return {-2, -1, {}};
+}
+
 void VueCircuit::menuLiaison(QPointF q, const Liaison& l) {
   auto* menu = new QMenu(this);
   menu->setObjectName(QStringLiteral("menuLiaison"));
@@ -2440,6 +2592,24 @@ void VueCircuit::menuEmpreinte(QPointF q, const std::string& composant) {
   for (const auto& o : m_selection)
     if (o.genre == Genre::Empreinte) ids.push_back(o.id);
   if (std::find(ids.begin(), ids.end(), composant) == ids.end()) ids = {composant};
+  // Origine de travail au centre de l'empreinte (5.31) : un trou de fixation y lit 0 ; 0
+  QAction* origine = menu->addAction(QStringLiteral("Origine de travail ici"), this, [this, composant] {
+    const ConceptionElec* cc = conception();
+    if (!cc) return;
+    Pt centre{};
+    for (const auto& e : cc->circuit.empreintes)
+      if (e.composant == composant)
+        if (const DefEmpreinte* d = cc->empreinte(e.empreinte)) centre = versCarte(e, pointDePlacement(*d));
+    const int ci = m_conception;
+    m_doc->reglerSansHistorique([&](prom::Projet& p) {
+      if (ci < 0 || ci >= static_cast<int>(p.electronique.size())) return;
+      AffichageCircuit& a = p.electronique[static_cast<std::size_t>(ci)].circuit.affichage;
+      a.origineTravail = centre;
+      a.yVersLeHaut = true;
+    });
+    emit message(QStringLiteral("Origine de travail au centre de l’empreinte, y vers le haut : l’inspecteur, les mesures et les cotes s’y rapportent."));
+  });
+  origine->setObjectName(QStringLiteral("origineIci"));
   QAction* x = menu->addAction(QStringLiteral("Contour décalé de 0,25 mm autour des pastilles"), this, [this, ids] { contourAutour(ids, 250'000, Couche::EncombrementDessus); });
   x->setObjectName(QStringLiteral("contourPastilles"));
   menu->popup(mapToGlobal(q.toPoint()));

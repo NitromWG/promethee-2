@@ -2,6 +2,7 @@
 // liste des réseaux, mise à jour du circuit imprimé depuis le schéma, pastilles placées. Licence GPL-3.0-only.
 #include "promethee/electronique.hpp"
 #include "promethee/articles.hpp"
+#include "promethee/schema_avance.hpp"
 #include "promethee/structure_schema.hpp"
 #include "promethee/synchronisation.hpp"
 #include "promethee/valeurs.hpp"
@@ -666,9 +667,12 @@ struct Unions {
     if (a != b) p[static_cast<std::size_t>(std::max(a, b))] = std::min(a, b);
   }
 };
-enum class Genre { Fil, Broche, Alim, Drapeau, Locale, Globale };
+// Hiérarchie (7.2) : une étiquette hiérarchique de la feuille fille rejoint le port de même nom du bloc qui la désigne,
+// sur la feuille mère ; une directive (7.14) ne relie que son point, sans nom
+enum class Genre { Fil, Broche, Alim, Drapeau, Locale, Globale, Hierarchique, Port, Directive, Virtuel };
 struct Element {
   int feuille = 0;
+  int cible = -1;  // port : la feuille fille du bloc
   Genre genre = Genre::Fil;
   std::string uuid, composant, broche, nom;
   TypeBroche type = TypeBroche::Passive;
@@ -727,6 +731,9 @@ int synchroniserReseaux(ConceptionElec& c, std::vector<std::string>* conflits) {
   std::map<std::string, std::string> figes;
   for (const auto& r : k.reseaux)
     for (const auto& b : r.broches) figes[cleBroche(b.composant, b.broche)] = r.nom;
+  // Composants posés sur la carte sans schéma (5.17) : leurs broches prennent leur réseau du cuivre, il est gardé
+  for (const auto& [cle, r] : c.nomsReseaux)
+    if (const ComposantElec* x = c.composant(cle.substr(0, cle.find(':'))); x && x->carteSeule && !figes.count(cle)) figes[cle] = r;
   c.nomsReseaux = std::move(figes);
   int n = 0;
   auto suivre = [&](std::string& reseau) {
@@ -810,13 +817,19 @@ Connectivite connectivite(const ConceptionElec& c) {
   Connectivite k;
   Unions u;
   std::vector<Element> elements;
+  // Ports de bus ou de faisceau des blocs (7.13) : feuille mère, feuille fille, membres développés
+  struct PortFaisceau {
+    int mere = 0, fille = 0;
+    std::vector<std::string> membres;
+  };
+  std::vector<PortFaisceau> portsFaisceaux;
   for (std::size_t f = 0; f < c.feuilles.size(); ++f) {
     const Feuille& F = c.feuilles[f];
     std::map<Pt, std::vector<int>> parPoint;
     std::vector<std::pair<int, const Fil*>> fils;
     // Bus (7.4) : leurs fils et l'étiquette qui les nomme ne relient rien ; les entrées se rejoignent par leur nom
     std::set<std::string> filsBus, etiquettesBus;
-    for (const auto& b : busDeFeuille(F)) {
+    for (const auto& b : busDeFeuille(F, &c.aliasBus)) {
       filsBus.insert(b.fils.begin(), b.fils.end());
       etiquettesBus.insert(b.etiquette);
     }
@@ -853,10 +866,29 @@ Connectivite connectivite(const ConceptionElec& c) {
     for (const auto& e : F.etiquettes) {
       if (etiquettesBus.count(e.uuid)) continue;
       Element x;
-      x.genre = e.type == TypeEtiquette::Locale ? Genre::Locale : Genre::Globale;  // un connecteur hors feuille relie comme une globale
+      // Un connecteur hors feuille relie comme une globale ; une étiquette hiérarchique rejoint le port du bloc mère
+      x.genre = e.type == TypeEtiquette::Locale ? Genre::Locale : e.type == TypeEtiquette::Hierarchique ? Genre::Hierarchique : e.type == TypeEtiquette::Directive ? Genre::Directive : Genre::Globale;
       x.uuid = e.uuid;
       x.nom = e.texte;
       nouveau(x, e.p);
+    }
+    for (const auto& bloc : F.blocs) {
+      int fille = -1;
+      for (std::size_t j = 0; j < c.feuilles.size(); ++j)
+        if (c.feuilles[j].uuid == bloc.feuille && j != f) fille = static_cast<int>(j);
+      for (const auto& port : bloc.ports) {
+        // Port de bus ou de faisceau : ses membres se rejoignent un à un, par leur nom, plus bas
+        if (!membresFaisceau(port.nom, c.aliasBus).empty()) {
+          if (fille >= 0) portsFaisceaux.push_back({static_cast<int>(f), fille, membresFaisceau(port.nom, c.aliasBus)});
+          continue;
+        }
+        Element x;
+        x.genre = Genre::Port;
+        x.uuid = port.uuid;
+        x.nom = port.nom;
+        x.cible = fille;
+        nouveau(x, port.p);
+      }
     }
     for (auto& [p, v] : parPoint)
       for (std::size_t i = 1; i < v.size(); ++i) u.unir(v[0], v[i]);
@@ -905,7 +937,7 @@ Connectivite connectivite(const ConceptionElec& c) {
   // Noms : alimentations et étiquettes globales dans tout le projet, étiquettes locales dans leur feuille
   {
     std::map<std::string, int> globaux;
-    std::map<std::pair<int, std::string>, int> locaux;
+    std::map<std::pair<int, std::string>, int> locaux, hierarchiques;
     for (std::size_t i = 0; i < elements.size(); ++i) {
       const Element& e = elements[i];
       if (e.genre == Genre::Alim || e.genre == Genre::Globale) {
@@ -914,8 +946,34 @@ Connectivite connectivite(const ConceptionElec& c) {
       } else if (e.genre == Genre::Locale) {
         const auto [it, neuf] = locaux.emplace(std::make_pair(e.feuille, e.nom), static_cast<int>(i));
         if (!neuf) u.unir(it->second, static_cast<int>(i));
+      } else if (e.genre == Genre::Hierarchique || (e.genre == Genre::Port && e.cible >= 0)) {
+        // Clé : la feuille fille et le nom ; le port d'un bloc porte celle de sa fille
+        const int feuille = e.genre == Genre::Port ? e.cible : e.feuille;
+        const auto [it, neuf] = hierarchiques.emplace(std::make_pair(feuille, e.nom), static_cast<int>(i));
+        if (!neuf) u.unir(it->second, static_cast<int>(i));
       }
     }
+    // Membres d'un bus ou d'un faisceau passés par un port : un nœud par (feuille, membre), relié au nom du membre
+    // dans cette feuille (étiquette locale, hiérarchique ou globale) ; le port relie le nœud de la mère à celui de la
+    // fille, un membre à la fois. Un niveau intermédiaire qui ne nomme pas les membres les laisse passer ; aucun autre
+    // nom n'est réuni
+    std::map<std::pair<int, std::string>, int> virtuels;
+    auto virtuel = [&](int feuille, const std::string& m) {
+      if (const auto it = virtuels.find({feuille, m}); it != virtuels.end()) return it->second;
+      const int id = u.ajouter();
+      Element x;
+      x.genre = Genre::Virtuel;
+      x.nom = m;
+      x.feuille = feuille;
+      elements.push_back(std::move(x));
+      virtuels.emplace(std::pair{feuille, m}, id);
+      if (const auto l = locaux.find({feuille, m}); l != locaux.end()) u.unir(id, l->second);
+      if (const auto h = hierarchiques.find({feuille, m}); h != hierarchiques.end()) u.unir(id, h->second);
+      if (const auto g = globaux.find(m); g != globaux.end()) u.unir(id, g->second);
+      return id;
+    };
+    for (const auto& pf : portsFaisceaux)
+      for (const auto& m : pf.membres) u.unir(virtuel(pf.mere, m), virtuel(pf.fille, m));
   }
   // Une même broche posée plusieurs fois (broche commune des unités d'un symbole, alimentation d'un circuit
   // logique) est un seul point électrique. Si deux de ses poses tombent sur des réseaux déjà formés (chacun avec
@@ -933,7 +991,7 @@ Connectivite connectivite(const ConceptionElec& c) {
     std::map<int, int> poids;
     for (std::size_t i = 0; i < elements.size(); ++i) {
       racine[i] = u.racine(static_cast<int>(i));
-      if (elements[i].genre != Genre::Fil) ++poids[racine[i]];
+      if (elements[i].genre != Genre::Fil && elements[i].genre != Genre::Virtuel) ++poids[racine[i]];
     }
     // Seule la broche commune d'un symbole à plusieurs unités est gardée de l'union silencieuse : une borne posée
     // deux fois (atelier électrique, plan de bornier) ou deux points de connexion d'un même numéro sont un seul
@@ -988,6 +1046,8 @@ Connectivite connectivite(const ConceptionElec& c) {
     return oui;
   };
   for (std::size_t i = 0; i < elements.size(); ++i) {
+    // Les nœuds de passage d'un faisceau ne font pas de réseau à eux seuls
+    if (elements[i].genre == Genre::Virtuel) continue;
     const int rac = u.racine(static_cast<int>(i));
     auto [it, neuf] = parRacine.emplace(rac, bruts.size());
     if (neuf) bruts.emplace_back();
@@ -1002,7 +1062,11 @@ Connectivite connectivite(const ConceptionElec& c) {
       case Genre::Drapeau: b.r.alimente = true; break;
       case Genre::Alim: b.alims.insert(e.nom); break;
       case Genre::Globale: b.globales.insert(e.nom); break;
-      case Genre::Locale: b.locales.insert(e.nom); break;
+      case Genre::Locale:
+      case Genre::Hierarchique: b.locales.insert(e.nom); break;
+      case Genre::Port:
+      case Genre::Directive:
+      case Genre::Virtuel: break;
       case Genre::Fil: break;
     }
   }
@@ -1013,6 +1077,42 @@ Connectivite connectivite(const ConceptionElec& c) {
   std::set<std::string> pris, explicites;
   for (const Brut& b : bruts)
     for (const auto* ens : {&b.alims, &b.globales, &b.locales}) explicites.insert(ens->begin(), ens->end());
+  // Noms à chemin (5.14, E2) : un réseau nommé par une étiquette locale dont le nom sert aussi à un autre réseau prend
+  // le chemin de sa feuille (« /Alimentation/CLK ») ; l'ordre des feuilles ne change plus aucun nom, les anciens
+  // suffixes « #2 » restent des alias le temps que le cuivre soit renommé
+  std::vector<std::string> cheminFeuille(c.feuilles.size());
+  {
+    std::map<std::string, std::pair<std::size_t, std::string>> mere;  // feuille fille → (feuille mère, nom du bloc)
+    std::map<std::string, std::size_t> indice;
+    for (std::size_t i = 0; i < c.feuilles.size(); ++i) indice[c.feuilles[i].uuid] = i;
+    for (std::size_t i = 0; i < c.feuilles.size(); ++i)
+      for (const auto& bloc : c.feuilles[i].blocs)
+        if (const auto it = indice.find(bloc.feuille); it != indice.end() && it->second != i)
+          mere.emplace(bloc.feuille, std::pair{i, bloc.nom.empty() ? c.feuilles[it->second].nom : bloc.nom});
+    for (std::size_t i = 0; i < c.feuilles.size(); ++i) {
+      std::string chemin;
+      std::size_t f = i;
+      std::set<std::size_t> vues;
+      while (vues.insert(f).second) {
+        const auto it = mere.find(c.feuilles[f].uuid);
+        if (it == mere.end()) {
+          // Racine d'une hiérarchie : elle ne s'écrit pas dans le chemin de ses filles (« / » de KiCad), qui gardent
+          // le nom qu'elles avaient à plat (7.2 : une migration en hiérarchie ne renomme aucun réseau)
+          if (c.feuilles[f].blocs.empty() || chemin.empty()) chemin = "/" + c.feuilles[f].nom + chemin;
+          break;
+        }
+        chemin = "/" + it->second.second + chemin;
+        f = it->second.first;
+      }
+      cheminFeuille[i] = chemin;
+    }
+  }
+  std::map<std::string, int> usages;  // nom explicite → réseaux qui le portent
+  for (const Brut& b : bruts) {
+    std::set<std::string> siens;
+    for (const auto* ens : {&b.alims, &b.globales, &b.locales}) siens.insert(ens->begin(), ens->end());
+    for (const auto& n : siens) ++usages[n];
+  }
   for (Brut& b : bruts) {
     // Noms distincts (EL-09) : le même nom posé par une alimentation et une étiquette, ou sur deux feuilles, compte une fois
     for (const auto* ens : {&b.alims, &b.globales, &b.locales})
@@ -1029,7 +1129,17 @@ Connectivite connectivite(const ConceptionElec& c) {
     std::string nom;
     if (!b.alims.empty()) nom = *b.alims.begin();
     else if (!b.globales.empty()) nom = *b.globales.begin();
-    else if (!b.locales.empty()) nom = *b.locales.begin();
+    else if (!b.locales.empty()) {
+      nom = *b.locales.begin();
+      if (usages[nom] > 1)
+        for (int id : b.elements) {
+          const Element& e = elements[static_cast<std::size_t>(id)];
+          if ((e.genre == Genre::Locale || e.genre == Genre::Hierarchique) && e.nom == nom && e.feuille >= 0 && static_cast<std::size_t>(e.feuille) < cheminFeuille.size()) {
+            nom = cheminFeuille[static_cast<std::size_t>(e.feuille)] + "/" + nom;
+            break;
+          }
+        }
+    }
     b.r.nomme = !nom.empty();
     // Noms figés de ses broches (EL-01) : le réseau garde le nom que le cuivre connaît, même si un repère change
     std::vector<std::string> figes;
@@ -1064,7 +1174,7 @@ Connectivite connectivite(const ConceptionElec& c) {
       const Element& e = elements[static_cast<std::size_t>(id)];
       if (e.genre == Genre::Fil) k.parFil[e.uuid] = static_cast<int>(n);
       else if (e.genre == Genre::Broche && !e.composant.empty()) k.parBroche[{e.composant, e.broche}] = static_cast<int>(n);
-      else if (e.genre == Genre::Locale || e.genre == Genre::Globale) k.parEtiquette[e.uuid] = static_cast<int>(n);
+      else if (e.genre == Genre::Locale || e.genre == Genre::Globale || e.genre == Genre::Hierarchique || e.genre == Genre::Directive || e.genre == Genre::Port) k.parEtiquette[e.uuid] = static_cast<int>(n);
       else k.parSymbole[e.uuid] = static_cast<int>(n);
     }
   }
@@ -1510,22 +1620,17 @@ std::vector<Violation> verifierERC(const ConceptionElec& c, const Connectivite& 
   }
   // ERC-32 (7.4) : une entrée de bus qui porte un nom hors du bus (D8 sur D[0..7])
   for (const auto& f : c.feuilles)
-    for (const auto& b : busDeFeuille(f))
+    for (const auto& b : busDeFeuille(f, &c.aliasBus))
       for (const auto& [fil, nom] : b.entrees) {
-        if (nom.empty()) continue;
-        bool membre = nom.size() > b.nom.prefixe.size() && nom.compare(0, b.nom.prefixe.size(), b.nom.prefixe) == 0 &&
-                      std::all_of(nom.begin() + static_cast<long>(b.nom.prefixe.size()), nom.end(), [](char ch) { return std::isdigit(static_cast<unsigned char>(ch)); });
-        if (membre) {
-          const int n = std::stoi(nom.substr(b.nom.prefixe.size(), 9));
-          membre = n >= b.nom.debut && n <= b.nom.fin;
-        }
-        if (membre) continue;
+        // Membre : un nom développé du bus ou du faisceau (« D3 », « SDA »)
+        if (nom.empty() || std::find(b.membres.begin(), b.membres.end(), nom) != b.membres.end()) continue;
         Pt ou;
+        std::string nomBus;
         for (const auto& w : f.fils)
           if (w.uuid == fil) ou = w.a;
-        ajouter(Gravite::Erreur, "ERC-32",
-                "Entrée « " + nom + " » sur le bus " + b.nom.prefixe + "[" + std::to_string(b.nom.debut) + ".." + std::to_string(b.nom.fin) + "] : ce nom n’en fait pas partie",
-                "Renomme l’entrée d’un membre du bus, ou élargis le bus.", f.uuid, ou, {fil});
+        for (const auto& e : f.etiquettes)
+          if (e.uuid == b.etiquette) nomBus = e.texte;
+        ajouter(Gravite::Erreur, "ERC-32", "Entrée « " + nom + " » sur le bus " + nomBus + " : ce nom n’en fait pas partie", "Renomme l’entrée d’un membre du bus, ou élargis le bus.", f.uuid, ou, {fil});
       }
   // ERC-45 (7.17) : électrolytique monté à l'envers, d'après les tensions des réseaux (« + » plus bas que « − »)
   for (const auto& x : c.composants) {
@@ -1544,6 +1649,9 @@ std::vector<Violation> verifierERC(const ConceptionElec& c, const Connectivite& 
     std::snprintf(t, sizeof t, " : son « + » est à %g V, son « − » à %g V", *vp, *vm);
     ajouter(Gravite::Erreur, "ERC-45", x.reference + " est monté à l’envers" + t, "Retourne le condensateur : le « + » va au potentiel le plus haut.", feuille, ou, {x.uuid});
   }
+  // 0.34 (lot L7) : ports des blocs hiérarchiques (ERC-33), textes marqués et variables sans valeur (ERC-34, ERC-35)
+  for (auto& x : verifierPortsHierarchiques(c)) v.push_back(std::move(x));
+  for (auto& x : verifierTextesRiches(c, false)) v.push_back(std::move(x));
   for (auto& x : v) x.niveau = niveauErc(x.code);
   std::stable_sort(v.begin(), v.end(), [](const Violation& a, const Violation& b) { return a.gravite < b.gravite; });
   return v;
@@ -1728,7 +1836,8 @@ std::vector<LigneNomenclature> nomenclature(const ConceptionElec& c) {
   for (const auto& x : c.composants) {
     const DefSymbole* d = c.symbole(x.symbole);
     (void)d;
-    if (!poses.count(x.uuid) || x.nePasMonter || !dansNomenclature(c, x)) continue;
+    // Posé au schéma, ou posé sur la carte sans schéma (5.17)
+    if ((!poses.count(x.uuid) && !x.carteSeule) || x.nePasMonter || !dansNomenclature(c, x)) continue;
     // « 4k7 », « 4,7 kΩ » et « 4.7k » font une seule ligne (3.2) ; la valeur affichée est celle du premier repère
     const std::string cle = cleValeur(lireValeurComposant(x.valeur, familleDe(c, x)), x.valeur);
     LigneNomenclature& l = lignes[cle + "|" + x.empreinte + "|" + x.mpn + "|" + x.fabricant];
@@ -1742,6 +1851,17 @@ std::vector<LigneNomenclature> nomenclature(const ConceptionElec& c) {
     if (l.fournisseur.empty()) l.fournisseur = x.fournisseur;
     if (l.lcsc.empty()) l.lcsc = x.lcsc.empty() && x.champs.count("LCSC") ? x.champs.at("LCSC") : x.lcsc;
     if (l.description.empty()) l.description = x.description;
+  }
+  // Pièces montées sur la carte (6.8) : dissipateurs, entretoises, vis, une ligne par article
+  for (const auto& m : c.piecesMontees) {
+    LigneNomenclature& l = lignes["piece|" + m.nom + "|" + m.mpn + "|" + m.fabricant];
+    l.quantite += std::max(1, m.quantite);
+    l.references.push_back(m.reference.empty() ? m.nom : m.reference);
+    l.valeur = m.nom;
+    l.fabricant = m.fabricant;
+    l.mpn = m.mpn;
+    if (l.fournisseur.empty()) l.fournisseur = m.fournisseur;
+    l.description = "Pièce montée sur la carte";
   }
   std::vector<LigneNomenclature> r;
   for (auto& [cle, l] : lignes) {
@@ -1877,6 +1997,8 @@ BilanMiseAJour mettreAJourCircuit(ConceptionElec& c) {
   const std::size_t avant = E.size();
   E.erase(std::remove_if(E.begin(), E.end(), [&](const EmpreintePlacee& e) {
             const ComposantElec* x = c.composant(e.composant);
+            // Un composant posé sur la carte sans schéma (5.17) reste : son seul lieu est le circuit
+            if (x && x->carteSeule) return false;
             return !x || !poses.count(e.composant) || x->empreinte.empty() || x->horsCarte;
           }),
           E.end());
@@ -1890,7 +2012,8 @@ BilanMiseAJour mettreAJourCircuit(ConceptionElec& c) {
     auto it = std::find_if(E.begin(), E.end(), [&](const EmpreintePlacee& e) { return e.composant == comp.uuid; });
     if (it != E.end()) {
       // Empreinte changée : remplacée en place, pistes accrochées (3.7, C22)
-      if (it->empreinte != comp.empreinte && c.empreinte(comp.empreinte) && remplacerEmpreinteEnPlace(c, comp.uuid, comp.empreinte)) ++b.changees;
+      // (une copie locale de la même empreinte, 7.24, reste : c'est le cuivre propre à la carte)
+      if (it->empreinte != comp.empreinte && it->copieLocale != comp.empreinte && c.empreinte(comp.empreinte) && remplacerEmpreinteEnPlace(c, comp.uuid, comp.empreinte)) ++b.changees;
       continue;
     }
     const DefEmpreinte* d = c.empreinte(comp.empreinte);
@@ -1936,6 +2059,9 @@ std::vector<PastillePlacee> pastilles(const ConceptionElec& c, const Connectivit
       pp.reference = x ? x->reference : std::string();
       pp.numero = p.numero;
       pp.reseau = p.numero.empty() ? std::string() : k.nom(e.composant, p.numero);
+      // Composant de la carte seule (5.17) : son réseau est celui que la piste tirée entre deux pastilles lui a donné
+      if (pp.reseau.empty() && x && x->carteSeule && !p.numero.empty())
+        if (const auto it = c.nomsReseaux.find(e.composant + ":" + p.numero); it != c.nomsReseaux.end()) pp.reseau = it->second;
       pp.pastille = pastilleSurCarte(e, p);
       pp.dessous = e.dessous;
       pp.couches = couchesPastille(p, e.dessous, c.circuit.empilage.couchesCuivre);

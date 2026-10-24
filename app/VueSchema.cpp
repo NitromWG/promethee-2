@@ -1,6 +1,9 @@
 // Prométhée : éditeur de schéma électronique (canevas). Licence GPL-3.0-only.
+#include "promethee/fichiers.hpp"
+#include "promethee/pdf_documents.hpp"
 #include "promethee/valeurs.hpp"
 #include "promethee/formules.hpp"
+#include "promethee/schema_avance.hpp"
 #include "RegistreReglages.hpp"
 #include "VueSchema.hpp"
 
@@ -1206,6 +1209,30 @@ void VueSchema::dessinerSymbole(QPainter& g, const Repere& r, const DefSymbole& 
       case Trace::Forme::Texte:
         if (!t.points.empty()) texte(g, E(t.points.front()), QString::fromStdString(t.texte), mm(t.taille) * e, 0, encre);
         break;
+      // 0.34 (7.20) : ellipses et courbes de Bézier du corps, découpées dans le repère du symbole puis tournées avec lui ;
+      // cadre de texte et image
+      case Trace::Forme::Ellipse:
+      case Trace::Forme::Bezier: {
+        QPolygonF poly;
+        for (const Pt& p : contourTrace(t, 32)) poly << E(p);
+        if (t.forme == Trace::Forme::Ellipse) g.drawPolygon(poly);
+        else g.drawPolyline(poly);
+        break;
+      }
+      case Trace::Forme::CadreTexte:
+      case Trace::Forme::Image:
+        if (t.points.size() >= 2) {
+          const QRectF cadre = QRectF(E(t.points[0]), E(t.points[1])).normalized();
+          g.drawRect(cadre);
+          if (t.forme == Trace::Forme::CadreTexte) {
+            QFont fo = g.font();
+            fo.setPixelSize(std::max(1, static_cast<int>(mm(t.taille) * e)));
+            g.setFont(fo);
+            g.setPen(encre);
+            g.drawText(cadre.adjusted(2, 2, -2, -2), Qt::AlignCenter | Qt::TextWordWrap, QString::fromStdString(t.texte));
+          }
+        }
+        break;
     }
   }
   // Broches : trait, numéro le long du trait, nom dans le corps
@@ -1549,6 +1576,7 @@ void VueSchema::paintEvent(QPaintEvent*) {
   if (!m_impression) {
     dessinerSurvol(g);
     m_outils.actif()->dessiner(g);
+    dessinerFilAriane(g);
   }
   if (const ConceptionElec* c = conception(); c && c->verrouillee) {
     const QString t = QStringLiteral("🔒 Publiée %1 · révision %2 · lecture seule").arg(QString::fromStdString(c->publications.empty() ? std::string() : c->publications.back().id),
@@ -1578,10 +1606,15 @@ void VueSchema::paintEvent(QPaintEvent*) {
 bool VueSchema::exporterPdf(const QString& chemin) {
   const ConceptionElec* c = conception();
   if (!c || c->feuilles.empty()) return false;
+  // PDF/A-1b (8.29) si le projet le demande : polices incorporées et métadonnées XMP par QPdfWriter
+  const auto itA = c->extensions.find("pdfA");
+  const bool pdfA = itA != c->extensions.end() && itA->second.is_boolean() && itA->second.get<bool>();
+  {
   QPdfWriter pdf(chemin);
   pdf.setResolution(300);
-  pdf.setTitle(QString::fromStdString(c->nom));
+  pdf.setTitle(QString::fromStdString(c->cartouche.titre.empty() ? c->nom : c->cartouche.titre));
   pdf.setCreator(QStringLiteral("Prométhée"));
+  if (pdfA) pdf.setPdfVersion(QPagedPaintDevice::PdfVersion_A1b);
   const int feuille = m_feuille;
   const double echelle = m_echelle;
   const QPointF origine = m_origine;
@@ -1613,7 +1646,18 @@ bool VueSchema::exporterPdf(const QString& chemin) {
   m_selection = selection;
   m_reseau = reseau;
   update();
-  return ok;
+  if (!ok) return false;
+  }
+  // Signet par feuille et liens entre étiquettes de même nom (8.11), ajoutés par une mise à jour incrémentale
+  try {
+    const std::string chemin8 = chemin.toStdString();
+    const std::string avant = prom::lireFichier(prom::cheminFichier(chemin8));
+    const std::string apres = completerPdf(avant, signetsSchema(*c), liensSchema(*c), pdfA ? std::nullopt : std::optional<MetaPdf>(metaDepuisCartouche(*c)));
+    if (apres != avant) prom::ecrireFichierAtomique(prom::cheminFichier(chemin8), apres);
+  } catch (const std::exception&) {
+    // Le PDF de QPdfWriter reste, sans signets
+  }
+  return true;
 }
 
 int VueSchema::exporterDxf(const QString& chemin, int feuille) {
@@ -1659,6 +1703,8 @@ void VueSchema::peindre(QPainter& g) {
   if (!c || !f) return;
   PeintreDxf::calque(g, QStringLiteral("CADRE"));
   dessinerFond(g, *f, *c);
+  PeintreDxf::calque(g, QStringLiteral("DESSIN"));
+  dessinerObjets034(g, *f, *c);
   PeintreDxf::calque(g, QStringLiteral("FILS"));
   dessinerFils(g, *f);
   PeintreDxf::calque(g, QStringLiteral("NUMEROS"));
@@ -1705,6 +1751,7 @@ void VueSchema::peindre(QPainter& g) {
   }
   PeintreDxf::calque(g, QStringLiteral("RENVOIS"));
   dessinerApresSymboles(g, *f);
+  dessinerRenvois034(g, *f, *c);
   // Étiquettes : locale soulignée, globale dans un cartouche pointu selon le sens du signal, connecteur hors feuille
   // à double chevron suivi de ses renvois (les feuilles où le même nom passe), qui s'ouvrent d'un clic (2.20)
   PeintreDxf::calque(g, QStringLiteral("ETIQUETTES"));
@@ -1784,6 +1831,22 @@ void VueSchema::peindre(QPainter& g) {
           m_zonesRenvoi.push_back({g.transform().mapRect(QRectF(xr, -0.8 * m_echelle, lr, 1.6 * m_echelle)), premiere, e.texte});
         }
       }
+    } else if (e.type == TypeEtiquette::Directive) {
+      // Directive (7.14) : un fanion relié au fil, le texte en italique, sans nommer le réseau
+      const double h = 2.4 * m_echelle;
+      g.setPen(QPen(GLOBALE, std::max(1.0, 0.15 * m_echelle), Qt::DashLine));
+      g.drawLine(QPointF(0, 0), QPointF(0, -h));
+      QFont fi = g.font();
+      fi.setItalic(true);
+      fi.setPixelSize(std::max(1, static_cast<int>(1.2 * m_echelle)));
+      g.setFont(fi);
+      const double ld = QFontMetricsF(fi).horizontalAdvance(t) + 0.8 * m_echelle;
+      const QRectF fanion(QPointF(0, -h - 1.6 * m_echelle), QSizeF(sens * ld, 1.6 * m_echelle));
+      g.setPen(QPen(GLOBALE, std::max(1.0, 0.15 * m_echelle)));
+      g.setBrush(FOND_ETIQUETTE);
+      g.drawRect(fanion.normalized());
+      g.drawText(fanion.normalized(), Qt::AlignCenter, t);
+      if (choisie) signes::selectionBoite(g, fanion.normalized().adjusted(-2, -2, 2, 2), theme().signesSchema().sel);
     } else {
       texte(g, QPointF(retournee ? -(0.3 * m_echelle + l) : 0.3 * m_echelle, -0.9 * m_echelle), t, 1.4 * m_echelle, -1, c2);
       g.setPen(QPen(c2, std::max(1.0, 0.15 * m_echelle)));
@@ -1799,9 +1862,11 @@ void VueSchema::peindre(QPainter& g) {
     g.translate(ecran(t.p));
     g.rotate(-90.0 * t.rotation);
     const double taille = mm(t.taille) * m_echelle;
-    // Calcul tenu à jour entre « {= » et « } » (3.14) : « fc = {=1/(2π·R3·C5)} » montre « fc = 1,59 kHz »
-    const QString montre = QString::fromStdString(t.texte.find("{=") != std::string::npos ? texteCalcule(*c, t.texte) : t.texte);
-    texte(g, QPointF(0, 0), montre, taille, texteAncreAGauche() ? -1 : 0, ENCRE);
+    // Calcul tenu à jour entre « {= » et « } » (3.14) : « fc = {=1/(2π·R3·C5)} » montre « fc = 1,59 kHz » ; puis
+    // variables, expressions et styles (7.6, 7.11)
+    const std::string brut = t.texte.find("{=") != std::string::npos ? texteCalcule(*c, t.texte) : t.texte;
+    const QString montre = QString::fromStdString(texteAffiche(brut, *c, m_feuille));
+    texteRiche(g, QPointF(0, 0), *c, brut, taille, ENCRE, texteAncreAGauche() ? -1 : 0);
     if (!m_impression && m_selection.count(t.uuid)) {
       QFont fo = g.font();
       fo.setPixelSize(std::max(1, static_cast<int>(taille)));
@@ -1978,6 +2043,7 @@ void VueSchema::mousePressEvent(QMouseEvent* e) {
     return;
   }
   if (e->button() != Qt::LeftButton) return;
+  if (ouvrirAriane(e->position())) return;  // fil d'Ariane de la hiérarchie (7.2)
   // L'origine des coordonnées relatives, posée d'un clic (2.28)
   if (m_armeOrigine) {
     m_armeOrigine = false;
@@ -2070,6 +2136,7 @@ void VueSchema::mouseReleaseEvent(QMouseEvent* e) {
 
 void VueSchema::mouseDoubleClickEvent(QMouseEvent* e) {
   if (e->button() != Qt::LeftButton) return;
+  if (outil() == Outil::Selection && entrerDansBloc(e->position())) return;  // la feuille fille du bloc (7.2)
   m_outils.recycler();
   m_outils.actif()->doubleClic(geste(e));
   majBandeau();

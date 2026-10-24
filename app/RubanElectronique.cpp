@@ -4,6 +4,8 @@
 // l'atelier est dans AtelierElectronique.cpp ; le découpage se poursuit aux lots L2 à L5.
 // Licence GPL-3.0-only.
 #include "AtelierElectronique.hpp"
+#include "SelectionElectronique.hpp"
+#include "FenetresMeca034.hpp"
 
 #include <algorithm>
 #include <set>
@@ -114,6 +116,12 @@ void AtelierElectronique::enregistrerCommandes() {
   c["bibliotheque.articles"] = [this] { ouvrirChoixComposant(); };
   c["bibliotheque.standardiser"] = [this] { ouvrirStandardisation(); };
   c["bibliotheque.misesAJour"] = [this] { ouvrirMisesAJourArticles(); };
+  c["bibliotheque.gerer"] = [this] { ouvrirGestionBibliotheque(); };
+  c["bibliotheque.serieEmpreintes"] = [this] { ouvrirSerieEmpreintes(); };
+  c["bibliotheque.affecter"] = [this] { ouvrirAffectation(); };
+  c["circuit.gabaritsPastilles"] = [this] { ouvrirGabaritsPastilles(); };
+  c["bibliotheque.achats"] = [this] { ouvrirAchats(); };
+  c["circuit.echangerEmpreintesMasse"] = [this] { ouvrirEchangeEmpreintes(); };
   c["circuit.aPlacer"] = [this] { montrerAPlacer(); };
   c["circuit.disposerCercle"] = [this] { disposerEnCercle(); };
   c["verification.rapport"] = [this] { ouvrirRapport(); };
@@ -131,6 +139,35 @@ void AtelierElectronique::enregistrerCommandes() {
     const int n = QInputDialog::getInt(this, QStringLiteral("Feuille de canal"), QStringLiteral("Nombre d’exemplaires de la feuille"), 4, 2, 64, 1, &ok);
     if (ok) repeterFeuille(vueSchema()->feuille(), n);
   };
+  // 0.34, lot L7
+  c["schema.migrerHierarchie"] = [this] { migrerEnHierarchie(); };
+  c["schema.synchroniserPorts"] = [this] { synchroniserPortsBlocs(false); };
+  c["schema.feuilleMere"] = [this] { allerFeuilleMere(); };
+  c["schema.echangerPortes"] = [this] { echangerPortesChoisies(); };
+  c["schema.directives"] = [this] { appliquerDirectivesSchema(); };
+  c["schema.grapheReseaux"] = [this] { ouvrirGrapheReseaux(); };
+  c["schema.importerFormes"] = [this] { ouvrirImportFormes(); };
+  c["schema.enregistrerExtrait"] = [this] {
+    const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Enregistrer l’extrait"), QStringLiteral("extrait.json"), QStringLiteral("Extraits Prométhée (*.json)"));
+    if (!f.isEmpty()) enregistrerExtrait(f, QFileInfo(f).completeBaseName());
+  };
+  c["schema.poserExtrait"] = [this] {
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Poser un extrait"), {}, QStringLiteral("Extraits Prométhée (*.json)"));
+    if (!f.isEmpty()) poserExtraitFichier(f);
+  };
+  c["schema.jeuxStyles"] = [this] { ouvrirJeuxStyles(); };
+  c["schema.assistantSymbole"] = [this] { ouvrirAssistantSymbole(); };
+  c["circuit.recopierDisposition"] = [this] {
+    bool ok = false;
+    const QString t = QInputDialog::getText(this, QStringLiteral("Recopier la disposition"), QStringLiteral("Décalage d’une voie à la suivante, x et y en mm :"), QLineEdit::Normal, QStringLiteral("0 15"), &ok);
+    const QStringList m = t.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+    if (ok && m.size() == 2) recopierDispositionChoisie(QString(m[0]).replace(QLatin1Char(','), QLatin1Char('.')).toDouble(), QString(m[1]).replace(QLatin1Char(','), QLatin1Char('.')).toDouble());
+  };
+  c["circuit.copieLocale"] = [this] { copieLocaleChoisie(); };
+  c["circuit.revenirBibliotheque"] = [this] { revenirBibliothequeChoisie(); };
+  c["circuit.eclaterEmpreinte"] = [this] { eclaterEmpreinteChoisie(); };
+  c["circuit.generateurs"] = [this] { ouvrirGenerateurs(); };
+  c["bibliotheque.pastilles"] = [this] { ouvrirPastilles(); };
   c["schema.deplacerVersFeuille"] = [this] {
     const prom::ecad::ConceptionElec* cc = conceptionCourante();
     if (!cc) return;
@@ -270,6 +307,70 @@ void AtelierElectronique::enregistrerCommandes() {
     majPanneau();
   };
   c["vue3d.recadrer"] = [this] { m_3d->recadrer(); };
+  using F3 = Navigation3D::Face;
+  for (const auto& [id, face] : std::vector<std::pair<const char*, F3>>{{"vue3d.dessus", F3::Dessus}, {"vue3d.dessous", F3::Dessous}, {"vue3d.avant", F3::Avant}, {"vue3d.arriere", F3::Arriere},
+                                                                         {"vue3d.gauche", F3::Gauche}, {"vue3d.droite", F3::Droite}, {"vue3d.iso", F3::Iso}})
+    c[id] = [this, face = face] {
+      setMode(Vue3D);
+      m_3d->navigation().vueStandard(face);
+    };
+  c["vue3d.quartDeTour"] = [this] { m_3d->navigation().quartDeTour(true); };
+  c["vue3d.projection"] = [this] {
+    m_3d->navigation().basculerProjection();
+    afficherMessage(m_3d->navigation().orthographique() ? QStringLiteral("Projection orthographique.") : QStringLiteral("Projection en perspective."), NiveauMessage::Information);
+  };
+  c["vue3d.grille"] = [this] {
+    bool ok = false;
+    const int pas = QInputDialog::getInt(this, QStringLiteral("Grille de la 3D"), QStringLiteral("Pas de la grille au sol (mm, 0 : aucune) :"), static_cast<int>(m_3d->navigation().grille()), 0, 10, 1, &ok);
+    if (ok) m_3d->navigation().setGrille(pas);
+  };
+  c["vue3d.enregistrerVue"] = [this] {
+    bool ok = false;
+    const QString nom = QInputDialog::getText(this, QStringLiteral("Point de vue"), QStringLiteral("Nom du point de vue :"), QLineEdit::Normal, QStringLiteral("Face USB"), &ok);
+    if (ok) enregistrerPointDeVue3D(nom);
+  };
+  c["vue3d.pointsDeVue"] = [this] {
+    const ConceptionElec* cc = conceptionCourante();
+    if (!cc || cc->pointsDeVue.empty()) {
+      afficherMessage(QStringLiteral("Aucun point de vue enregistré : « Garder la vue… » en ajoute un."), NiveauMessage::Information);
+      return;
+    }
+    QStringList noms;
+    for (const auto& v : cc->pointsDeVue) noms << QString::fromStdString(v.nom);
+    bool ok = false;
+    const QString nom = QInputDialog::getItem(this, QStringLiteral("Points de vue"), QStringLiteral("Revenir à :"), noms, 0, false, &ok);
+    if (!ok) return;
+    for (const auto& v : cc->pointsDeVue)
+      if (QString::fromStdString(v.nom) == nom) {
+        setMode(Vue3D);
+        appliquerPointDeVue3D(v);
+      }
+  };
+  c["vue3d.apparence"] = [this] {
+    auto* d = new DialogueApparence3D(*this, this);
+    d->setAttribute(Qt::WA_DeleteOnClose);
+    d->show();
+  };
+  c["vue3d.mesurer"] = [this] {
+    std::vector<std::string> ids;
+    for (const auto& id : m_selection->composants()) ids.push_back(id);
+    if (ids.size() != 2) {
+      afficherMessage(QStringLiteral("Choisis exactement deux composants pour les mesurer."), NiveauMessage::Information);
+      return;
+    }
+    mesurerCorps3D(ids[0], ids[1]);
+  };
+  c["vue3d.rendu"] = [this] { ouvrirRendu(); };
+  c["carte.boitierCommerce"] = [this] { importerBoitierCommerce(); };
+  c["carte.pieceMontee"] = [this] { ajouterPieceMontee(); };
+  c["carte.exporterIdf"] = [this] {
+    const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Carte en IDF 3.0"), QStringLiteral("carte.emn"), QStringLiteral("IDF (*.emn)"));
+    if (!f.isEmpty()) exporterIdf(f);
+  };
+  c["carte.importerIdf"] = [this] {
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Carte IDF 3.0"), {}, QStringLiteral("IDF (*.emn)"));
+    if (!f.isEmpty()) importerIdf(f);
+  };
   c["fabrication.valider"] = [this] {
     recalculer();
     majPanneau();
@@ -356,6 +457,8 @@ void AtelierElectronique::enregistrerCommandes() {
     const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Dossier Gerber et perçages à relire en carte"));
     if (!d.isEmpty()) ajouterCarteDepuisGerber(d);
   };
+  enregistrerCommandesCuivre();  // lot L5 (OutilsCuivre.cpp)
+  enregistrerCommandesL8();      // 0.34, lot L8 (OutilsFabrication034.cpp)
 }
 
 // Couche active, couches visibles et opacité des cuivres inactifs (EL-25)

@@ -132,47 +132,67 @@ std::vector<std::vector<Point2>> polylignes(const char* def) {
 constexpr double AVANCE = 5.5;  // largeur d'un caractère, espace compris, en unités de grille
 }  // namespace
 
+namespace {
+// Lignes d'un texte (0.34, 8.13) : « \n » sépare les lignes, l'interligne vaut 1,6 fois la hauteur des capitales
+std::vector<std::u32string> lignes(const std::u32string& t) {
+  std::vector<std::u32string> r(1);
+  for (char32_t ch : t)
+    if (ch == U'\n') r.emplace_back();
+    else if (ch != U'\r') r.back() += ch;
+  return r;
+}
+constexpr double INTERLIGNE = 9.6;  // unités de grille (la hauteur des capitales en vaut 6)
+}  // namespace
+
 Nm largeurTexte(const std::string& texte, Nm hauteur) {
   const std::u32string t = decoder(texte);
   if (t.empty()) return 0;
-  return static_cast<Nm>(std::llround((static_cast<double>(t.size()) * AVANCE - 1.5) * static_cast<double>(hauteur) / 6.0));
+  std::size_t n = 0;
+  for (const auto& l : lignes(t)) n = std::max(n, l.size());
+  return n == 0 ? 0 : static_cast<Nm>(std::llround((static_cast<double>(n) * AVANCE - 1.5) * static_cast<double>(hauteur) / 6.0));
 }
 
 Nm epaisseurTexte(Nm hauteur) { return std::max<Nm>(120'000, static_cast<Nm>(std::llround(0.15 * static_cast<double>(hauteur)))); }
 
 std::vector<TraitTexte> traitsTexte(const std::string& texte, Pt position, Nm hauteur, double rotation, bool miroir, AncrageTexte ancrage, bool centreVertical) {
   std::vector<TraitTexte> r;
-  const std::u32string t = decoder(texte);
-  if (t.empty() || hauteur <= 0) return r;
+  const std::u32string tout = decoder(texte);
+  if (tout.empty() || hauteur <= 0) return r;
   const double e = static_cast<double>(hauteur) / 6.0;
-  const double largeur = (static_cast<double>(t.size()) * AVANCE - 1.5) * e;
-  const double x0 = ancrage == AncrageTexte::Gauche ? 0 : ancrage == AncrageTexte::Centre ? -largeur / 2 : -largeur;
-  const double y0 = centreVertical ? -3 * e : 0;
   const double a = rotation * std::numbers::pi / 180, ca = std::cos(a), sa = std::sin(a);
-  auto placer = [&](double x, double y) {
-    // Repère du texte : x vers la droite, y vers le haut ; la carte a l'axe Y vers le bas. La rotation suit la même
-    // convention que les empreintes (tournerDegres) : un angle positif tourne dans le sens direct à l'écran (X3)
-    double u = x0 + x, v = -(y0 + y);
-    if (miroir) u = -u;
-    const double X = u * ca + v * sa, Y = -u * sa + v * ca;
-    return Pt{position.x + static_cast<Nm>(std::llround(X)), position.y + static_cast<Nm>(std::llround(Y))};
-  };
-  for (std::size_t i = 0; i < t.size(); ++i) {
-    const auto it = glyphes().find(t[i]);
-    if (it == glyphes().end()) {
-      if (t[i] != U' ') {  // caractère inconnu : un petit rectangle, pour qu'il ne disparaisse pas en silence
-        const double ox = static_cast<double>(i) * AVANCE * e;
-        const Pt p1 = placer(ox, 0), p2 = placer(ox + 4 * e, 0), p3 = placer(ox + 4 * e, 6 * e), p4 = placer(ox, 6 * e);
-        r.push_back({p1, p2});
-        r.push_back({p2, p3});
-        r.push_back({p3, p4});
-        r.push_back({p4, p1});
+  const auto ls = lignes(tout);
+  const double n = static_cast<double>(ls.size());
+  for (std::size_t j = 0; j < ls.size(); ++j) {
+    const std::u32string& t = ls[j];
+    const double largeur = (static_cast<double>(t.size()) * AVANCE - 1.5) * e;
+    const double x0 = ancrage == AncrageTexte::Gauche ? 0 : ancrage == AncrageTexte::Centre ? -largeur / 2 : -largeur;
+    // Centré : le bloc de lignes est centré sur la position ; sinon la première ligne est sur la ligne de base
+    const double y0 = centreVertical ? -3 * e + ((n - 1) / 2 - static_cast<double>(j)) * INTERLIGNE * e : -static_cast<double>(j) * INTERLIGNE * e;
+    auto placer = [&](double x, double y) {
+      // Repère du texte : x vers la droite, y vers le haut ; la carte a l'axe Y vers le bas. La rotation suit la même
+      // convention que les empreintes (tournerDegres) : un angle positif tourne dans le sens direct à l'écran (X3)
+      double u = x0 + x, v = -(y0 + y);
+      if (miroir) u = -u;
+      const double X = u * ca + v * sa, Y = -u * sa + v * ca;
+      return Pt{position.x + static_cast<Nm>(std::llround(X)), position.y + static_cast<Nm>(std::llround(Y))};
+    };
+    for (std::size_t i = 0; i < t.size(); ++i) {
+      const auto it = glyphes().find(t[i]);
+      if (it == glyphes().end()) {
+        if (t[i] != U' ') {  // caractère inconnu : un petit rectangle, pour qu'il ne disparaisse pas en silence
+          const double ox = static_cast<double>(i) * AVANCE * e;
+          const Pt p1 = placer(ox, 0), p2 = placer(ox + 4 * e, 0), p3 = placer(ox + 4 * e, 6 * e), p4 = placer(ox, 6 * e);
+          r.push_back({p1, p2});
+          r.push_back({p2, p3});
+          r.push_back({p3, p4});
+          r.push_back({p4, p1});
+        }
+        continue;
       }
-      continue;
+      const double ox = static_cast<double>(i) * AVANCE * e;
+      for (const auto& l : polylignes(it->second))
+        for (std::size_t k = 1; k < l.size(); ++k) r.push_back({placer(ox + l[k - 1].x * e, l[k - 1].y * e), placer(ox + l[k].x * e, l[k].y * e)});
     }
-    const double ox = static_cast<double>(i) * AVANCE * e;
-    for (const auto& l : polylignes(it->second))
-      for (std::size_t k = 1; k < l.size(); ++k) r.push_back({placer(ox + l[k - 1].x * e, l[k - 1].y * e), placer(ox + l[k].x * e, l[k].y * e)});
   }
   return r;
 }

@@ -74,6 +74,7 @@ template <typename... T> std::string signature(const T&... v) {
 }  // namespace
 
 Vue3D::Vue3D(Document* doc, QWidget* parent) : QOpenGLWidget(parent), m_doc(doc) {
+  m_navigation = std::make_unique<Navigation3D>([this] { return m_vue; }, [this] { update(); }, [this](const gp_Pnt& p) { m_pivot = p; });
   Handle(Aspect_DisplayConnection) affichage;
 #ifdef PROMETHEE_X11
   affichage = new Xw_DisplayConnection();

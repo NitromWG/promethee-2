@@ -21,7 +21,8 @@ option(PROMETHEE_APP "Compiler l'application de bureau (Qt 6)" ON)
 if(MSVC)
   add_compile_options(/W4 /utf-8 /permissive-)
 else()
-  add_compile_options(-Wall -Wextra -Wpedantic)
+  # Les agrégats du modèle ont des membres à valeur par défaut, pensés pour une initialisation partielle
+  add_compile_options(-Wall -Wextra -Wpedantic -Wno-missing-field-initializers)
 endif()
 
 # Identifiant de build : version et révision des sources (commit), régénérés à chaque compilation par
