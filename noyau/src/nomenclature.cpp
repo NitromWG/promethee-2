@@ -1,4 +1,5 @@
 // Prométhée : nomenclature unique. Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/nomenclature.hpp"
 
 #include <algorithm>
@@ -34,12 +35,7 @@ bool avantNaturel(const std::string& a, const std::string& b) {
 
 }  // namespace
 
-std::string champCsv(const std::string& s) {
-  if (s.find_first_of(";\"\n\r") == std::string::npos) return s;
-  std::string r = "\"";
-  for (char c : s) { if (c == '"') r += '"'; r += c; }
-  return r + "\"";
-}
+std::string champCsv(const std::string& s) { return champCsvRegle(s); }
 
 bool avantNaturelRepere(const std::string& a, const std::string& b) { return avantNaturel(a, b); }
 
@@ -90,10 +86,10 @@ std::vector<LigneNomenclature> nomenclature(const Projet& p, const Derive& d) {
 }
 
 std::string versCsv(const std::vector<LigneNomenclature>& lignes) {
-  std::string s = "\xEF\xBB\xBF" "Groupe;Repère;Désignation;Quantité;Approvisionnement\r\n";
-  for (const auto& x : lignes)
-    s += champCsv(x.groupe) + ";" + champCsv(x.ref) + ";" + champCsv(x.designation) + ";" + std::to_string(x.qte) + ";" + champCsv(x.appro) + "\r\n";
-  return s;
+  EcrivainCsv w;  // écrivain du poste (10.20)
+  w.ligne({"Groupe", "Repère", "Désignation", "Quantité", "Approvisionnement"});
+  for (const auto& x : lignes) w.champ(x.groupe).champ(x.ref).champ(x.designation).entier(x.qte).champ(x.appro).fin();
+  return w.texte();
 }
 
 }  // namespace prom

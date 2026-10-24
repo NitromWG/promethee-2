@@ -1,5 +1,6 @@
 // Prométhée : sorties pour le fabricant et l'assembleur (8.5, 8.6, 8.15). Voir sorties_fabricant.hpp.
 // Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/sorties_fabricant.hpp"
 
 #include <algorithm>
@@ -140,12 +141,12 @@ std::vector<std::vector<std::string>> tableauNomenclature(const ConceptionElec& 
 }
 
 std::string csvNomenclatureFormat(const ConceptionElec& c, const OptionsNomenclature& o) {
-  std::string s;
-  for (const auto& l : tableauNomenclature(c, o)) {
-    for (std::size_t i = 0; i < l.size(); ++i) s += (i ? o.separateur : "") + champ(l[i], o.separateur);
-    s += "\n";
-  }
-  return s;
+  // Format imposé par le fabricant (10.20) : son séparateur, point décimal, sans marque UTF-8
+  prom::ReglagesCsv r = prom::ReglagesCsv::international();
+  if (!o.separateur.empty()) r.separateur = o.separateur[0];
+  prom::EcrivainCsv w(r);
+  for (const auto& l : tableauNomenclature(c, o)) w.ligne(l);
+  return w.texte();
 }
 
 // ---------- Corrections de rotation ----------

@@ -43,6 +43,10 @@ class SelectionElectronique;
 class VuePiece;
 class VueSchema;
 
+namespace prom::ecad {
+struct OptionsDessinCarte;
+}
+
 class AtelierElectronique : public QWidget {
   Q_OBJECT
  public:
@@ -146,6 +150,9 @@ class AtelierElectronique : public QWidget {
   class DialogueNomenclatureEntree* nomenclatureEntree();
   // Proposition IDX de la mécanique (10.24) : le dialogue des changements ; sans dialogue, tous acceptés
   bool recevoirIdx(const QString& chemin, bool dialogue = true);
+  // Dessin DXF, SVG ou DWG (LibreDWG) posé sur une couche de la carte (10.21) ; sans dialogue, « options » ou le
+  // centre de la carte en sérigraphie du dessus ; rend le nombre de dessins posés
+  int importerDessinCarte(const QString& chemin, bool dialogue, const prom::ecad::OptionsDessinCarte* options = nullptr);
   void ouvrirChoixComposant(const QString& recherche = {});
   class FenetreChoixComposant* choixComposant() const;
   void ouvrirChoixEmpreinte(std::vector<std::string> composants = {});

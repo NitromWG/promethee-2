@@ -1,5 +1,6 @@
 // Prométhée : CAO électrique — folios, pose des appareils et de leurs contacts, repérage, renvois croisés,
 // numérotation des fils, propriétés des conducteurs. Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/electrique.hpp"
 
 #include <algorithm>
@@ -952,25 +953,21 @@ double puissanceDe(const ComposantElec& c) {
 }
 
 std::string documentCsv(const std::vector<std::string>& entete, const std::vector<std::vector<std::string>>& lignes) {
-  auto ligne = [](const std::vector<std::string>& v) {
-    std::string r;
-    for (std::size_t i = 0; i < v.size(); ++i) {
-      if (i) r += ';';
-      const std::string& x = v[i];
-      if (x.find_first_of(";\"\r\n") != std::string::npos) {
-        r += '"';
-        for (char ch : x) {
-          if (ch == '"') r += '"';
-          r += ch;
-        }
-        r += '"';
-      } else r += x;
-    }
-    return r + "\r\n";
+  prom::EcrivainCsv w;  // écrivain du poste (10.20)
+  // Les nombres écrits « à la française » (12,5) prennent la marque décimale réglée
+  auto localiser = [&](std::string x) {
+    const bool nombre = !x.empty() && x.find_first_not_of("-0123456789,") == std::string::npos && std::count(x.begin(), x.end(), ',') <= 1 && x != "-" && x != ",";
+    if (nombre)
+      for (char& ch : x)
+        if (ch == ',') ch = w.reglages().decimale;
+    return x;
   };
-  std::string r = "\xEF\xBB\xBF" + ligne(entete);
-  for (const auto& l : lignes) r += ligne(l);
-  return r;
+  w.ligne(entete);
+  for (const auto& l : lignes) {
+    for (const auto& x : l) w.champ(localiser(x));
+    w.fin();
+  }
+  return w.texte();
 }
 
 }  // namespace detail

@@ -34,7 +34,8 @@ std::string empreinteConnue(const std::string& nom);
 ConceptionElec conceptionDepuisNetlist(const NetlistLue& n, const std::string& nom);
 struct BilanNetlist {
   int ajoutes = 0, valeurs = 0, empreintes = 0, liaisons = 0, nonChangees = 0;
-  std::vector<std::string> lignes;  // une ligne par changement ou par écart laissé, pour le rapport CSV
+  // Une ligne par changement ou par écart laissé, pour le rapport CSV : objet, changement, avant, après
+  std::vector<std::vector<std::string>> lignes;
 };
 BilanNetlist mettreAJourDepuisNetlist(ConceptionElec& c, const NetlistLue& n);
 std::string rapportNetlistCsv(const BilanNetlist& b);

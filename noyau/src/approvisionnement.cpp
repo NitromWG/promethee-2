@@ -1,4 +1,5 @@
 // Prométhée : approvisionnement hors ligne (lot L4, tâche 4.18). Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/approvisionnement.hpp"
 
 #include <algorithm>
@@ -198,20 +199,19 @@ std::vector<BesoinAchat> besoinsAchat(const ConceptionElec& c, int cartes, const
 }
 
 std::string csvBesoins(const std::vector<BesoinAchat>& b) {
-  std::string s = "Repères;Valeur;Empreinte;Référence;Besoin;En stock;À acheter;Commandé;Source;Prix unitaire;Montant\n";
+  prom::EcrivainCsv w;  // écrivain du poste (10.20)
+  w.ligne({"Repères", "Valeur", "Empreinte", "Référence", "Besoin", "En stock", "À acheter", "Commandé", "Source", "Prix unitaire", "Montant"});
   double total = 0;
   for (const auto& x : b) {
     std::string refs;
     for (const auto& r : x.ligne.references) refs += (refs.empty() ? "" : ",") + r;
-    char t[64];
-    std::snprintf(t, sizeof t, "%.4f;%.2f", x.prixUnitaire, x.montant);
-    s += refs + ";" + x.ligne.valeur + ";" + x.ligne.empreinte + ";" + x.ligne.mpn + ";" + std::to_string(x.besoin) + ";" + std::to_string(x.enStock) + ";" + std::to_string(x.aAcheter) + ";" +
-         std::to_string(x.quantiteCommandee) + ";" + x.source + ";" + t + "\n";
+    w.champ(refs).champ(x.ligne.valeur).champ(x.ligne.empreinte).champ(x.ligne.mpn).entier(x.besoin).entier(x.enStock).entier(x.aAcheter).entier(x.quantiteCommandee).champ(x.source);
+    w.fixe(x.prixUnitaire, 4).fixe(x.montant, 2).fin();
     total += x.montant;
   }
-  char t[48];
-  std::snprintf(t, sizeof t, "%.2f", total);
-  return s + ";;;;;;;;Total;;" + t + "\n";
+  for (int i = 0; i < 8; ++i) w.champ("");
+  w.champ("Total").champ("").fixe(total, 2).fin();
+  return w.texte();
 }
 
 bool remplacantCompatible(const Article& a, const Article& b, std::string* raison) {

@@ -296,9 +296,18 @@ TEST_CASE("Fonctions KiCad : empreinte .kicad_mod et symboles .kicad_sym import�
   const auto d = prom::ecad::empreinteDepuisKicadMod(mod, &alertes);
   REQUIRE(d);
   CHECK(d->id == "kicad:R_0603_1608Metric");
-  REQUIRE(d->pastilles.size() == 2);  // l'ouverture de pâte seule n'est pas une pastille
-  CHECK(d->pastilles[0].position == prom::ecad::ptMm(-0.825, 0));
-  CHECK(d->pastilles[1].largeur == prom::ecad::nm(0.8));
+  // 0.34 (10.1) : l'ouverture de pâte seule est reprise, pastille sans numéro sur la seule couche de pâte
+  REQUIRE(d->pastilles.size() == 3);
+  const prom::ecad::Pastille* p1 = nullptr;
+  const prom::ecad::Pastille* p2 = nullptr;
+  const prom::ecad::Pastille* pate = nullptr;
+  for (const auto& p : d->pastilles) (p.numero == "1" ? p1 : p.numero == "2" ? p2 : pate) = &p;
+  REQUIRE(p1);
+  REQUIRE(p2);
+  REQUIRE(pate);
+  CHECK(pate->couches == prom::ecad::bit(prom::ecad::Couche::PateDessus));
+  CHECK(p1->position == prom::ecad::ptMm(-0.825, 0));
+  CHECK(p2->largeur == prom::ecad::nm(0.8));
   CHECK(d->traits.size() >= 2);
   CHECK(prom::ecad::mm(d->encombrement.largeur()) == Approx(2.96).margin(1e-6));
   CHECK_FALSE(prom::ecad::empreinteDepuisKicadMod("(kicad_pcb (version 1))"));

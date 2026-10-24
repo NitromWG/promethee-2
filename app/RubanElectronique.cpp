@@ -446,7 +446,8 @@ void AtelierElectronique::enregistrerCommandes() {
     enregistrerTexte(QStringLiteral("IPC-2581"), QStringLiteral(".xml"), QStringLiteral("IPC-2581 (*.xml *.cvg)"), [](const ConceptionElec& x) { return ipc2581(x); });
   };
   c["fabrication.importerNetlist"] = [this] {
-    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Netlist à appliquer"), {}, QStringLiteral("Netlists (*.net *.txt)"));
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Netlist à appliquer"), {},
+                                                   QStringLiteral("Netlists (*.net *.txt *.asc *.edf *.edn *.edif *.frp *.cir *.sp *.spi);;Tous les fichiers (*)"));
     if (f.isEmpty()) return;
     const QString csv = QFileInfo(f).dir().filePath(QFileInfo(f).completeBaseName() + QStringLiteral("-changements.csv"));
     importerNetlist(f, csv);

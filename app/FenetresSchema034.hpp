@@ -133,6 +133,9 @@ class DialoguePastilles : public QDialog {
   bool lireCoordonnees(const QString& chemin);
   int appliquerModele(const std::vector<std::string>& numeros);  // la pastille de la première ligne choisie, sur les autres
   bool reglerCote(const std::string& a, const std::string& b, double mm);
+  // 10.21 : forme libre des pastilles choisies (toutes si aucune) tirée d'un DXF ou d'un SVG, mise à « largeur » mm
+  // (0 : à l'échelle du fichier)
+  bool formeDepuisDessin(const QString& chemin, const std::vector<std::string>& numeros, double largeur = 0);
   QStringList controler() const;
   int doublons() const;
   // Rangée au projet ; « composants » : ceux à reprendre (vide : aucun) ; rend le nombre repris

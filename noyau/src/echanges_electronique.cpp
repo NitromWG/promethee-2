@@ -1,6 +1,10 @@
 // Prométhée : échanges de la conception électronique (lot L10). Licence GPL-3.0-only.
 #include "promethee/echanges_electronique.hpp"
 
+#include "promethee/csv.hpp"
+#include "promethee/netlists_tierces.hpp"
+#include "promethee/valeurs.hpp"
+
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
@@ -94,6 +98,9 @@ NetlistLue lireNetlist(const std::string& texte) {
     }
     return n;
   }
+  // Netlists des autres logiciels (10.20) : OrCAD PCB II, PADS, Allegro, CADSTAR, EDIF, SPICE et LTspice, gEDA, TinyCAD
+  if (texte.find("Composants") == std::string::npos || texte.find("Réseaux") == std::string::npos)
+    if (const auto f = reconnaitreNetlist(texte)) return lireNetlistTierce(texte, *f);
   // Liste de Prométhée : « Composants » puis « Réseaux »
   std::istringstream in(texte);
   std::string ligne;
@@ -306,20 +313,20 @@ BilanNetlist mettreAJourDepuisNetlist(ConceptionElec& c, const NetlistLue& n) {
     const ComposantNetlist x = parRef.count(ref) ? parRef[ref] : ComposantNetlist{ref, {}, {}};
     if (ComposantElec* k = const_cast<ComposantElec*>(c.parReference(ref))) {
       if (!x.valeur.empty() && k->valeur != x.valeur) {
-        b.lignes.push_back(ref + ";valeur;" + k->valeur + ";" + x.valeur);
+        b.lignes.push_back({ref, "valeur", k->valeur, x.valeur});
         k->valeur = x.valeur;
         ++b.valeurs;
       }
       const std::string e = x.empreinte.empty() ? std::string() : empreinteConnue(x.empreinte);
       if (!e.empty() && k->empreinte != e) {
-        b.lignes.push_back(ref + ";empreinte;" + k->empreinte + ";" + e);
+        b.lignes.push_back({ref, "empreinte", k->empreinte, e});
         k->empreinte = e;
         ++b.empreintes;
       }
       continue;
     }
     poserComposantNetlist(c, 0, x, bs.empty() ? std::vector<std::string>{"1"} : bs, place.suivant(c, 2.54 * static_cast<double>(bs.size()) / 2 + 10));
-    b.lignes.push_back(ref + ";ajouté;;" + x.valeur);
+    b.lignes.push_back({ref, "ajouté", "", x.valeur});
     ++b.ajoutes;
   }
   // Liaisons : une broche dont le réseau diffère est recâblée si elle est reliée par une étiquette au bout de son fil
@@ -365,24 +372,49 @@ BilanNetlist mettreAJourDepuisNetlist(ConceptionElec& c, const NetlistLue& n) {
         }
       }
       if (recable) {
-        b.lignes.push_back(ref + "." + broche + ";réseau;" + actuel + ";" + reseau);
+        b.lignes.push_back({ref + "." + broche, "réseau", actuel, reseau});
         ++b.liaisons;
       } else {
-        b.lignes.push_back(ref + "." + broche + ";réseau non changé (câblé au schéma);" + actuel + ";" + reseau);
+        b.lignes.push_back({ref + "." + broche, "réseau non changé (câblé au schéma)", actuel, reseau});
         ++b.nonChangees;
       }
     }
   for (const auto& x : c.composants)
-    if (!x.reference.empty() && x.reference[0] != '#' && !broches.count(x.reference)) b.lignes.push_back(x.reference + ";absent de la netlist (gardé);;");
+    if (!x.reference.empty() && x.reference[0] != '#' && !broches.count(x.reference)) b.lignes.push_back({x.reference, "absent de la netlist (gardé)", "", ""});
   mettreAJourCircuit(c);
   return b;
 }
 
+namespace {
+bool valeurSI(const std::string& t, const std::string& ref, double& v) {
+  if (t.empty()) return false;
+  std::string prefixe;
+  for (char ch : ref) {
+    if (!std::isalpha(static_cast<unsigned char>(ch))) break;
+    prefixe += ch;
+  }
+  const ValeurComprise c = lireValeurComposant(t, familleDepuisPrefixe(prefixe));
+  if (!c.comprise()) return false;
+  v = c.nombre;
+  return true;
+}
+}  // namespace
+
 std::string rapportNetlistCsv(const BilanNetlist& b) {
-  // Séparateur « ; », marque UTF-8 : ouvert d'un double-clic par LibreOffice et Excel en français
-  std::string r = "\xEF\xBB\xBFobjet;changement;avant;après\r\n";
-  for (const auto& l : b.lignes) r += l + "\r\n";
-  return r;
+  // Écrivain CSV du poste (10.20) : par défaut point-virgule, virgule décimale et marque UTF-8, ouvert d'un
+  // double-clic en colonnes justes par LibreOffice et Excel ; la valeur numérique des valeurs changées suit la marque
+  // décimale réglée
+  prom::EcrivainCsv w;
+  w.ligne({"objet", "changement", "avant", "après", "valeur après (SI)"});
+  for (const auto& l : b.lignes) {
+    for (std::size_t i = 0; i < 4; ++i) w.champ(i < l.size() ? l[i] : std::string());
+    const std::string apres = l.size() > 3 ? l[3] : std::string();
+    double v = 0;
+    if ((l.size() > 1 && (l[1] == "valeur" || l[1] == "ajouté")) && valeurSI(apres, l[0], v)) w.nombre(v, 12);
+    else w.champ("");
+    w.fin();
+  }
+  return w.texte();
 }
 
 // ---------- DXF de la mécanique ----------

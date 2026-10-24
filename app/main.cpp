@@ -25,6 +25,7 @@
 #include <exception>
 #include <cstdio>
 
+#include "promethee/csv.hpp"
 #include "Accueil.hpp"
 #include "ChienDeGarde.hpp"
 #include "Document.hpp"
@@ -219,6 +220,8 @@ int main(int argc, char** argv) {
   if (const QString avant = RegistreReglages::instance().reprendreVersionPrecedente(QCoreApplication::applicationVersion()); !avant.isEmpty())
     journal("réglages repris de la version " + avant.toStdString());
   RegistreReglages::instance().relireSynchronise();
+  // Écrivain CSV du noyau réglé une fois pour le poste (10.20)
+  prom::reglerCsv(prom::reglagesCsvDepuisTexte(RegistreReglages::instance().valeur(QStringLiteral("echanges/csv")).toString().toStdString()));
 
   // Thème de couleur choisi (Prométhée par défaut), appliqué à toute l'application : voir Theme.hpp
   // La taille des icônes réglée (2.31) : un style qui grandit les icônes des barres, boutons et menus

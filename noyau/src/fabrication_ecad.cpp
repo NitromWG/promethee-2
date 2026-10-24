@@ -14,6 +14,7 @@
 
 #include <nlohmann/json.hpp>
 
+#include "promethee/csv.hpp"
 #include "promethee/fichiers.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/police.hpp"
@@ -852,21 +853,14 @@ bool dansFichierPlacement(const ConceptionElec& c, const EmpreintePlacee& e) {
 }
 
 std::string csvNomenclature(const ConceptionElec& c) {
-  auto champ = [](const std::string& t) {
-    if (t.find_first_of(";\"\n") == std::string::npos) return t;
-    std::string r = "\"";
-    for (char ch : t) r += ch == '"' ? std::string("\"\"") : std::string(1, ch);
-    return r + "\"";
-  };
-  std::ostringstream s;
-  s << "\xEF\xBB\xBF" << "Quantité;Références;Valeur;Empreinte;Fabricant;Référence fabricant;Fournisseur;Description;LCSC\n";
+  prom::EcrivainCsv w;  // écrivain du poste (10.20)
+  w.ligne({"Quantité", "Références", "Valeur", "Empreinte", "Fabricant", "Référence fabricant", "Fournisseur", "Description", "LCSC"});
   for (const auto& l : nomenclature(c)) {
     std::string refs;
     for (const auto& r : l.references) refs += (refs.empty() ? "" : ", ") + r;
-    s << l.quantite << ";" << champ(refs) << ";" << champ(l.valeur) << ";" << champ(l.empreinte) << ";" << champ(l.fabricant) << ";" << champ(l.mpn) << ";" << champ(l.fournisseur) << ";"
-      << champ(l.description) << ";" << champ(l.lcsc) << "\n";
+    w.entier(l.quantite).champ(refs).champ(l.valeur).champ(l.empreinte).champ(l.fabricant).champ(l.mpn).champ(l.fournisseur).champ(l.description).champ(l.lcsc).fin();
   }
-  return s.str();
+  return w.texte();
 }
 
 std::vector<std::string> ecrireDossierFabrication(const ConceptionElec& c, const std::string& dossier, const std::string& version) {

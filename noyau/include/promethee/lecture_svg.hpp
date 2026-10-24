@@ -27,6 +27,7 @@ struct FormeSvg {
   double rx = 0, ry = 0;  // cercle, ellipse ; rectangle : rayon des coins
   bool ferme = false;
   std::string trait, fond;  // « #RRGGBB », vide : aucun
+  std::string fondChemin;   // fond du chemin dont la forme est un morceau (un chemin est coupé à chaque courbe, 10.21)
   double epaisseur = 0;     // mm
   std::string calque;       // identifiant ou étiquette du groupe parent le plus proche
 };

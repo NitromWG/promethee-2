@@ -1,4 +1,5 @@
 // Prométhée : nomenclature mécanique en tableau, CSV et XLSX (M10). Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/nomenclature_meca.hpp"
 
 #include <algorithm>
@@ -200,20 +201,20 @@ TableauNomenclature tableauNomenclature(const Projet& p, int assemblage, VueNome
 }
 
 std::string csvNomenclature(const TableauNomenclature& t) {
-  std::string r = "\xEF\xBB\xBF";
-  for (std::size_t c = 0; c < t.colonnes.size(); ++c) r += (c ? ";" : "") + champCsv(t.colonnes[c].titre);
-  r += "\r\n";
+  EcrivainCsv w;  // écrivain du poste (10.20)
+  for (const auto& col : t.colonnes) w.champ(col.titre);
+  w.fin();
   for (std::size_t i = 0; i < t.lignes.size(); ++i) {
     for (std::size_t c = 0; c < t.lignes[i].size(); ++c) {
       std::string v = t.lignes[i][c].texte;
       // Retrait des niveaux dans la désignation, lisible sans mise en forme
       if (t.colonnes[c].cle == "designation" && i < t.niveaux.size()) v = std::string(static_cast<std::size_t>(2 * t.niveaux[i]), ' ') + v;
-      r += (c ? ";" : "") + champCsv(v);
+      w.champ(v);
     }
-    r += "\r\n";
+    w.fin();
   }
-  r += champCsv("Total : " + t.texteTotal()) + "\r\n";
-  return r;
+  w.champ("Total : " + t.texteTotal()).fin();
+  return w.texte();
 }
 
 std::string xlsxNomenclature(const TableauNomenclature& t) {

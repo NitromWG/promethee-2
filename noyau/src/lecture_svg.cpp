@@ -472,6 +472,7 @@ class Construction {
     FormeSvg f;
     f.trait = k.trait;
     f.fond = fermable ? k.fond : std::string();
+    f.fondChemin = k.fond;
     f.epaisseur = k.trait.empty() ? 0 : k.epaisseur * k.m.echelleMoyenne();
     f.calque = k.calque;
     return f;

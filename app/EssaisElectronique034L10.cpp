@@ -25,6 +25,8 @@
 #include "FenetrePrincipale.hpp"
 #include "ImportsTiers034.hpp"
 #include "promethee/circuit_edition.hpp"
+#include "promethee/dessins_carte.hpp"
+#include "promethee/echanges_electronique.hpp"
 #include "promethee/exports3d.hpp"
 #include "promethee/idx.hpp"
 #include "promethee/fichiers.hpp"
@@ -298,5 +300,69 @@ void essaisElectronique034L10(FenetrePrincipale& f, const Verifier& verifier) {
       }
     }
     verifier(ok, "10.24 : proposition IDX de la mécanique (connecteur déplacé de 2 mm) acceptée, carte mise à jour, échange inscrit, un Ctrl+Z la retire", detail);
+  }
+  // ---------- 10.20 · Netlist d'un schéma LTspice : carte mise à jour, rapport CSV en colonnes justes ----------
+  {
+    const std::string v1 = "* filtre.asc\nV1 IN 0 SINE(0 1 1k)\nR1 IN OUT 10k\nC1 OUT 0 100n\n.tran 5m\n.end\n";
+    const std::string v2 = "* filtre.asc\nV1 IN 0 SINE(0 1 1k)\nR1 IN OUT 22k\nC1 OUT 0 100n\nC2 OUT 0 4.7µ\n.tran 5m\n.end\n";
+    AtelierElectronique* a = ouvrir(f, conceptionDepuisNetlist(lireNetlist(v1), "Filtre LTspice"));
+    const QString net = QDir(dossier).filePath(QStringLiteral("filtre.net")), csv = QDir(dossier).filePath(QStringLiteral("filtre-changements.csv"));
+    bool ok = false;
+    std::string detail;
+    if (a && ecrire(net, v2)) {
+      a->importerNetlist(net, csv);
+      attendre(300);
+      const ConceptionElec& c = doc->projet().electronique[0];
+      std::vector<std::vector<std::string>> t;
+      try {
+        t = lireTableau(prom::lireFichier(prom::cheminFichier(csv.toStdString())));
+      } catch (const std::exception&) {
+      }
+      const bool colonnes = !t.empty() && std::all_of(t.begin(), t.end(), [](const auto& l) { return l.size() == 5; });
+      bool decimale = false;
+      for (const auto& l : t) decimale = decimale || (l.size() == 5 && l[0] == "C2" && l[4] == "0,0000047");
+      ok = c.parReference("R1") && c.parReference("R1")->valeur == "22k" && c.parReference("C2") && colonnes && decimale;
+      detail = std::to_string(t.size()) + " ligne(s) au rapport";
+    }
+    verifier(ok, "10.20 : netlist d'un schéma LTspice appliquée à la carte, rapport des changements en colonnes et décimales justes", detail);
+  }
+  // ---------- 10.21 · Logo SVG de 20 mm posé en sérigraphie : 20,00 mm dans le Gerber relu ----------
+  {
+    AtelierElectronique* a = ouvrir(f, exempleElectronique());
+    const QString logo = QDir(dossier).filePath(QStringLiteral("logo.svg"));
+    double largeur = 0;
+    int regions = 0;
+    if (a && ecrire(logo, R"(<svg xmlns="http://www.w3.org/2000/svg" width="40mm" height="20mm" viewBox="0 0 40 20">
+  <path d="M 10 2 A 8 8 0 1 1 9.99 2 Z M 10 6 A 4 4 0 1 0 10.01 6 Z" fill="#000"/><rect x="22" y="4" width="16" height="12" fill="#000"/></svg>)")) {
+      OptionsDessinCarte o;
+      o.couche = Couche::SerigraphieDessus;
+      o.largeurVoulue = 20;
+      o.centre = ptMm(30, 20);
+      a->importerDessinCarte(logo, false, &o);
+      attendre(200);
+      const ConceptionElec& c = doc->projet().electronique[0];
+      const Connectivite k = connectivite(c);
+      const std::string g = gerber(modeleFabrication(c, k, remplirZones(c, k)), Couche::SerigraphieDessus, "0.34");
+      // Lecture indépendante des régions (G36…G37), format 4.6 en millimètres
+      double x0 = 1e300, x1 = -1e300;
+      bool region = false;
+      std::size_t i = 0;
+      while (i < g.size()) {
+        const auto fin = g.find('*', i);
+        if (fin == std::string::npos) break;
+        std::string cmd = g.substr(i, fin - i);
+        i = fin + 1;
+        while (!cmd.empty() && (cmd.front() == '\n' || cmd.front() == '\r' || cmd.front() == '%')) cmd.erase(cmd.begin());
+        if (cmd == "G36") region = true, ++regions;
+        else if (cmd == "G37") region = false;
+        else if (region && !cmd.empty() && cmd[0] == 'X') {
+          const double x = std::stoll(cmd.substr(1)) / 1e6;
+          x0 = std::min(x0, x), x1 = std::max(x1, x);
+        }
+      }
+      largeur = x1 - x0;
+      if (qEnvironmentVariableIsSet("PROMETHEE_ESSAIS_DEBUG")) std::printf("(dessins : %zu ; gerber : %zu octets, G36 à %zu)\n", c.circuit.dessins.size(), g.size(), g.find("G36"));
+    }
+    verifier(regions == 2 && std::abs(largeur - 20) < 0.005, "10.21 : logo SVG de 20 mm posé en sérigraphie : 20,00 mm dans le Gerber relu", std::to_string(largeur) + " mm, " + std::to_string(regions) + " région(s)");
   }
 }

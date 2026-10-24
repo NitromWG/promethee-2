@@ -1,6 +1,7 @@
 // Prométhée : fabrication détaillée (0.34) — perçage complet par paires de couches (Excellon, EIA, Gerber X2),
 // fentes détourées ou en G85, contre-perçages, tableau et plan de perçage, forets du profil, Gerber X3 des
 // composants, vias à remplir (IPC-4761) et usinages de la carte nue. Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/fabrication_detaillee.hpp"
 
 #include <algorithm>
@@ -214,18 +215,23 @@ std::vector<LignePercage> tableauPercages(const ModeleFabrication& m) {
 }
 
 std::string tableauPercagesCsv(const ModeleFabrication& m) {
-  std::ostringstream s;
-  s << "Outil;Diamètre (mm);Longueur de fente (mm);Tolérance (mm);Métallisé;Nombre;Couches;Fonction\n";
+  prom::EcrivainCsv w;  // écrivain du poste (10.20)
+  w.ligne({"Outil", "Diamètre (mm)", "Longueur de fente (mm)", "Tolérance (mm)", "Métallisé", "Nombre", "Couches", "Fonction"});
   for (const auto& l : tableauPercages(m)) {
-    auto mm3 = [](Nm v) {
-      std::string x = decimal(v, 3);
-      std::replace(x.begin(), x.end(), '.', ',');
-      return x;
-    };
-    s << "T" << l.outil << ";" << mm3(l.diametre) << ";" << (l.longueur ? mm3(l.longueur) : std::string()) << ";" << (l.tolerance ? "±" + mm3(l.tolerance) : std::string()) << ";"
-      << (l.metallise ? "oui" : "non") << ";" << l.nombre << ";" << l.paire << ";" << l.fonction << "\n";
+    w.champ("T" + std::to_string(l.outil)).fixe(mm(l.diametre), 3);
+    if (l.longueur) w.fixe(mm(l.longueur), 3);
+    else w.champ("");
+    std::string tol;
+    if (l.tolerance) {
+      char t[32];
+      std::snprintf(t, sizeof t, "±%.3f", mm(l.tolerance));
+      tol = t;
+      std::replace(tol.begin(), tol.end(), '.', w.reglages().decimale);
+    }
+    w.champ(tol);
+    w.champ(l.metallise ? "oui" : "non").entier(l.nombre).champ(l.paire).champ(l.fonction).fin();
   }
-  return s.str();
+  return w.texte();
 }
 
 std::string tableauPercagesJson(const ModeleFabrication& m) {

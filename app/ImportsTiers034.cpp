@@ -19,8 +19,10 @@
 #include <QLabel>
 #include <QMessageBox>
 #include <QPushButton>
+#include <QProcess>
 #include <QRadioButton>
 #include <QSettings>
+#include <QStandardPaths>
 #include <QStackedWidget>
 #include <QTableWidget>
 #include <QVBoxLayout>
@@ -32,8 +34,11 @@
 #include "FenetrePrincipale.hpp"
 #include "promethee/carte3d.hpp"
 #include "promethee/circuit_edition.hpp"
+#include "promethee/dessins_carte.hpp"
 #include "promethee/exports3d.hpp"
+#include "promethee/echanges_electronique.hpp"
 #include "promethee/fichiers.hpp"
+#include "promethee/netlists_tierces.hpp"
 
 using namespace prom::ecad;
 using prom::Projet;
@@ -580,6 +585,81 @@ void AtelierElectronique::enregistrerCommandesL10() {
     d->show();
     d->raise();
   };
+  // Netlists des autres logiciels (10.20) : un format au choix, ou un gabarit maison
+  c["fabrication.netlistTierce"] = [this] {
+    const ConceptionElec* x = conceptionCourante();
+    if (!x) return;
+    QStringList noms;
+    for (const auto& f : formatsNetlist()) noms << QString::fromUtf8(f.nom);
+    noms << QStringLiteral("Gabarit maison…");
+    bool ok = false;
+    const QString choix = QInputDialog::getItem(this, QStringLiteral("Netlist pour un autre logiciel"), QStringLiteral("Format"), noms, 0, false, &ok);
+    if (!ok) return;
+    const int i = static_cast<int>(noms.indexOf(choix));
+    std::string texte;
+    QString extension = QStringLiteral("net");
+    if (i == static_cast<int>(formatsNetlist().size())) {
+      const QString g = QFileDialog::getOpenFileName(this, QStringLiteral("Gabarit de netlist"), {}, QStringLiteral("Gabarits (*.txt *.gabarit)"));
+      if (g.isEmpty()) return;
+      try {
+        texte = netlistGabarit(netlistDe(*x), prom::lireFichier(prom::cheminFichier(g.toStdString())), x->nom);
+      } catch (const std::exception& e) {
+        afficherMessage(QStringLiteral("Gabarit illisible : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+        return;
+      }
+      extension = QStringLiteral("txt");
+    } else {
+      const auto& f = formatsNetlist()[static_cast<std::size_t>(std::max(0, i))];
+      texte = ecrireNetlist(netlistDe(*x), f.format, x->nom);
+      extension = QString::fromUtf8(f.extension);
+    }
+    const QString chemin = QFileDialog::getSaveFileName(this, QStringLiteral("Netlist"), q(x->nom) + QLatin1Char('.') + extension, QStringLiteral("Netlist (*.%1)").arg(extension));
+    if (chemin.isEmpty()) return;
+    try {
+      prom::ecrireFichierAtomique(prom::cheminFichier(chemin.toStdString()), texte);
+      afficherMessage(QStringLiteral("<b>Netlist</b> écrite : %1 (%2)").arg(QFileInfo(chemin).fileName().toHtmlEscaped(), choix.toHtmlEscaped()), NiveauMessage::Succes);
+    } catch (const std::exception& e) {
+      afficherMessage(QStringLiteral("Netlist : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+    }
+  };
+  // Dessins 2D (10.21) : DXF, SVG (et DWG si LibreDWG est installé) posés sur une couche ; DXF par jeux de couches
+  c["carte.importerDessin"] = [this] {
+    const ConceptionElec* x = conceptionCourante();
+    if (!x) return;
+    const bool dwg = !QStandardPaths::findExecutable(QStringLiteral("dwg2dxf")).isEmpty();
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Dessin à poser sur la carte"), {},
+                                                   dwg ? QStringLiteral("Dessins (*.dxf *.svg *.dwg)") : QStringLiteral("Dessins (*.dxf *.svg)"));
+    if (f.isEmpty()) return;
+    importerDessinCarte(f, true);
+  };
+  c["carte.exporterDxfCouches"] = [this] {
+    const ConceptionElec* x = conceptionCourante();
+    if (!x) return;
+    std::vector<JeuDxf> jeux = jeuxDxf(*x);
+    if (jeux.empty()) jeux.push_back(JeuDxf{});
+    QStringList noms;
+    for (const auto& j : jeux) noms << q(j.nom) + (j.miroir ? QStringLiteral(" (miroir)") : QString());
+    noms << QStringLiteral("Nouveau jeu : vue de dessous en miroir…");
+    bool ok = false;
+    const QString choix = QInputDialog::getItem(this, QStringLiteral("DXF des couches"), QStringLiteral("Jeu de couches"), noms, 0, false, &ok);
+    if (!ok) return;
+    const int i = static_cast<int>(noms.indexOf(choix));
+    JeuDxf j = i < static_cast<int>(jeux.size()) ? jeux[static_cast<std::size_t>(i)] : JeuDxf{};
+    if (i >= static_cast<int>(jeux.size())) {
+      j.nom = "Vue de dessous";
+      j.miroir = true;
+      j.couches = {Couche::CuivreDessous, Couche::SerigraphieDessous, Couche::VernisDessous};
+      modifierConception([&](ConceptionElec& y) { enregistrerJeuDxf(y, j); }, QStringLiteral("Jeu de couches DXF enregistré"));
+    }
+    const QString chemin = QFileDialog::getSaveFileName(this, QStringLiteral("DXF des couches"), q(x->nom) + QStringLiteral(".dxf"), QStringLiteral("DXF (*.dxf)"));
+    if (chemin.isEmpty()) return;
+    try {
+      prom::ecrireFichierAtomique(prom::cheminFichier(chemin.toStdString()), dxfCouches(*conceptionCourante(), j));
+      afficherMessage(QStringLiteral("<b>DXF</b> écrit : %1, un calque par couche%2.").arg(QFileInfo(chemin).fileName().toHtmlEscaped(), j.miroir ? QStringLiteral(", en miroir") : QString()), NiveauMessage::Succes);
+    } catch (const std::exception& e) {
+      afficherMessage(QStringLiteral("DXF : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+    }
+  };
   // Exports 3D de la carte équipée (10.10, 10.24)
   c["carte.exporter3D"] = [this] {
     const ConceptionElec* x = conceptionCourante();
@@ -669,4 +749,67 @@ void AtelierElectronique::enregistrerCommandesL10() {
       afficherMessage(QStringLiteral("<b>%1 composant(s) ajouté(s)</b> ; %2 repère(s) renuméroté(s), %3 réseau(x) homonyme(s).").arg(r.composants).arg(r.renumerotes.size()).arg(r.homonymes.size()),
                       NiveauMessage::Succes);
   };
+}
+
+int AtelierElectronique::importerDessinCarte(const QString& chemin, bool dialogue, const prom::ecad::OptionsDessinCarte* options) {
+  const ConceptionElec* x = conceptionCourante();
+  if (!x) return 0;
+  QString fichier = chemin;
+  // DWG : converti en DXF par LibreDWG (dwg2dxf), installé à part
+  if (chemin.endsWith(QStringLiteral(".dwg"), Qt::CaseInsensitive)) {
+    const QString outil = QStandardPaths::findExecutable(QStringLiteral("dwg2dxf"));
+    if (outil.isEmpty()) {
+      afficherMessage(QStringLiteral("Les fichiers DWG se lisent avec LibreDWG (dwg2dxf), absent de ce poste."), NiveauMessage::Avertissement);
+      return 0;
+    }
+    fichier = QDir::temp().filePath(QFileInfo(chemin).completeBaseName() + QStringLiteral("-promethee.dxf"));
+    QProcess p;
+    p.start(outil, {QStringLiteral("-y"), QStringLiteral("-o"), fichier, chemin});
+    if (!p.waitForFinished(60000) || !QFileInfo::exists(fichier)) {
+      afficherMessage(QStringLiteral("DWG non converti par LibreDWG : %1").arg(QString::fromLocal8Bit(p.readAllStandardError()).toHtmlEscaped()), NiveauMessage::Erreur);
+      return 0;
+    }
+  }
+  std::string texte;
+  try {
+    texte = prom::lireFichier(prom::cheminFichier(fichier.toStdString()));
+  } catch (const std::exception& e) {
+    afficherMessage(QStringLiteral("Dessin illisible : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+    return 0;
+  }
+  OptionsDessinCarte o = options ? *options : OptionsDessinCarte{};
+  if (!options) {
+    const Boite b = boite(x->circuit.contour.polygone());
+    o.centre = b.centre();
+  }
+  if (dialogue) {
+    QStringList couches;
+    std::vector<Couche> liste{Couche::SerigraphieDessus, Couche::SerigraphieDessous, Couche::CuivreDessus, Couche::CuivreDessous, Couche::VernisDessus, Couche::VernisDessous,
+                              Couche::FabricationDessus, Couche::FabricationDessous, Couche::Dessins, Couche::Commentaires};
+    for (Couche k : liste) couches << QString::fromUtf8(nomCouche(k));
+    bool ok = false;
+    const QString c = QInputDialog::getItem(this, QStringLiteral("Dessin sur la carte"), QStringLiteral("Couche"), couches, 0, false, &ok);
+    if (!ok) return 0;
+    o.couche = liste[static_cast<std::size_t>(std::max(0, static_cast<int>(couches.indexOf(c))))];
+    o.miroir = o.couche == Couche::SerigraphieDessous || o.couche == Couche::CuivreDessous || o.couche == Couche::VernisDessous || o.couche == Couche::FabricationDessous;
+    o.largeurVoulue = QInputDialog::getDouble(this, QStringLiteral("Dessin sur la carte"), QStringLiteral("Largeur voulue (mm, 0 : à l’échelle du fichier) :"), 0, 0, 1000, 2, &ok);
+    if (!ok) return 0;
+  }
+  RapportDessinCarte r;
+  const auto d = fichier.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive) ? dessinsDepuisSvg(texte, o, &r) : dessinsDepuisDxf(texte, o, &r);
+  if (d.empty()) {
+    afficherMessage(QStringLiteral("Le dessin ne contient aucune géométrie à poser."), NiveauMessage::Avertissement);
+    return 0;
+  }
+  modifierConception([&](ConceptionElec& y) { y.circuit.dessins.insert(y.circuit.dessins.end(), d.begin(), d.end()); }, QStringLiteral("Dessin posé sur la carte"));
+  afficherMessage(QStringLiteral("<b>Dessin posé</b> sur %1 : %2 × %3 mm, %4 région(s) pleine(s), %5 contour(s), %6 trait(s)%7.")
+                      .arg(QString::fromUtf8(nomCouche(o.couche)))
+                      .arg(r.largeur, 0, 'f', 2)
+                      .arg(r.hauteur, 0, 'f', 2)
+                      .arg(r.ilots)
+                      .arg(r.contours - (r.ilots ? 0 : 0))
+                      .arg(r.traits)
+                      .arg(r.reunis ? QStringLiteral(", %1 discontinuité(s) réparée(s)").arg(r.reunis) : QString()),
+                  NiveauMessage::Succes);
+  return static_cast<int>(d.size());
 }

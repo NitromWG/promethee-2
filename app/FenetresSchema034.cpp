@@ -31,6 +31,8 @@
 #include "AtelierElectronique.hpp"
 #include "Theme.hpp"
 #include "VueSchema.hpp"
+#include "promethee/dessins_carte.hpp"
+#include "promethee/fichiers.hpp"
 #include "promethee/dxf_dessin.hpp"
 #include "promethee/gabarits_ipc.hpp"
 
@@ -450,7 +452,8 @@ DialoguePastilles::DialoguePastilles(AtelierElectronique& a, const std::string& 
   auto* coord = new QPushButton(QStringLiteral("Depuis des coordonnées…"), this);
   auto* modele = new QPushButton(QStringLiteral("Pastille modèle → choisies"), this);
   auto* cote = new QPushButton(QStringLiteral("Cote entre deux pastilles…"), this);
-  for (QPushButton* b : {serie, matrice, coord, modele, cote}) b1->addWidget(b);
+  auto* dessin = new QPushButton(QStringLiteral("Forme depuis un DXF ou un SVG…"), this);
+  for (QPushButton* b : {serie, matrice, coord, modele, cote, dessin}) b1->addWidget(b);
   l->addLayout(b1);
   auto* b2 = new QHBoxLayout;
   m_majComposants = new QCheckBox(QStringLiteral("Mettre à jour les composants posés"), this);
@@ -476,6 +479,17 @@ DialoguePastilles::DialoguePastilles(AtelierElectronique& a, const std::string& 
     const QString t = QInputDialog::getText(this, QStringLiteral("Cote"), QStringLiteral("Pastilles et distance (« 1 2 1,27 ») :"), QLineEdit::Normal, {}, &ok);
     const QStringList m = t.split(QLatin1Char(' '), Qt::SkipEmptyParts);
     if (ok && m.size() == 3) reglerCote(s(m[0]), s(m[1]), QString(m[2]).replace(QLatin1Char(','), QLatin1Char('.')).toDouble());
+  });
+  connect(dessin, &QPushButton::clicked, this, [this] {
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Forme de pastille"), {}, QStringLiteral("Dessins (*.dxf *.svg)"));
+    if (f.isEmpty()) return;
+    bool ok = false;
+    const double l = QInputDialog::getDouble(this, QStringLiteral("Forme de pastille"), QStringLiteral("Largeur de la pastille (mm, 0 : celle du dessin) :"), 0, 0, 200, 3, &ok);
+    if (!ok) return;
+    std::vector<std::string> numeros;
+    for (const QModelIndex& i : m_tableau->selectionModel()->selectedRows())
+      if (i.row() >= 0 && i.row() < static_cast<int>(m_def.pastilles.size())) numeros.push_back(m_def.pastilles[static_cast<std::size_t>(i.row())].numero);
+    formeDepuisDessin(f, numeros, l);
   });
   connect(enregistrerB, &QPushButton::clicked, this, [this] { enregistrer(m_majComposants->isChecked()); });
   connect(m_tableau, &QTableWidget::cellChanged, this, [this](int r, int col) {
@@ -557,6 +571,38 @@ int DialoguePastilles::appliquerModele(const std::vector<std::string>& numeros) 
   const int n = appliquerPastilleModele(m_def, modele, std::vector<std::string>(numeros.begin() + 1, numeros.end()));
   remplir();
   return n;
+}
+
+bool DialoguePastilles::formeDepuisDessin(const QString& chemin, const std::vector<std::string>& numeros, double largeur) {
+  std::string texte;
+  try {
+    texte = prom::lireFichier(prom::cheminFichier(chemin.toStdString()));
+  } catch (const std::exception& e) {
+    m_bilan->setText(QString::fromUtf8(e.what()).toHtmlEscaped());
+    return false;
+  }
+  OptionsDessinCarte o;
+  o.largeurVoulue = largeur;
+  o.remplir = true;
+  const auto d = chemin.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive) ? dessinsDepuisSvg(texte, o) : dessinsDepuisDxf(texte, o);
+  const auto modele = pastilleDepuisDessins(d, {});
+  if (!modele) {
+    m_bilan->setText(QStringLiteral("Le dessin n’a aucun contour fermé : pas de forme de pastille."));
+    return false;
+  }
+  int n = 0;
+  for (auto& p : m_def.pastilles)
+    if (numeros.empty() || std::find(numeros.begin(), numeros.end(), p.numero) != numeros.end()) {
+      p.forme = FormePastille::Libre;
+      p.contourLibre = modele->contourLibre;
+      p.largeur = modele->largeur;
+      p.hauteur = modele->hauteur;
+      p.rotation = 0;
+      ++n;
+    }
+  remplir();
+  m_bilan->setText(QStringLiteral("%1 pastille(s) en forme libre de %2 × %3 mm.").arg(n).arg(mm(modele->largeur), 0, 'f', 2).arg(mm(modele->hauteur), 0, 'f', 2));
+  return n > 0;
 }
 
 bool DialoguePastilles::reglerCote(const std::string& a, const std::string& b, double distanceMm) {

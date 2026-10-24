@@ -1,5 +1,7 @@
 // Prométhée : schéma avancé de la 0.34 (lot L7). Voir schema_avance.hpp.
 // Licence GPL-3.0-only.
+#include "promethee/circuit_edition.hpp"
+#include "promethee/csv.hpp"
 #include "promethee/schema_avance.hpp"
 
 #include <algorithm>
@@ -750,35 +752,18 @@ std::vector<std::string> controlerSymbole(const DefSymbole& d) {
 }
 
 std::string brochesVersCsv(const DefSymbole& d) {
-  std::ostringstream s;
-  s << "numero;nom;type;cote;rang;unite;section;groupe\n";
+  prom::EcrivainCsv w;  // écrivain du poste (10.20) ; relu par brochesDepuisCsv
+  w.ligne({"numero", "nom", "type", "cote", "rang", "unite", "section", "groupe"});
   for (const auto& b : d.broches) {
     const int cote = b.direction == 0 ? 0 : b.direction == 2 ? 1 : b.direction == 1 ? 2 : 3;  // vers le corps : +x ⇒ à gauche
-    s << b.numero << ';' << b.nom << ';' << codeTypeBroche(b.type) << ';' << (cote == 0 ? "gauche" : cote == 1 ? "droite" : cote == 2 ? "haut" : "bas") << ';' << b.rang << ';' << b.unite << ';'
-      << b.section << ';' << b.groupe << '\n';
+    w.champ(b.numero).champ(b.nom).champ(codeTypeBroche(b.type)).champ(cote == 0 ? "gauche" : cote == 1 ? "droite" : cote == 2 ? "haut" : "bas").entier(b.rang).entier(b.unite).champ(b.section).champ(b.groupe).fin();
   }
-  return s.str();
+  return w.texte();
 }
 
 std::vector<SpecBroche> brochesDepuisCsv(const std::string& csv, std::vector<std::string>* journal) {
-  std::vector<std::vector<std::string>> lignes;
-  std::istringstream in(csv);
-  std::string l;
-  while (std::getline(in, l)) {
-    if (!l.empty() && l.back() == '\r') l.pop_back();
-    if (l.empty()) continue;
-    std::vector<std::string> cases;
-    std::string x;
-    for (char ch : l + ";") {
-      if (ch == ';' || ch == ',' || ch == '\t') {
-        cases.push_back(x);
-        x.clear();
-      } else
-        x += ch;
-    }
-    lignes.push_back(cases);
-  }
-  return specDepuisTableau(lignes, "symbole", journal).broches;
+  // Lecteur de tableau commun : marque UTF-8, guillemets, point-virgule, virgule ou tabulation (10.20)
+  return specDepuisTableau(lireTableau(csv), "symbole", journal).broches;
 }
 
 std::vector<SpecBroche> rangeeBroches(const std::string& prefixe, int de, int a, int premierNumero, int cote, TypeBroche type) {

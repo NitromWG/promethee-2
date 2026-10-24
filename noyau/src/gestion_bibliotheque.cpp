@@ -1,5 +1,6 @@
 // Prométhée : tableur et gestion de bibliothèque (lot L4, tâche 4.23). Voir gestion_bibliotheque.hpp.
 // Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/gestion_bibliotheque.hpp"
 
 #include <algorithm>
@@ -534,14 +535,10 @@ int RapportBibliotheque::compter(const std::string& genre, const std::string& et
 }
 
 std::string RapportBibliotheque::csv() const {
-  auto champ = [](const std::string& s) {
-    std::string r = "\"";
-    for (char ch : s) r += ch == '"' ? std::string("\"\"") : std::string(1, ch);
-    return r + "\"";
-  };
-  std::string o = "\xEF\xBB\xBFGenre;Nom;État;Détail\r\n";
-  for (const auto& l : objets) o += champ(l.genre) + ";" + champ(l.nom) + ";" + champ(l.etat) + ";" + champ(l.detail) + "\r\n";
-  return o;
+  prom::EcrivainCsv w;  // écrivain du poste (10.20)
+  w.ligne({"Genre", "Nom", "État", "Détail"});
+  for (const auto& l : objets) w.ligne({l.genre, l.nom, l.etat, l.detail});
+  return w.texte();
 }
 
 }  // namespace prom::ecad

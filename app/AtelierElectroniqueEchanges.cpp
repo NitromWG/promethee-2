@@ -44,7 +44,11 @@ QStringList AtelierElectronique::importerNetlist(const QString& chemin, const QS
   modifierConception([&](ConceptionElec& c) { b = mettreAJourDepuisNetlist(c, n); }, QStringLiteral("Mise à jour depuis la netlist"));
   if (!csv.isEmpty()) prom::ecrireFichierAtomique(prom::cheminFichier(csv.toStdString()), rapportNetlistCsv(b));
   QStringList lignes;
-  for (const auto& l : b.lignes) lignes << q(l);
+  for (const auto& l : b.lignes) {
+    QStringList champs;
+    for (const auto& x : l) champs << q(x);
+    lignes << champs.join(QStringLiteral(" · "));
+  }
   afficherMessage(QStringLiteral("<b>Netlist</b> : %1 composant(s) ajouté(s), %2 valeur(s), %3 empreinte(s), %4 liaison(s) changée(s)%5.")
                       .arg(b.ajoutes)
                       .arg(b.valeurs)

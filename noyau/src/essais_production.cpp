@@ -1,4 +1,5 @@
 // Prométhée : essais, mise en service et fiabilité (lot L17). Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "promethee/essais_production.hpp"
 
 #include <algorithm>
@@ -183,13 +184,17 @@ CouvertureTest couvertureTest(const ConceptionElec& c) {
 }
 
 std::string ProcesVerbal::csv() const {
-  std::ostringstream s;
-  s << "Procès-verbal;" << numeroSerie << ";" << date << ";" << operateur << "\nPoint;Réseau;Attendu;Mesure;Verdict\n";
-  for (const auto& l : lignes)
-    s << l.point << ";" << l.reseau << ";" << l.attendu << ";" << (l.mesuree ? chiffre(l.mesure, 4) : std::string()) << ";"
-      << (!l.mesuree ? "non mesuré" : l.conforme ? "conforme" : "hors tolérance") << "\n";
-  s << "Verdict;" << (conforme ? "carte conforme" : "carte non conforme") << "\n";
-  return s.str();
+  prom::EcrivainCsv w;  // écrivain du poste (10.20)
+  w.ligne({"Procès-verbal", numeroSerie, date, operateur});
+  w.ligne({"Point", "Réseau", "Attendu", "Mesure", "Verdict"});
+  for (const auto& l : lignes) {
+    w.champ(l.point).champ(l.reseau).champ(l.attendu);
+    if (l.mesuree) w.nombre(l.mesure, 4);
+    else w.champ("");
+    w.champ(!l.mesuree ? "non mesuré" : l.conforme ? "conforme" : "hors tolérance").fin();
+  }
+  w.ligne({"Verdict", conforme ? "carte conforme" : "carte non conforme"});
+  return w.texte();
 }
 
 ProcesVerbal procesVerbal(const ConceptionElec& c, const std::string& numeroSerie, const std::vector<MesurePv>& mesures, const std::string& operateur, const std::string& date) {

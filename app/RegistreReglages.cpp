@@ -1,4 +1,5 @@
 // Prométhée : réglages déclarés une fois (lot L2, tâche 2.32). Licence GPL-3.0-only.
+#include "promethee/csv.hpp"
 #include "RegistreReglages.hpp"
 
 #include <algorithm>
@@ -212,6 +213,17 @@ RegistreReglages::RegistreReglages() {
     Reglage r{QStringLiteral("recents/longueur"), QStringLiteral("Projets récents gardés"), QStringLiteral("historique fichiers liste accueil"), QStringLiteral("Session"), G::Entier, 10};
     r.min = 3;
     r.max = 40;
+    declarer(r);
+  }
+  // ---------- Échanges (0.34, 10.20) : l'écrivain CSV unique du noyau, réglé une fois ----------
+  {
+    Reglage r{QStringLiteral("echanges/csv"), QStringLiteral("Fichiers CSV écrits pour un tableur"), QStringLiteral("csv séparateur décimale point-virgule virgule excel libreoffice tableur marque utf-8 bom"),
+              QStringLiteral("Échanges"), G::Choix, QStringLiteral("; , bom crlf")};
+    r.choix = {QStringLiteral("Tableur en français (point-virgule, virgule décimale, marque UTF-8)"), QStringLiteral("International (virgule, point décimal, sans marque)"),
+               QStringLiteral("Tabulations (virgule décimale, marque UTF-8)"), QStringLiteral("Point-virgule et point décimal (marque UTF-8)")};
+    r.valeurs = {QStringLiteral("; , bom crlf"), QStringLiteral(", . sansbom lf"), QStringLiteral("tab , bom crlf"), QStringLiteral("; . bom crlf")};
+    r.bulle = QStringLiteral("Nomenclatures, rapports de changements et listes : séparateur, marque décimale et marque d’ordre. Les fichiers imposés par un fabricant gardent leur format.");
+    r.appliquer = [](const QVariant& v) { prom::reglerCsv(prom::reglagesCsvDepuisTexte(v.toString().toStdString())); };
     declarer(r);
   }
   {
