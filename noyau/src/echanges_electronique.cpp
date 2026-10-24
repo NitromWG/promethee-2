@@ -239,16 +239,20 @@ std::map<std::string, std::vector<std::string>> brochesParComposant(const Netlis
 struct Rangement {
   std::size_t feuille = 0;
   double x = 25.4, y = 25.4;
+  double rang = 0;  // hauteur du plus grand symbole du rang en cours : le rang suivant passe dessous
   Pt suivant(ConceptionElec& c, double hauteurMm) {
     if (x > 380) {
       x = 25.4;
-      y += 40.64;
+      y += std::max(40.64, rang + 12.7);
+      rang = 0;
     }
-    if (y + hauteurMm > 270) {
+    if (y + hauteurMm > 270 && y > 25.4) {
       ++feuille;
       x = 25.4;
       y = 25.4;
+      rang = 0;
     }
+    rang = std::max(rang, hauteurMm);
     while (c.feuilles.size() <= feuille) {
       Feuille f;
       f.uuid = nouvelUuid();
@@ -274,12 +278,57 @@ ConceptionElec conceptionDepuisNetlist(const NetlistLue& n, const std::string& n
   for (const auto& [ref, b] : broches) refs.push_back(ref);
   std::sort(refs.begin(), refs.end(), ordreNaturel);
   std::map<std::string, std::pair<std::size_t, std::string>> poses;  // repère → (feuille, symbole)
-  Rangement place;
+  // Symboles empilés en colonnes d'après leur encombrement réel (broches et fils des étiquettes compris) : aucun ne
+  // déborde sur un autre, sans quoi une étiquette posée sur la broche d'un voisin réunirait deux réseaux
+  std::size_t feuille = 0;
+  Nm xCol = nm(25.4), yCur = nm(25.4), largeurCol = 0;
+  const Nm marge = nm(7.62), bas = nm(270), droite = nm(400);
   for (const auto& ref : refs) {
     ComposantNetlist x = parRef.count(ref) ? parRef[ref] : ComposantNetlist{ref, {}, {}};
     const auto& b = broches.at(ref);
-    const Pt p = place.suivant(c, 2.54 * static_cast<double>(b.size()) / 2 + 10);
-    poses[ref] = {place.feuille, poserComposantNetlist(c, place.feuille, x, b.empty() ? std::vector<std::string>{"1"} : b, p)};
+    while (c.feuilles.size() <= feuille) {
+      Feuille f;
+      f.uuid = nouvelUuid();
+      f.nom = "Netlist " + std::to_string(c.feuilles.size() + 1);
+      f.format = "A3";
+      c.feuilles.push_back(f);
+    }
+    const std::string sym = poserComposantNetlist(c, feuille, x, b.empty() ? std::vector<std::string>{"1"} : b, Pt{0, 0});
+    SymbolePlace* sp = nullptr;
+    for (auto& s : c.feuilles[feuille].symboles)
+      if (s.uuid == sym) sp = &s;
+    Boite boite = sp ? boiteSymbole(*sp, *c.symbole(sp->symbole)) : Boite{0, 0, nm(10), nm(10)};
+    boite = boite.gonflee(nm(5.08));  // fils des étiquettes
+    if (yCur + boite.hauteur() > bas && yCur > nm(25.4)) {
+      xCol += largeurCol + marge * 2;
+      yCur = nm(25.4);
+      largeurCol = 0;
+    }
+    if (xCol + boite.largeur() > droite && xCol > nm(25.4)) {
+      // Feuille suivante : le symbole y est déplacé
+      Feuille f;
+      f.uuid = nouvelUuid();
+      f.nom = "Netlist " + std::to_string(c.feuilles.size() + 1);
+      f.format = "A3";
+      SymbolePlace copie = *sp;
+      c.feuilles[feuille].symboles.erase(std::remove_if(c.feuilles[feuille].symboles.begin(), c.feuilles[feuille].symboles.end(), [&](const SymbolePlace& s) { return s.uuid == sym; }),
+                                         c.feuilles[feuille].symboles.end());
+      ++feuille;
+      if (c.feuilles.size() <= feuille) c.feuilles.push_back(f);
+      c.feuilles[feuille].symboles.push_back(copie);
+      sp = &c.feuilles[feuille].symboles.back();
+      xCol = nm(25.4);
+      yCur = nm(25.4);
+      largeurCol = 0;
+    }
+    if (sp) {
+      Pt q{xCol - boite.x0, yCur - boite.y0};
+      q = {(q.x + GRILLE_SCHEMA - 1) / GRILLE_SCHEMA * GRILLE_SCHEMA, (q.y + GRILLE_SCHEMA - 1) / GRILLE_SCHEMA * GRILLE_SCHEMA};
+      sp->position = q;
+    }
+    yCur += boite.hauteur() + marge;
+    largeurCol = std::max(largeurCol, boite.largeur());
+    poses[ref] = {feuille, sym};
   }
   for (const auto& [reseau, noeuds] : n.reseaux)
     for (const auto& [ref, broche] : noeuds)

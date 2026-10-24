@@ -2,7 +2,8 @@
 // ECH-21, ECH-22, ECH-30). Écrivains : carte et schéma en PADS ASCII (Layout et Logic), carte en P-CAD ASCII
 // (ACCEL_ASCII), schéma en EDIF 2 0 0 (netlists_tierces.hpp), et pour Altium une archive aux formats KiCad et PADS
 // que son assistant d'import lit. Chaque écrivain inscrit à son rapport ce qui ne passe pas (zones de cuivre, règles,
-// empilage…). Lecteurs : PADS ASCII (Logic et Layout) et P-CAD ASCII, carte et réseaux reliés. Licence GPL-3.0-only.
+// empilage…). Lecteurs : PADS ASCII (Logic et Layout), P-CAD ASCII et archives CADSTAR, carte et réseaux reliés.
+// Licence GPL-3.0-only.
 #pragma once
 
 #include <optional>
@@ -33,5 +34,8 @@ ConceptionElec conceptionDepuisPads(const std::optional<std::string>& logic, con
 ConceptionElec conceptionDepuisPcad(const std::string& texte, const std::string& nom, RapportLectureCao* rapport = nullptr);
 bool estPadsAscii(const std::string& texte);
 bool estPcadAscii(const std::string& texte);
+// CADSTAR (10.17) : archive de carte (.cpa) ou de schéma (.csa)
+ConceptionElec conceptionDepuisCadstar(const std::string& texte, const std::string& nom, RapportLectureCao* rapport = nullptr);
+bool estArchiveCadstar(const std::string& texte);
 
 }  // namespace prom::ecad

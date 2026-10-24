@@ -8,6 +8,7 @@
 
 #include "promethee/circuit_edition.hpp"
 #include "promethee/formats_cao.hpp"
+#include "promethee/import_altium.hpp"
 #include "promethee/import_eagle.hpp"
 #include "promethee/import_schemas.hpp"
 #include "promethee/kicad_electronique.hpp"
@@ -32,7 +33,9 @@ std::string baseDe(const std::string& n) {
 bool estXmlEagle(const std::string& t) { return t.find("<eagle") != std::string::npos && t.find("<drawing") != std::string::npos; }
 }  // namespace
 
-std::string filtreConceptionsTierces() { return "*.kicad_pcb *.kicad_sch *.kicad_pro *.sch *.brd *.asc *.txt *.pcb *.vsdx"; }
+std::string filtreConceptionsTierces() {
+  return "*.kicad_pcb *.kicad_sch *.kicad_pro *.sch *.brd *.asc *.txt *.pcb *.vsdx *.cpa *.csa *.PrjPcb *.SchDoc *.PcbDoc *.CSPcbDoc *.CSSchDoc *.CMPcbDoc *.CMSchDoc *.SWPcbDoc *.prjpcb *.schdoc *.pcbdoc";
+}
 
 std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichier, const std::string& contenu, const LecteurVoisin& lire, std::string* erreur) {
   const std::string ext = extensionDe(nomFichier), base = baseDe(nomFichier);
@@ -80,6 +83,20 @@ std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichie
       if (brd) r.fichiers.push_back(base + ".brd");
       r.alertes = re.alertes;
       if (!brd) r.conception.schemaSeul = true;
+    } else if (ext == "prjpcb" || ext == "schdoc" || ext == "csschdoc" || ext == "cmschdoc" || ext == "pcbdoc" || ext == "cspcbdoc" || ext == "cmpcbdoc" || ext == "swpcbdoc") {
+      // Altium : le projet s'il est à côté (schémas et carte reliés), sinon le document seul
+      r.logiciel = ext.rfind("cs", 0) == 0 ? "CircuitStudio" : ext.rfind("cm", 0) == 0 ? "CircuitMaker" : ext == "swpcbdoc" ? "SolidWorks PCB" : "Altium";
+      RapportImportAltium ra;
+      auto lecteur = [&](const std::string& f) { return lire ? lire(f) : std::nullopt; };
+      const std::optional<std::string> projet = ext == "prjpcb" ? std::optional<std::string>(contenu) : voisin("PrjPcb");
+      if (projet)
+        r.conception = conceptionDepuisProjetAltium(*projet, base, lecteur, &ra);
+      else if (ext.find("sch") != std::string::npos)
+        r.conception = conceptionDepuisAltium({{nomFichier, contenu}}, std::nullopt, base, &ra);
+      else
+        r.conception = conceptionDepuisAltium({}, contenu, base, &ra);
+      r.fichiers = ra.fichiers.empty() ? std::vector<std::string>{nomFichier} : ra.fichiers;
+      r.alertes = ra.alertes;
     } else if (ext == "sch" && estSchemaKicad5(contenu)) {
       // KiCad 5 : schéma au format d'avant la 6, symboles tirés du cache ; la carte voisine (.kicad_pcb) est reliée
       r.logiciel = "KiCad 5";
@@ -122,6 +139,12 @@ std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichie
       const std::optional<std::string> logic = logique ? std::optional<std::string>(contenu) : (autre && autre->find("LOGIC") != std::string::npos ? autre : std::nullopt);
       const std::optional<std::string> layout = !logique ? std::optional<std::string>(contenu) : (autre && autre->find("LOGIC") == std::string::npos ? autre : std::nullopt);
       r.conception = conceptionDepuisPads(logic, layout, base, &rl);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rl.alertes;
+    } else if (estArchiveCadstar(contenu)) {
+      r.logiciel = "CADSTAR";
+      RapportLectureCao rl;
+      r.conception = conceptionDepuisCadstar(contenu, base, &rl);
       r.fichiers.push_back(nomFichier);
       r.alertes = rl.alertes;
     } else if (estPcadAscii(contenu)) {

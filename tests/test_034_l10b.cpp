@@ -656,3 +656,320 @@ TEST_CASE("10.14 · synoptique Visio (.vsdx) : formes en blocs, connecteurs en l
   REQUIRE(imp);
   CHECK(imp->logiciel == "Visio");
 }
+
+#include <cstdlib>
+
+#include "promethee/import_altium.hpp"
+#include "promethee/import_bibliotheques.hpp"
+
+namespace {
+// Schéma Altium d'essai : R1 entre IN et OUT, C1 entre OUT et la masse, J1 à deux broches, étiquettes de réseau et
+// ports d'alimentation, fils ; coordonnées en dizaines de mils, y vers le haut
+std::vector<EnregistrementAltium> schemaAltiumEssai() {
+  std::vector<EnregistrementAltium> e;
+  auto composant = [&](const std::string& ref, const std::string& lib, int x, int y, int orientation, const std::string& valeur, const std::string& motif) {
+    const int i = static_cast<int>(e.size());
+    e.push_back({{"RECORD", "1"}, {"LIBREFERENCE", lib}, {"LOCATION.X", std::to_string(x)}, {"LOCATION.Y", std::to_string(y)}, {"ORIENTATION", std::to_string(orientation)}, {"CURRENTPARTID", "1"}, {"PARTCOUNT", "2"}, {"UNIQUEID", "UID" + ref}});
+    e.push_back({{"RECORD", "34"}, {"OWNERINDEX", std::to_string(i)}, {"TEXT", ref}, {"NAME", "Designator"}});
+    e.push_back({{"RECORD", "41"}, {"OWNERINDEX", std::to_string(i)}, {"NAME", "Comment"}, {"TEXT", "=Value"}});
+    e.push_back({{"RECORD", "41"}, {"OWNERINDEX", std::to_string(i)}, {"NAME", "Value"}, {"TEXT", valeur}});
+    e.push_back({{"RECORD", "44"}, {"OWNERINDEX", std::to_string(i)}});
+    e.push_back({{"RECORD", "45"}, {"OWNERINDEX", std::to_string(static_cast<int>(e.size()) - 1)}, {"MODELNAME", motif}, {"MODELTYPE", "PCBLIB"}, {"ISCURRENT", "T"}});
+    return i;
+  };
+  // Broche : corps en (x, y), longueur 20 (200 mils), vers la droite (0), le haut (1), la gauche (2) ou le bas (3)
+  auto broche = [&](int proprio, const std::string& numero, int x, int y, int sens) {
+    e.push_back({{"RECORD", "2"}, {"OWNERINDEX", std::to_string(proprio)}, {"OWNERPARTID", "1"}, {"DESIGNATOR", numero}, {"NAME", numero}, {"ELECTRICAL", "4"}, {"PINCONGLOMERATE", std::to_string(sens | 0x18)},
+                 {"PINLENGTH", "20"}, {"LOCATION.X", std::to_string(x)}, {"LOCATION.Y", std::to_string(y)}});
+  };
+  auto fil = [&](int x1, int y1, int x2, int y2) {
+    e.push_back({{"RECORD", "27"}, {"LOCATIONCOUNT", "2"}, {"X1", std::to_string(x1)}, {"Y1", std::to_string(y1)}, {"X2", std::to_string(x2)}, {"Y2", std::to_string(y2)}});
+  };
+  e.push_back({{"RECORD", "31"}, {"USECUSTOMSHEET", "T"}, {"CUSTOMX", "1500"}, {"CUSTOMY", "950"}});
+  // R1 horizontale (corps de 300 à 400 en x, y = 500) : broche 1 à gauche, 2 à droite
+  const int r1 = composant("R1", "Res1", 300, 500, 0, "10k", "R0603");
+  broche(r1, "1", 300, 500, 2);
+  broche(r1, "2", 400, 500, 0);
+  // C1 tournée d'un quart de tour (verticale, x = 500) : broche 1 en haut, 2 en bas
+  const int c1 = composant("C1", "Cap", 500, 400, 1, "100n", "C0603");
+  broche(c1, "1", 500, 400, 1);
+  broche(c1, "2", 500, 300, 3);
+  // J1 : deux broches vers la droite
+  const int j1 = composant("J1", "Header 2", 100, 500, 0, "Header", "HDR1X2");
+  broche(j1, "1", 100, 500, 0);
+  broche(j1, "2", 100, 400, 0);
+  // Fils : J1.1 (120, 500) → R1.1 (280, 500) ; R1.2 (420, 500) → C1.1 (500, 420) par un coude ; C1.2 (500, 280) → masse
+  fil(120, 500, 280, 500);
+  fil(420, 500, 500, 500);
+  fil(500, 500, 500, 420);
+  fil(500, 280, 500, 250);
+  e.push_back({{"RECORD", "17"}, {"TEXT", "GND"}, {"LOCATION.X", "500"}, {"LOCATION.Y", "250"}, {"STYLE", "4"}});
+  // J1.2 (120, 400) : masse par un second port d'alimentation
+  fil(120, 400, 200, 400);
+  e.push_back({{"RECORD", "17"}, {"TEXT", "GND"}, {"LOCATION.X", "200"}, {"LOCATION.Y", "400"}, {"STYLE", "4"}});
+  e.push_back({{"RECORD", "25"}, {"TEXT", "IN"}, {"LOCATION.X", "200"}, {"LOCATION.Y", "500"}});
+  e.push_back({{"RECORD", "25"}, {"TEXT", "OUT"}, {"LOCATION.X", "460"}, {"LOCATION.Y", "500"}});
+  return e;
+}
+CarteAltium carteAltiumEssai() {
+  CarteAltium k;
+  k.contour = {{0, 0}, {30, 0}, {30, 20}, {0, 20}};
+  k.reseaux = {"IN", "OUT", "GND"};
+  k.composants = {{"R1", "R0603", "10k", 10, 10, 0, false}, {"C1", "C0603", "100n", 20, 10, 90, false}, {"J1", "HDR1X2", "Header", 4, 10, 0, true}};
+  auto pad = [&](const std::string& n, int comp, int net, double x, double y, double l, double h, double perc, int couche, double angle) {
+    PastilleAltium p;
+    p.nom = n, p.composant = comp, p.reseau = net, p.x = x, p.y = y, p.largeur = l, p.hauteur = h, p.percage = perc, p.couche = couche, p.angle = angle;
+    p.forme = perc > 0 ? 1 : 2;
+    k.pastilles.push_back(p);
+  };
+  pad("1", 0, 0, 9.2, 10, 0.8, 0.95, 0, 1, 0);
+  pad("2", 0, 1, 10.8, 10, 0.8, 0.95, 0, 1, 0);
+  pad("1", 1, 1, 20, 10.8, 0.8, 0.95, 0, 1, 90);
+  pad("2", 1, 2, 20, 9.2, 0.8, 0.95, 0, 1, 90);
+  pad("1", 2, 0, 4, 10, 1.7, 1.7, 1.0, 74, 0);
+  pad("2", 2, 2, 4, 12.54, 1.7, 1.7, 1.0, 74, 0);
+  k.pistes = {{0, 1, 4, 10, 9.2, 10, 0.3}, {1, 1, 10.8, 10, 20, 10.8, 0.3}, {2, 32, 20, 9.2, 4, 12.54, 0.5}};
+  k.vias = {{2, 15, 8, 0.6, 0.3}};
+  return k;
+}
+}  // namespace
+
+TEST_CASE("10.15 · fichier composé (CFB) écrit puis relu : grands flux, petits flux du mini-flux, dossiers", "[034][L10][10.15]") {
+  std::string grand(70'000, '\0');
+  for (std::size_t i = 0; i < grand.size(); ++i) grand[i] = static_cast<char>((i * 7 + i / 300) & 0xFF);
+  const std::vector<std::pair<std::string, std::string>> flux = {{"FileHeader", "|HEADER=essai"}, {"Pads6/Data", grand}, {"Pads6/Header", std::string(4, '\x02')}, {"Board6/Data", std::string(5000, 'b')}};
+  const std::string cfb = prom::ecrireCfb(flux);
+  REQUIRE(prom::estCfb(cfb));
+  const auto relus = prom::lireCfb(cfb);
+  REQUIRE(relus.size() == flux.size());
+  for (const auto& [n, c] : flux) {
+    const auto it = std::find_if(relus.begin(), relus.end(), [&](const auto& x) { return x.first == n; });
+    REQUIRE(it != relus.end());
+    CHECK(it->second == c);
+  }
+}
+
+TEST_CASE("10.15 · projet Altium (schéma binaire et ASCII, carte) : schéma et carte reliés, mêmes réseaux, mêmes empreintes", "[034][L10][10.15]") {
+  const auto enr = schemaAltiumEssai();
+  for (const bool ascii : {false, true}) {
+    const std::string sch = schDocAltium(enr, ascii);
+    REQUIRE(estSchemaAltium(sch));
+    RapportImportAltium r;
+    const ConceptionElec s = conceptionDepuisAltium({{"essai.SchDoc", sch}}, std::nullopt, "essai", &r);
+    for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+    CHECK(s.composants.size() == 3);
+    REQUIRE(s.parReference("R1"));
+    CHECK(s.parReference("R1")->valeur == "10k");  // « =Value » résolu
+    CHECK(s.parReference("C1")->empreinte == "altium:C0603");
+    const NetlistLue n = netlistDe(s);
+    CHECK(reseauDe(n, "R1", "1") == "IN");
+    CHECK(reseauDe(n, "J1", "1") == "IN");
+    CHECK(reseauDe(n, "R1", "2") == "OUT");
+    CHECK(reseauDe(n, "C1", "1") == "OUT");
+    CHECK(reseauDe(n, "C1", "2") == "GND");
+    CHECK(reseauDe(n, "J1", "2") == "GND");
+  }
+  // La carte seule : réseaux tirés des pastilles, empreintes par motif, J1 posé dessous
+  const std::string pcb = pcbDocAltium(carteAltiumEssai());
+  REQUIRE(estCarteAltium(pcb));
+  RapportImportAltium rk;
+  const ConceptionElec k = conceptionDepuisAltium({}, pcb, "carte", &rk);
+  for (const auto& a : rk.alertes) UNSCOPED_INFO(a);
+  REQUIRE(k.circuit.empreintes.size() == 3);
+  CHECK(k.circuit.pistes.size() == 3);
+  CHECK(k.circuit.vias.size() == 1);
+  CHECK(k.circuit.contour.libre.size() == 4);
+  const NetlistLue nk = netlistDe(k);
+  const NetlistLue ns = netlistDe(conceptionDepuisAltium({{"essai.SchDoc", schDocAltium(enr)}}, std::nullopt, "s"));
+  CHECK(partitionDe(nk) == partitionDe(ns));
+  // Pastilles posées aux places d'origine (J1 retournée dessous compris)
+  const Connectivite kk = connectivite(k);
+  int trouvees = 0;
+  for (const auto& p : pastilles(k, kk))
+    for (const auto& a : carteAltiumEssai().pastilles)
+      if (distance(p.pastille.position, ptMm(a.x, -a.y)) < 1000) ++trouvees;
+  CHECK(trouvees == 6);
+  // Le projet entier : schéma et carte reliés par les repères, empreintes au schéma
+  const std::string prj = "[Design]\r\nHierarchyMode=0\r\n\r\n[Document1]\r\nDocumentPath=essai.SchDoc\r\n\r\n[Document2]\r\nDocumentPath=essai.PcbDoc\r\n";
+  RapportImportAltium rp;
+  const ConceptionElec c = conceptionDepuisProjetAltium(prj, "essai", [&](const std::string& f) -> std::optional<std::string> { return f == "essai.SchDoc" ? std::optional(schDocAltium(enr)) : f == "essai.PcbDoc" ? std::optional(pcb) : std::nullopt; }, &rp);
+  for (const auto& a : rp.alertes) UNSCOPED_INFO(a);
+  CHECK(rp.alertes.empty());
+  CHECK(!c.schemaSeul);
+  CHECK(c.circuit.empreintes.size() == 3);
+  CHECK(c.parReference("R1")->empreinte == "altium:R0603");
+  CHECK(partitionDe(netlistDe(c)) == partitionDe(ns));
+  // Par la chaîne commune, le projet est reconnu à son extension
+  const auto imp = importerConceptionTierce("essai.PrjPcb", prj, [&](const std::string& f) -> std::optional<std::string> { return f == "essai.SchDoc" ? std::optional(schDocAltium(enr)) : f == "essai.PcbDoc" ? std::optional(pcb) : std::nullopt; });
+  REQUIRE(imp);
+  CHECK(imp->logiciel == "Altium");
+  CHECK(imp->conception.circuit.empreintes.size() == 3);
+}
+
+TEST_CASE("10.15 · schémas ASCII d'Altium à pages croisées : hiérarchie gardée, renvoi croisé coupé", "[034][L10][10.15]") {
+  std::vector<std::pair<std::string, std::string>> sch;
+  for (const char* f : {"overview.SchDoc", "pagea.SchDoc", "pageb.SchDoc"}) sch.push_back({f, donnee14(std::string("altium/") + f)});
+  for (const auto& [n, o] : sch) CHECK(estSchemaAltium(o));
+  RapportImportAltium r;
+  const ConceptionElec c = conceptionDepuisAltium(sch, std::nullopt, "t", &r);
+  for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+  REQUIRE(c.feuilles.size() == 3);
+  CHECK(c.feuilles[0].nom == "overview");
+  // overview → pagea → pageb ; le bloc de pageb qui revient vers pagea reste vide
+  REQUIRE(c.feuilles[0].blocs.size() == 1);
+  const std::string a = c.feuilles[0].blocs[0].feuille;
+  const auto fa = std::find_if(c.feuilles.begin(), c.feuilles.end(), [&](const Feuille& f) { return f.uuid == a; });
+  REQUIRE(fa != c.feuilles.end());
+  CHECK(fa->nom == "pagea");
+  REQUIRE(fa->blocs.size() == 1);
+  const auto fb = std::find_if(c.feuilles.begin(), c.feuilles.end(), [&](const Feuille& f) { return f.uuid == fa->blocs[0].feuille; });
+  REQUIRE(fb != c.feuilles.end());
+  CHECK(fb->nom == "pageb");
+  REQUIRE(fb->blocs.size() == 1);
+  CHECK(fb->blocs[0].feuille.empty());
+}
+
+TEST_CASE("10.15 · empreinte d'une bibliothèque Altium (.PcbLib) : les mêmes pastilles que son import par KiCad", "[034][L10][10.15][10.18]") {
+  const std::string lib = donnee14("altium/ESP32-WROOM-32.PcbLib");
+  REQUIRE(estBibliothequeAltium(lib));
+  const BibliothequeAltium b = lireBibliothequeAltium(lib, "esp");
+  for (const auto& a : b.alertes) UNSCOPED_INFO(a);
+  REQUIRE(b.empreintes.size() == 1);
+  const auto kicad = empreinteDepuisKicadMod(donnee14("altium/ESP32-WROOM-32.kicad_mod"));
+  REQUIRE(kicad);
+  const DefEmpreinte& e = b.empreintes.front();
+  REQUIRE(e.pastilles.size() == kicad->pastilles.size());
+  // Chaque pastille de KiCad a sa jumelle : numéro, place, taille, perçage (à 1 µm près)
+  int jumelles = 0;
+  std::vector<bool> prise(e.pastilles.size(), false);
+  for (const auto& q : kicad->pastilles)
+    for (std::size_t i = 0; i < e.pastilles.size(); ++i) {
+      const Pastille& p = e.pastilles[i];
+      if (prise[i] || p.numero != q.numero || distance(p.position, q.position) > 1000 || std::abs(p.largeur - q.largeur) > 1000 || std::abs(p.hauteur - q.hauteur) > 1000 || std::abs(p.percage - q.percage) > 1000) continue;
+      prise[i] = true;
+      ++jumelles;
+      break;
+    }
+  CHECK(jumelles == static_cast<int>(kicad->pastilles.size()));
+  // Par l'import des bibliothèques : une empreinte rangée, une ligne de rapport
+  ContenuBibliotheque dest;
+  const RapportBibliotheque rap = importerBibliotheques({{"ESP32-WROOM-32.PcbLib", lib}}, dest, false);
+  CHECK(dest.empreintes.size() == 1);
+  CHECK(!rap.objets.empty());
+}
+
+TEST_CASE("10.15 · projet Altium d'exemple (eDP, 112 composants) : schéma et carte aux mêmes réseaux et mêmes empreintes", "[034][L10][10.15][.altium]") {
+  // Données facultatives (voir tests/donnees/altium/LISEZMOI.md)
+  const std::string dossier = std::getenv("PROMETHEE_DONNEES_ALTIUM") ? std::getenv("PROMETHEE_DONNEES_ALTIUM") : "";
+  if (dossier.empty()) {
+    SUCCEED("PROMETHEE_DONNEES_ALTIUM non défini : essai sauté");
+    return;
+  }
+  auto lire = [&](const std::string& f) -> std::optional<std::string> {
+    try {
+      return prom::lireFichier(prom::cheminFichier(dossier + "/" + f));
+    } catch (const std::exception&) {
+      return std::nullopt;
+    }
+  };
+  const auto prj = lire("eDP_adapter_dvt1.PrjPcb");
+  REQUIRE(prj);
+  RapportImportAltium r;
+  const ConceptionElec c = conceptionDepuisProjetAltium(*prj, "eDP", lire, &r);
+  for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+  CHECK(r.feuilles == 2);
+  CHECK(r.composants == 112);
+  const ConceptionElec s = conceptionDepuisAltium({{"it6251_core.SchDoc", *lire("it6251_core.SchDoc")}, {"power.SchDoc", *lire("power.SchDoc")}}, std::nullopt, "s");
+  const ConceptionElec k = conceptionDepuisAltium({}, *lire("eDP_adapter_dvt1.PcbDoc"), "k");
+  CHECK(partitionDe(netlistDe(s)) == partitionDe(netlistDe(k)));
+  int memes = 0;
+  for (const auto& x : s.composants)
+    if (const ComposantElec* y = k.parReference(x.reference); y && k.empreinte(y->empreinte) && x.empreinte == "altium:" + k.empreinte(y->empreinte)->description) ++memes;
+  CHECK(memes == 112);
+}
+
+namespace {
+// Codes de la vérification d'une carte importée : ses courts-circuits (DRC-21) et liaisons non routées (DRC-20)
+std::map<std::string, int> codesDrc(const ConceptionElec& c) {
+  const Connectivite k = connectivite(c);
+  std::map<std::string, int> r;
+  for (const auto& v : verifierDRC(c, k, remplirZones(c, k))) ++r[v.code];
+  return r;
+}
+}  // namespace
+
+TEST_CASE("10.17 · carte PADS réelle (PowerPCB, unités BASIC) : réseaux du fichier, cuivre relu sans court-circuit ni liaison ouverte", "[034][L10][10.17]") {
+  const std::string asc = donnee14("pads/LCORE_2.asc");
+  REQUIRE(estPadsAscii(asc));
+  RapportLectureCao r;
+  const ConceptionElec c = conceptionDepuisPads(std::nullopt, asc, "LCORE_2", &r);
+  for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+  CHECK(c.circuit.empreintes.size() == 30);
+  CHECK(c.circuit.pistes.size() > 200);
+  CHECK(c.circuit.vias.size() == 16);
+  CHECK(c.circuit.contour.libre.size() > 10);  // contour à arcs
+  // Les réseaux de la conception sont ceux des signaux du fichier ; le cuivre les relie sans en mêler deux
+  const auto drc = codesDrc(c);
+  CHECK(drc.count("DRC-21") == 0);
+  CHECK(drc.count("DRC-20") == 0);
+  int multi = 0;
+  for (const auto& [n, v] : netlistDe(c).reseaux) multi += v.size() > 1;
+  CHECK(multi == 14);
+  // Écrite en PADS par Prométhée puis relue : mêmes réseaux, mêmes pistes
+  const ConceptionElec relue = conceptionDepuisPads(std::nullopt, padsAsciiCarte(c), "relue");
+  CHECK(partitionDe(netlistDe(relue)) == partitionDe(netlistDe(c)));
+  CHECK(relue.circuit.pistes.size() == c.circuit.pistes.size());
+  CHECK(codesDrc(relue).count("DRC-21") == 0);
+}
+
+TEST_CASE("10.17 · schéma PADS Logic : pièces et signaux", "[034][L10][10.17]") {
+  const std::string txt = donnee14("pads/signals_schematic.txt");
+  REQUIRE(estPadsAscii(txt));
+  const ConceptionElec c = conceptionDepuisPads(txt, std::nullopt, "logic");
+  CHECK(c.schemaSeul);
+  const NetlistLue n = netlistDe(c);
+  CHECK(reseauDe(n, "R1", "1") == "VCC");
+  CHECK(reseauDe(n, "U1", "14") == "VCC");
+  CHECK(reseauDe(n, "U1", "7") == "GND");
+  CHECK(reseauDe(n, "R2", "1") == "NET1");
+  CHECK(reseauDe(n, "U1", "2") == "NET1");
+  // Le schéma et sa carte ensemble : la carte prend les réseaux du schéma
+  const auto imp = importerConceptionTierce("logic.txt", txt, {});
+  REQUIRE(imp);
+  CHECK(imp->logiciel == "PADS");
+}
+
+TEST_CASE("10.17 · archives CADSTAR : empreinte à pastille thermique identique à son import par KiCad, carte routée", "[034][L10][10.17]") {
+  const std::string lib = donnee14("cadstar/footprint-with-thermal-pad.cpa");
+  REQUIRE(estArchiveCadstar(lib));
+  const ConceptionElec c = conceptionDepuisCadstar(lib, "lib");
+  REQUIRE(c.empreintes.size() == 1);
+  const DefEmpreinte& e = c.empreintes.begin()->second;
+  const auto kicad = empreinteDepuisKicadMod(donnee14("cadstar/CP_32_7.kicad_mod"));
+  REQUIRE(kicad);
+  REQUIRE(e.pastilles.size() == kicad->pastilles.size());
+  int jumelles = 0;
+  std::vector<bool> prise(e.pastilles.size(), false);
+  for (const auto& q : kicad->pastilles)
+    for (std::size_t i = 0; i < e.pastilles.size(); ++i) {
+      const Pastille& p = e.pastilles[i];
+      const bool libre = p.forme == FormePastille::Libre;  // cuivre de forme libre : seuls numéro et ancre comptent
+      if (prise[i] || p.numero != q.numero || distance(p.position, q.position) > 1000 || (!libre && (std::abs(p.largeur - q.largeur) > 1000 || std::abs(p.hauteur - q.hauteur) > 1000))) continue;
+      prise[i] = true;
+      ++jumelles;
+      break;
+    }
+  CHECK(jumelles == static_cast<int>(kicad->pastilles.size()));
+  // Carte de révision 7 : deux composants, réseaux routés de broche à broche
+  RapportLectureCao r;
+  const ConceptionElec k = conceptionDepuisCadstar(donnee14("cadstar/revision7_format_no_routewidth.cpa"), "carte", &r);
+  for (const auto& a : r.alertes) UNSCOPED_INFO(a);
+  CHECK(k.circuit.empreintes.size() == 2);
+  CHECK(k.circuit.pistes.size() >= 5);
+  const auto drc = codesDrc(k);
+  CHECK(drc.count("DRC-21") == 0);
+  CHECK(drc.count("DRC-20") == 0);
+  const auto imp = importerConceptionTierce("carte.cpa", donnee14("cadstar/revision7_format_no_routewidth.cpa"), {});
+  REQUIRE(imp);
+  CHECK(imp->logiciel == "CADSTAR");
+}

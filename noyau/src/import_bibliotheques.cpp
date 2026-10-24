@@ -6,6 +6,8 @@
 #include <map>
 #include <set>
 
+#include "promethee/archive.hpp"
+#include "promethee/import_altium.hpp"
 #include "promethee/import_eagle.hpp"
 #include "promethee/kicad_electronique.hpp"
 #include "kicad_interne.hpp"
@@ -115,9 +117,50 @@ void importerKicad(const std::vector<FichierBibliotheque>& fichiers, ContenuBibl
 }
 }  // namespace
 
-std::string filtreBibliotheques() { return "*.kicad_sym *.kicad_mod *.lbr"; }
+std::string filtreBibliotheques() { return "*.kicad_sym *.kicad_mod *.lbr *.SchLib *.PcbLib *.IntLib *.schlib *.pcblib *.intlib"; }
 
-bool fichierBibliothequeLu(const std::string& chemin) { return finit(chemin, ".kicad_sym") || finit(chemin, ".kicad_mod") || finit(chemin, ".lbr"); }
+bool fichierBibliothequeLu(const std::string& chemin) {
+  return finit(chemin, ".kicad_sym") || finit(chemin, ".kicad_mod") || finit(chemin, ".lbr") || finit(chemin, ".schlib") || finit(chemin, ".pcblib") || finit(chemin, ".intlib");
+}
+
+namespace {
+// Bibliothèques Altium : symboles (un article par symbole qui nomme son empreinte), empreintes ; une bibliothèque
+// intégrée (.IntLib) porte ses bibliothèques de symboles et d'empreintes compressées, chacune lue de même
+void importerAltium(const std::string& chemin, const std::string& octets, ContenuBibliotheque& dest, bool remplacer, RapportBibliotheque& rap, int profondeur = 0) {
+  const std::string lib = sansExtension(base(chemin));
+  if (finit(chemin, ".intlib") && profondeur == 0) {
+    int lus = 0;
+    for (const auto& [nom, flux] : lireCfb(octets)) {
+      if (flux.size() < 3 || flux[0] != '\x02') continue;
+      try {
+        const std::string sous = inflerZlib(flux.substr(1));
+        if (!estCfb(sous)) continue;
+        importerAltium(lib + (estBibliothequeAltium(sous) ? ".SchLib" : ".PcbLib"), sous, dest, remplacer, rap, 1);
+        ++lus;
+      } catch (const std::exception&) {
+      }
+    }
+    if (!lus) rap.refuser("bibliothèque", base(chemin), "aucune bibliothèque lisible dans la bibliothèque intégrée");
+    return;
+  }
+  const BibliothequeAltium b = lireBibliothequeAltium(octets, lib);
+  for (const auto& a : b.alertes) rap.refuser("objet", lib, a);
+  for (const DefSymbole& d : b.symboles) {
+    rap.poser(dest.symboles, d, "symbole", lib + ":" + d.nom, remplacer);
+    if (!d.empreinte.empty()) {
+      Article a;
+      a.id = "altium:" + lib + ":" + d.nom;
+      a.nom = d.nom;
+      a.description = d.description;
+      a.categorie = "Importés d’Altium";
+      a.symbole = d.id;
+      a.empreinte = d.empreinte;
+      rap.poser(dest.articles, std::move(a), "article", lib + ":" + d.nom, remplacer);
+    }
+  }
+  for (const DefEmpreinte& d : b.empreintes) rap.poser(dest.empreintes, d, "empreinte", lib + ":" + d.description, remplacer);
+}
+}  // namespace
 
 RapportBibliotheque importerBibliotheques(const std::vector<FichierBibliotheque>& fichiers, ContenuBibliotheque& destination, bool remplacer) {
   RapportBibliotheque rap;
@@ -127,6 +170,12 @@ RapportBibliotheque importerBibliotheques(const std::vector<FichierBibliotheque>
       try {
         const RapportBibliotheque r = importerBibliothequeEagle(f.contenu, destination, remplacer);
         rap.objets.insert(rap.objets.end(), r.objets.begin(), r.objets.end());
+      } catch (const std::exception& e) {
+        rap.refuser("bibliothèque", base(f.chemin), e.what());
+      }
+    } else if (finit(f.chemin, ".schlib") || finit(f.chemin, ".pcblib") || finit(f.chemin, ".intlib")) {
+      try {
+        importerAltium(f.chemin, f.contenu, destination, remplacer, rap);
       } catch (const std::exception& e) {
         rap.refuser("bibliothèque", base(f.chemin), e.what());
       }

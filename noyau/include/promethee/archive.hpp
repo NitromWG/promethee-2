@@ -1,4 +1,4 @@
-// Prométhée : archive zip sans compression (3MF, classeurs XLSX). Licence GPL-3.0-only.
+// Prométhée : archive zip (3MF, classeurs XLSX), flux zlib, fichiers composés CFB. Licence GPL-3.0-only.
 #pragma once
 
 #include <cstdint>
@@ -16,5 +16,14 @@ uint32_t crc32(const std::string& octets);
 // l'ordre du répertoire central ; lève std::runtime_error sur une archive abîmée
 std::string inflerBrut(const std::string& donnees);
 std::vector<std::pair<std::string, std::string>> lireZip(const std::string& octets);
+// Flux zlib (en-tête de deux octets, DEFLATE, somme Adler-32 non vérifiée)
+std::string inflerZlib(const std::string& donnees);
+
+// Fichier composé de Microsoft (CFB, « OLE2 » : documents Altium, anciens fichiers d'Office ; 10.15) : les flux, par
+// chemin (« Pads6/Data »), dans l'ordre du répertoire ; lève std::runtime_error sur un fichier abîmé. L'écrivain
+// (secteurs de 512 octets, petits flux dans le mini-flux) sert aux essais et aux échanges
+bool estCfb(const std::string& octets);
+std::vector<std::pair<std::string, std::string>> lireCfb(const std::string& octets);
+std::string ecrireCfb(const std::vector<std::pair<std::string, std::string>>& flux);
 
 }  // namespace prom
