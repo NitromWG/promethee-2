@@ -227,6 +227,14 @@ RegistreActions::RegistreActions() {
   ajouter("programme.machine", QStringLiteral("Machine à états (bascules, VHDL)"), P::Atelier, {});
   ajouter("programme.robot", QStringLiteral("Robot sur une piste (programme éprouvé sans matériel)"), P::Atelier, {});
   ajouter("programme.logique", QStringLiteral("Logique programmable (VHDL, GHDL, Yosys, GAL)"), P::Atelier, {});
+  // 0.34, lot L16 : platine d'essai et documents de câblage
+  ajouter("platine.ouvrir", QStringLiteral("Platine d'essai synchronisée avec le schéma"), P::Atelier, {});
+  ajouter("platine.monter", QStringLiteral("Monter la platine de lui-même"), P::Atelier, {});
+  ajouter("platine.etape", QStringLiteral("Platine : étape suivante du montage"), P::Atelier, {});
+  ajouter("platine.verifier", QStringLiteral("Comparer la platine au schéma"), P::Atelier, {});
+  ajouter("platine.3d", QStringLiteral("Platine équipée en 3D"), P::Atelier, {});
+  ajouter("platine.documents", QStringLiteral("Documents de câblage (plan de chargement, fils, plaque à bandes)"), P::Atelier, {});
+  ajouter("platine.guitare", QStringLiteral("Câblage de guitare : positions du sélecteur"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
   ajouter("schema.alimentation.3v3", QStringLiteral("Alimentation +3V3"), P::Schema, {});
@@ -521,6 +529,13 @@ RegistreActions::RegistreActions() {
       {"programme.machine", "Machine à états…", "repetition-lineaire", "table de transitions, bascules aux équations réduites, VHDL simulé par GHDL"},
       {"programme.robot", "Robot…", "piste", "robot à deux roues sur une piste en image : un tour sans matériel"},
       {"programme.logique", "Logique…", "proprietes", "schéma logique en VHDL, table de vérité par GHDL, Yosys, JEDEC du GAL16V8"},
+      {"platine.ouvrir", "Platine…", "composants", "platine d’essai synchronisée avec le schéma : un fil tiré relie le schéma et le circuit"},
+      {"platine.monter", "Monter", "poser-copie", "montage posé de lui-même, circuits intégrés à cheval sur la rainure"},
+      {"platine.etape", "Étape", "repetition-lineaire", "un composant de plus sur la platine"},
+      {"platine.verifier", "Comparer", "erc", "écarts avec le schéma, pattes vertes ou rouges"},
+      {"platine.3d", "Platine 3D", "esquisse3d", "platine équipée en 3D, interrupteurs reliés au laboratoire"},
+      {"platine.documents", "Câblage…", "rapport", "plan de chargement, liste des fils, impression à l’échelle, plaque à bandes"},
+      {"platine.guitare", "Guitare…", "cablage", "positions du sélecteur et combinaisons de micros"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},
       {"schema.etiquetteGlobale", "Étiquette globale", "etiquette", "relie les fils du même nom sur toutes les feuilles"},

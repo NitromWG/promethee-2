@@ -22,6 +22,7 @@
         {"titre": "Simuler", "forme": "grand", "actions": ["simulation.ouvrir", "simulation.laboratoire", "simulation.modele", "simulation.calculateurs"]},
         {"titre": "Laboratoire", "forme": "grille", "actions": ["simulation.logique", "simulation.symbolique", "simulation.reseau", "simulation.alimentation", "simulation.mesures"]},
         {"titre": "Programme", "forme": "grille", "actions": ["programme.ouvrir", "programme.cosimuler", "programme.organigramme", "programme.hdl", "programme.machine", "programme.robot", "programme.logique"]},
+        {"titre": "Platine", "forme": "grille", "actions": ["platine.ouvrir", "platine.monter", "platine.etape", "platine.verifier", "platine.3d", "platine.documents", "platine.guitare"]},
         {"titre": "Outils", "forme": "grand", "actions": ["outils.conception"]},
         {"titre": "Automatiser", "forme": "grille", "actions": ["automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]},
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},

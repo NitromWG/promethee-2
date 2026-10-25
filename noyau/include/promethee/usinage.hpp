@@ -4,6 +4,7 @@
 // réduites ou agrandies, en SVG ou en DXF pour la découpe laser ou vinyle. Licence GPL-3.0-only.
 #pragma once
 
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -46,6 +47,40 @@ std::string gcodePercages(const ConceptionElec& c, const OptionsUsinage& o = {})
 std::string gcodeDecoupe(const ConceptionElec& c, const OptionsUsinage& o = {});
 // Temps d'usinage estimé (minutes) d'un G-code écrit par Prométhée : longueurs aux avances
 double dureeGcode(const std::string& gcode);
+
+// ---------- Compléments d'usinage (16.8 ; PRO-19, PRO-20) ----------
+// Fraise en V : largeur de coupe à une profondeur (pointe de « pointe » mm, angle au sommet en degrés), et
+// profondeur qui donne une largeur voulue
+double largeurFraiseV(double angleDegres, double pointe, double profondeur);
+double profondeurFraiseV(double angleDegres, double pointe, double largeur);
+// Nettoyage du cuivre inutile en poche : la carte hors du cuivre gardé et de ses sillons, vidée par décalages
+// vers l'intérieur, passe après passe (sillons fermés)
+ResultatIsolement nettoyageCuivre(const ConceptionElec& c, Couche couche, const OptionsUsinage& o = {});
+
+// Relief de la plaque relevé par palpage : grille régulière de hauteurs (mm, Z de travail de la machine)
+struct GrilleRelief {
+  double x0 = 0, y0 = 0, pasX = 10, pasY = 10;
+  int nx = 0, ny = 0;
+  std::vector<double> z;  // nx × ny, x d'abord : z[j * nx + i] au point (x0 + i pasX, y0 + j pasY)
+  bool valide() const { return nx >= 2 && ny >= 2 && static_cast<int>(z.size()) == nx * ny && pasX > 0 && pasY > 0; }
+  double hauteur(double x, double y) const;  // interpolation bilinéaire, bornée aux bords de la grille
+};
+struct OptionsPalpage {
+  double x0 = 0, y0 = 0, x1 = 100, y1 = 80;  // mm, zone palpée
+  int nx = 11, ny = 9;
+  double descente = -2;        // mm : G38.2 jusqu'à ce Z au plus
+  double securite = 2;         // mm au-dessus de la plaque entre deux points
+  double avance = 50;          // mm/min de palpage
+  std::string machine = "linuxcnc";  // « linuxcnc » (relevé écrit par PROBEOPEN), « grbl » (relevé sur la liaison série)
+};
+// Programme de palpage en grille (G38.2), en serpentin
+std::string gcodePalpage(const OptionsPalpage& o);
+// Relevé relu : fichier de LinuxCNC (« x y z … » par ligne), journal de GRBL (« [PRB:x,y,z:1] ») ou de Marlin
+// (« X:… Y:… Z:… ») ; les points forment une grille régulière, dans n'importe quel ordre
+std::optional<GrilleRelief> lireRelevePalpage(const std::string& texte, std::string* erreur = nullptr);
+// Profondeur corrigée segment par segment : chaque G1 découpé en tronçons de « pasMax » mm au plus, son Z relevé de
+// la hauteur interpolée sous lui ; G0 relevés à leur point d'arrivée ; le reste recopié
+std::string corrigerProfondeur(const std::string& gcode, const GrilleRelief& g, double pasMax = 1.0);
 
 // ---------- Pochoir de pâte (16.9) ----------
 // Ouvertures du pochoir : pastilles CMS de la face, réduites (« reduction » > 0, mm par côté) ou agrandies (< 0)

@@ -105,4 +105,26 @@ std::string sha256Hex(std::string_view donnees) {
   return h.terminerHex();
 }
 
+std::string hmacSha256Hex(std::string_view cle, std::string_view message) {
+  // RFC 2104 : clé ramenée à un bloc de 64 octets, H((K ⊕ opad) ‖ H((K ⊕ ipad) ‖ message))
+  std::array<std::uint8_t, 64> k{};
+  if (cle.size() > 64) {
+    Sha256 h;
+    h.ajouter(cle);
+    const auto d = h.terminer();
+    std::copy(d.begin(), d.end(), k.begin());
+  } else
+    std::copy(cle.begin(), cle.end(), k.begin());
+  std::array<std::uint8_t, 64> ipad{}, opad{};
+  for (std::size_t i = 0; i < 64; ++i) ipad[i] = static_cast<std::uint8_t>(k[i] ^ 0x36), opad[i] = static_cast<std::uint8_t>(k[i] ^ 0x5c);
+  Sha256 interieur;
+  interieur.ajouter(ipad.data(), ipad.size());
+  interieur.ajouter(message);
+  const auto d = interieur.terminer();
+  Sha256 exterieur;
+  exterieur.ajouter(opad.data(), opad.size());
+  exterieur.ajouter(d.data(), d.size());
+  return exterieur.terminerHex();
+}
+
 }  // namespace prom

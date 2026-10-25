@@ -2,8 +2,11 @@
 #include "promethee/usinage.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <map>
+#include <regex>
+#include <set>
 #include <sstream>
 
 namespace prom::ecad {
@@ -261,6 +264,184 @@ std::string pochoirDxf(const ConceptionElec& c, bool dessous, double reduction) 
   }
   s << "0\nENDSEC\n0\nEOF\n";
   return s.str();
+}
+
+
+// ======================================================================================================================
+// Compléments d'usinage (16.8)
+// ======================================================================================================================
+double largeurFraiseV(double angleDegres, double pointe, double profondeur) {
+  return pointe + 2 * std::max(0.0, profondeur) * std::tan(angleDegres * 3.14159265358979323846 / 360);
+}
+double profondeurFraiseV(double angleDegres, double pointe, double largeur) {
+  const double t = std::tan(angleDegres * 3.14159265358979323846 / 360);
+  return t <= 0 ? 0 : std::max(0.0, (largeur - pointe) / (2 * t));
+}
+
+ResultatIsolement nettoyageCuivre(const ConceptionElec& c, Couche couche, const OptionsUsinage& o) {
+  ResultatIsolement r;
+  const Polygone carte = c.circuit.contour.polygone();
+  if (carte.size() < 3) return r;
+  // Cuivre gardé et ses sillons d'isolement (les passes de 16.7), puis l'outil n'approche pas le bord de la carte
+  Polygones garde;
+  for (const auto& [n, p] : cuivreParReseau(c, couche)) garde.insert(garde.end(), p.begin(), p.end());
+  const Nm rayon = nm(o.diametreOutil / 2), pas = nm(o.diametreOutil * (1 - std::clamp(o.recouvrement, 0.0, 0.9)));
+  const Nm isolement = rayon + std::max(0, o.passes - 1) * pas + rayon;
+  Polygones zone = soustraire(gonfler({orienter(carte)}, -rayon), garde.empty() ? Polygones{} : gonfler(unir(garde), isolement));
+  // Poche : chaque passe décale la précédente vers l'intérieur, jusqu'à ce qu'il ne reste rien
+  for (int passe = 0; passe < 2000 && !zone.empty(); ++passe) {
+    bool ajoute = false;
+    for (const auto& anneau : zone) {
+      if (anneau.size() < 3 || aireMm2(anneau) < 1e-4) continue;
+      Sillon s;
+      s.points = anneau;
+      s.points.push_back(anneau.front());
+      s.passe = passe;
+      s.reseau = "nettoyage";
+      for (std::size_t i = 1; i < s.points.size(); ++i) r.longueur += distance(s.points[i - 1], s.points[i]) * 1e-6;
+      r.sillons.push_back(std::move(s));
+      ajoute = true;
+    }
+    if (!ajoute) break;
+    zone = gonfler(zone, -pas);
+  }
+  return r;
+}
+
+double GrilleRelief::hauteur(double x, double y) const {
+  if (!valide()) return 0;
+  const double u = std::clamp((x - x0) / pasX, 0.0, static_cast<double>(nx - 1)), v = std::clamp((y - y0) / pasY, 0.0, static_cast<double>(ny - 1));
+  const int i = std::min(nx - 2, static_cast<int>(std::floor(u))), j = std::min(ny - 2, static_cast<int>(std::floor(v)));
+  const double a = u - i, b = v - j;
+  auto Z = [&](int ii, int jj) { return z[static_cast<std::size_t>(jj * nx + ii)]; };
+  return Z(i, j) * (1 - a) * (1 - b) + Z(i + 1, j) * a * (1 - b) + Z(i, j + 1) * (1 - a) * b + Z(i + 1, j + 1) * a * b;
+}
+
+std::string gcodePalpage(const OptionsPalpage& o) {
+  std::ostringstream s;
+  const int nx = std::max(2, o.nx), ny = std::max(2, o.ny);
+  const double px = (o.x1 - o.x0) / (nx - 1), py = (o.y1 - o.y0) / (ny - 1);
+  const bool grbl = o.machine == "grbl";
+  s << "(Palpage en grille " << nx << " × " << ny << ", écrit par Prométhée)\n(Z0 réglé au contact de la plaque au premier point)\nG21\nG90\nG94\n";
+  if (!grbl) s << "(PROBEOPEN releve.txt)\n";
+  s << "G0 Z" << f3(o.securite) << "\n";
+  for (int j = 0; j < ny; ++j)
+    for (int k = 0; k < nx; ++k) {
+      const int i = j % 2 == 0 ? k : nx - 1 - k;  // serpentin
+      s << "G0 X" << f3(o.x0 + i * px) << " Y" << f3(o.y0 + j * py) << "\nG38.2 Z" << f3(o.descente) << " F" << o.avance << "\nG0 Z" << f3(o.securite) << "\n";
+    }
+  if (!grbl) s << "(PROBECLOSE)\n";
+  s << "G0 Z" << f3(o.securite + 3) << "\nM2\n";
+  return s.str();
+}
+
+std::optional<GrilleRelief> lireRelevePalpage(const std::string& texte, std::string* erreur) {
+  auto refuser = [&](const std::string& e) -> std::optional<GrilleRelief> {
+    if (erreur) *erreur = e;
+    return std::nullopt;
+  };
+  std::vector<std::array<double, 3>> points;
+  std::istringstream in(texte);
+  std::string l;
+  static const std::regex grbl(R"(PRB:\s*(-?[0-9.]+),\s*(-?[0-9.]+),\s*(-?[0-9.]+)(:1)?)");
+  static const std::regex marlin(R"(X:\s*(-?[0-9.]+)\s+Y:\s*(-?[0-9.]+)\s+Z:\s*(-?[0-9.]+))");
+  while (std::getline(in, l)) {
+    std::smatch m;
+    if (std::regex_search(l, m, grbl)) {
+      if (m[4].matched || l.find(":1]") != std::string::npos || l.find(":1") != std::string::npos) points.push_back({std::stod(m[1]), std::stod(m[2]), std::stod(m[3])});
+      continue;
+    }
+    if (std::regex_search(l, m, marlin)) {
+      points.push_back({std::stod(m[1]), std::stod(m[2]), std::stod(m[3])});
+      continue;
+    }
+    // LinuxCNC : « x y z a b c u v w » (les trois premiers nombres)
+    std::istringstream ls(l);
+    double x, y, z;
+    if (ls >> x >> y >> z) points.push_back({x, y, z});
+  }
+  if (points.size() < 4) return refuser("relevé trop court : " + std::to_string(points.size()) + " point(s)");
+  auto arrondi = [](double v) { return std::llround(v * 100); };  // au centième de mm
+  std::set<long long> xs, ys;
+  for (const auto& p : points) xs.insert(arrondi(p[0])), ys.insert(arrondi(p[1]));
+  GrilleRelief g;
+  g.nx = static_cast<int>(xs.size());
+  g.ny = static_cast<int>(ys.size());
+  if (g.nx < 2 || g.ny < 2) return refuser("les points ne forment pas une grille");
+  if (static_cast<std::size_t>(g.nx) * static_cast<std::size_t>(g.ny) != points.size()) return refuser("grille incomplète : " + std::to_string(points.size()) + " points pour " + std::to_string(g.nx) + " × " + std::to_string(g.ny));
+  const std::vector<long long> vx(xs.begin(), xs.end()), vy(ys.begin(), ys.end());
+  g.x0 = vx.front() / 100.0;
+  g.y0 = vy.front() / 100.0;
+  g.pasX = (vx.back() - vx.front()) / 100.0 / (g.nx - 1);
+  g.pasY = (vy.back() - vy.front()) / 100.0 / (g.ny - 1);
+  for (std::size_t i = 1; i < vx.size(); ++i)
+    if (std::abs((vx[i] - vx[i - 1]) / 100.0 - g.pasX) > 0.05) return refuser("pas irrégulier en X");
+  for (std::size_t j = 1; j < vy.size(); ++j)
+    if (std::abs((vy[j] - vy[j - 1]) / 100.0 - g.pasY) > 0.05) return refuser("pas irrégulier en Y");
+  g.z.assign(points.size(), 0);
+  std::vector<bool> vu(points.size(), false);
+  for (const auto& p : points) {
+    const int i = static_cast<int>(std::lower_bound(vx.begin(), vx.end(), arrondi(p[0])) - vx.begin());
+    const int j = static_cast<int>(std::lower_bound(vy.begin(), vy.end(), arrondi(p[1])) - vy.begin());
+    const std::size_t k = static_cast<std::size_t>(j * g.nx + i);
+    if (vu[k]) return refuser("point palpé deux fois");
+    vu[k] = true;
+    g.z[k] = p[2];
+  }
+  return g;
+}
+
+std::string corrigerProfondeur(const std::string& gcode, const GrilleRelief& g, double pasMax) {
+  std::istringstream in(gcode);
+  std::ostringstream out;
+  std::string l;
+  double x = 0, y = 0, z = 0;  // position programmée (avant correction)
+  int mode = 0;                // 0 : G0, 1 : G1
+  static const std::regex mot(R"(([GXYZF])\s*(-?[0-9]*\.?[0-9]+))", std::regex::icase);
+  pasMax = std::max(0.05, pasMax);
+  while (std::getline(in, l)) {
+    // Commentaires et lignes sans mouvement : recopiés
+    const std::string code = l.substr(0, l.find('('));
+    std::optional<double> nx, ny, nz, f;
+    std::optional<int> g01;
+    bool autreG = false;
+    for (auto it = std::sregex_iterator(code.begin(), code.end(), mot); it != std::sregex_iterator(); ++it) {
+      const char c = static_cast<char>(std::toupper(static_cast<unsigned char>((*it)[1].str()[0])));
+      const double v = std::stod((*it)[2]);
+      if (c == 'G') {
+        if (v == 0 || v == 1) g01 = static_cast<int>(v);
+        else autreG = true;
+      } else if (c == 'X') nx = v;
+      else if (c == 'Y') ny = v;
+      else if (c == 'Z') nz = v;
+      else if (c == 'F') f = v;
+    }
+    if (autreG || (!nx && !ny && !nz)) {
+      out << l << "\n";
+      if (g01) mode = *g01;
+      continue;
+    }
+    if (g01) mode = *g01;
+    const double x1 = nx.value_or(x), y1 = ny.value_or(y), z1 = nz.value_or(z);
+    if (mode == 0) {
+      out << "G0";
+      if (nx) out << " X" << f3(x1);
+      if (ny) out << " Y" << f3(y1);
+      if (nz) out << " Z" << f3(z1 + g.hauteur(x1, y1));
+      out << "\n";
+    } else {
+      const double longueur = std::hypot(x1 - x, y1 - y);
+      const int n = std::max(1, static_cast<int>(std::ceil(longueur / pasMax)));
+      for (int i = 1; i <= n; ++i) {
+        const double t = static_cast<double>(i) / n, xi = x + (x1 - x) * t, yi = y + (y1 - y) * t, zi = z + (z1 - z) * t;
+        out << "G1 X" << f3(xi) << " Y" << f3(yi) << " Z" << f3(zi + g.hauteur(xi, yi));
+        if (i == 1 && f) out << " F" << *f;
+        out << "\n";
+      }
+    }
+    x = x1, y = y1, z = z1;
+  }
+  return out.str();
 }
 
 }  // namespace prom::ecad

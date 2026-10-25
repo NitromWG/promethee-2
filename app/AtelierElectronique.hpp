@@ -108,6 +108,8 @@ class AtelierElectronique : public QWidget {
   bool exporterPlanMontage(const QString& chemin);
   // Typon de gravure maison : PDF à l'échelle 1 (ou SVG selon l'extension)
   bool exporterTypon(const QString& chemin, const prom::ecad::OptionsTypon& o);
+  // Typon déjà calculé, en SVG ou en PDF à la taille du dessin (platine d'essai imprimée par le même chemin, 16.4)
+  static bool ecrireTypon(const QString& chemin, const prom::ecad::ModeleTypon& m, const prom::ecad::OptionsTypon& o, const std::string& titre);
   void exporterTyponInteractif();
   // La carte pilote le boîtier du projet ; « montrer » : l'atelier du boîtier s'ouvre (la case de l'inspecteur lie sans
   // quitter l'atelier, P22 : un lien du message y mène)
@@ -290,6 +292,9 @@ class AtelierElectronique : public QWidget {
   // 0.34, lot L15 (Embarque034.cpp) : programme, co-simulation du microcontrôleur, organigrammes, HDL, machines à
   // états, robot, logique programmable ; et la broche d'un composant montrée sur le schéma (écart du programme)
   class FenetreEmbarque* embarque(const QString& onglet = {});
+  // Platine d'essai (L16 : 16.2 à 16.4, 16.6) ; laboratoire déjà ouvert, sans le montrer
+  class FenetrePlatine* platine(const QString& onglet = {});
+  class FenetreLaboratoire* laboratoireOuvert() const;
   void montrerBroche(const std::string& composant, const std::string& numero);
   void demanderAssistant(const prom::ecad::Violation& v);  // « Demander à l'assistant » sur une violation
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
@@ -404,6 +409,7 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandesL13();     // automatisation et assistant (0.34, Automatisation034.cpp)
   void enregistrerCommandesL14();     // laboratoire de simulation (0.34, Laboratoire034.cpp)
   void enregistrerCommandesL15();     // programme, logique et machines à états (0.34, Embarque034.cpp)
+  void enregistrerCommandesL16();     // platine d'essai, documents de câblage, guitare (0.34, Platine034.cpp)
   QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
   QPointer<class DialogueConversionSerie> m_conversionSerie;
   QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
@@ -458,6 +464,7 @@ class AtelierElectronique : public QWidget {
   QPointer<class DialogueConceptionGuidee> m_conceptionGuidee;
   QPointer<class FenetreLaboratoire> m_laboratoire;
   QPointer<class FenetreEmbarque> m_embarque;
+  QPointer<class FenetrePlatine> m_platine;
   QPointer<class FenetreOutilsConception> m_outilsConception;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;

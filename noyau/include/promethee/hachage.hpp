@@ -27,5 +27,7 @@ private:
 };
 
 std::string sha256Hex(std::string_view donnees);
+// HMAC-SHA-256 (RFC 2104), en hexadécimal minuscule : sceau d'un contenu par une clé secrète
+std::string hmacSha256Hex(std::string_view cle, std::string_view message);
 
 }  // namespace prom

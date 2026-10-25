@@ -1,6 +1,7 @@
 // Prométhée : simulation du schéma (lot L11) : netlist SPICE, contrôles, mesures, boîte à calculs. Le moteur ngspice
 // est dans moteur_ngspice.cpp. Licence GPL-3.0-only.
 #include "promethee/simulation.hpp"
+#include "promethee/enseignement.hpp"
 
 #include <algorithm>
 #include <cctype>
@@ -906,9 +907,13 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
   };
   tensions(".ic", o.conditionsInitiales);
   tensions(".nodeset", o.pointDepart);
-  if (!o.moteur.empty()) {
+  // Profil de simulation distribué par l'enseignant (16.12) : ses options, sauf celles que le calcul règle lui-même
+  std::map<std::string, std::string> moteur = o.moteur;
+  if (const auto e = coucheEnseignant(c))
+    for (const auto& [cle, v] : e->restrictions.profilSimulation) moteur.emplace(cle, v);
+  if (!moteur.empty()) {
     t << ".options";
-    for (const auto& [cle, v] : o.moteur) t << " " << cle << (v.empty() ? std::string() : "=" + v);
+    for (const auto& [cle, v] : moteur) t << " " << cle << (v.empty() ? std::string() : "=" + v);
     t << "\n";
   }
   for (const auto& l : directives) t << l << "\n";
@@ -927,6 +932,8 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
   }
   t << ".end\n";
   n.texte = t.str();
+  // Pannes cachées de l'enseignant (16.12) : appliquées à la netlist générée seulement, jamais à la feuille
+  if (const auto pannes = pannesCachees(c); !pannes.empty()) appliquerPannes(n, c, pannes);
   return n;
 }
 

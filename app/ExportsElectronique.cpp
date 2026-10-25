@@ -87,6 +87,10 @@ bool AtelierElectronique::exporterTypon(const QString& chemin, const OptionsTypo
   const Connectivite k = connectivite(*c);
   const ModeleTypon m = modeleTypon(*c, k, remplirZones(*c, k), o);
   const std::string titre = c->nom + " — révision " + c->cartouche.revision;
+  return ecrireTypon(chemin, m, o, titre);
+}
+
+bool AtelierElectronique::ecrireTypon(const QString& chemin, const ModeleTypon& m, const OptionsTypon& o, const std::string& titre) {
   if (chemin.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive)) {
     try {
       prom::ecrireFichierAtomique(prom::cheminFichier(chemin.toStdString()), svgTypon(m, o, titre));
