@@ -468,6 +468,7 @@ void AtelierElectronique::enregistrerCommandes() {
   enregistrerCommandesL16();     // 0.34, lot L16 (Platine034.cpp)
   enregistrerCommandesL16b();    // 0.34, lot L16 (Enseignement034.cpp)
   enregistrerCommandesL17();     // 0.34, lots L17 et L18 (Lignes034.cpp)
+  enregistrerCommandesL19();     // 0.34, lot L19 (Bibliotheque034.cpp)
 }
 
 // Couche active, couches visibles et opacité des cuivres inactifs (EL-25)

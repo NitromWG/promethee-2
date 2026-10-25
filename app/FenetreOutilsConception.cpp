@@ -413,7 +413,8 @@ FenetreOutilsConception::FenetreOutilsConception(AtelierElectronique& a, QWidget
     }
     return t;
   });
-  ajouterOnglets034();  // lots L12 à L19 de la 0.34 (OutilsConception034.cpp)
+  ajouterOnglets034();     // lots L12 à L19 de la 0.34 (OutilsConception034.cpp)
+  ajouterOnglets034L19();  // achats et PLM (OutilsConception034L19.cpp)
   refaire();
 }
 

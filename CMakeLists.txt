@@ -44,6 +44,8 @@ add_subdirectory(outils)
 if(PROMETHEE_APP)
   add_subdirectory(app)
 endif()
+# Programme séparé d'accès en ligne (décision D13), hors des dossiers sans réseau
+add_subdirectory(en-ligne)
 
 if(PROMETHEE_TESTS)
   enable_testing()

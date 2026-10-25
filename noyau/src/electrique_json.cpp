@@ -444,6 +444,7 @@ J versJson(const ProjetElectrique& p) {
     folios[id] = {{"type", codeTypeFolio(f.type)}, {"commentaire", f.commentaire}};
     if (!f.origine.empty()) folios[id]["origine"] = f.origine;
     if (!f.grafcet.empty()) folios[id]["grafcet"] = f.grafcet;
+    if (!f.faisceau.empty()) folios[id]["faisceau"] = f.faisceau;
   }
   j["folios"] = folios;
   J conducteurs = J::object();
@@ -570,7 +571,7 @@ ProjetElectrique projetElectriqueDepuisJson(const J& j, std::vector<std::string>
   }
   if (const J& f = cle(j, "folios"); f.is_object())
     for (auto it = f.begin(); it != f.end(); ++it)
-      p.folios[it.key()] = {typeFolioDepuis(txt(it.value(), "type")), txt(it.value(), "commentaire"), txt(it.value(), "origine"), txt(it.value(), "grafcet")};
+      p.folios[it.key()] = {typeFolioDepuis(txt(it.value(), "type")), txt(it.value(), "commentaire"), txt(it.value(), "origine"), txt(it.value(), "grafcet"), txt(it.value(), "faisceau")};
   // Un folio sans fiche (projet ancien, fichier retouché) en reçoit une ; une fiche sans folio est retirée
   for (const auto& f : p.schema.feuilles)
     if (!p.folios.count(f.uuid)) p.folios[f.uuid] = {};

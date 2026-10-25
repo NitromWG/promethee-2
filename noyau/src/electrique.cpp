@@ -39,6 +39,7 @@ const char* nomTypeFolio(TypeFolio t) {
     case TypeFolio::Implantation: return "Implantation";
     case TypeFolio::Nomenclature: return "Nomenclature";
     case TypeFolio::Grafcet: return "Grafcet";
+    case TypeFolio::Cablage: return "Câblage de faisceau";
     case TypeFolio::Libre: break;
   }
   return "Folio";
@@ -55,16 +56,17 @@ const char* codeTypeFolio(TypeFolio t) {
     case TypeFolio::Implantation: return "implantation";
     case TypeFolio::Nomenclature: return "nomenclature";
     case TypeFolio::Grafcet: return "grafcet";
+    case TypeFolio::Cablage: return "cablage";
     case TypeFolio::Libre: break;
   }
   return "libre";
 }
 bool folioDessineDOffice(TypeFolio t) {
-  return t == TypeFolio::Garde || t == TypeFolio::Borniers || t == TypeFolio::Implantation || t == TypeFolio::Nomenclature || t == TypeFolio::Grafcet;
+  return t == TypeFolio::Garde || t == TypeFolio::Borniers || t == TypeFolio::Implantation || t == TypeFolio::Nomenclature || t == TypeFolio::Grafcet || t == TypeFolio::Cablage;
 }
 TypeFolio typeFolioDepuis(const std::string& code) {
   for (TypeFolio t : {TypeFolio::Garde, TypeFolio::Puissance, TypeFolio::Commande, TypeFolio::Automate, TypeFolio::Distribution, TypeFolio::Unifilaire, TypeFolio::Borniers,
-                      TypeFolio::Implantation, TypeFolio::Nomenclature, TypeFolio::Grafcet})
+                      TypeFolio::Implantation, TypeFolio::Nomenclature, TypeFolio::Grafcet, TypeFolio::Cablage})
     if (code == codeTypeFolio(t)) return t;
   return TypeFolio::Libre;
 }

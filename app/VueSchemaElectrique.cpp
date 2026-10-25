@@ -17,6 +17,7 @@
 #include "Document.hpp"
 #include "PeintreDxf.hpp"
 #include "VueGrafcet.hpp"
+#include "promethee/cablage.hpp"
 #include "promethee/electrique_grafcet.hpp"
 #include "promethee/modele.hpp"
 
@@ -255,7 +256,7 @@ void VueSchemaElectrique::dessinerCadreElectrique(QPainter& g, const Feuille& f,
   // Folios dessinés d'office : borniers, implantation, nomenclature ; la page de garde ci-dessous
   const prom::elec::TypeFolio typeFolio = pe.folio(f.uuid).type;
   if (typeFolio == prom::elec::TypeFolio::Borniers || typeFolio == prom::elec::TypeFolio::Implantation || typeFolio == prom::elec::TypeFolio::Nomenclature ||
-      typeFolio == prom::elec::TypeFolio::Grafcet) {
+      typeFolio == prom::elec::TypeFolio::Grafcet || typeFolio == prom::elec::TypeFolio::Cablage) {
     // En DXF, le contenu dessiné d'office a son calque (BORNIERS, IMPLANTATION, NOMENCLATURE, GRAFCET)
     PeintreDxf::calque(g, QString::fromLatin1(prom::elec::codeTypeFolio(typeFolio)).toUpper());
     dessinerFolioDOffice(g, f, pe, dessin);
@@ -361,6 +362,61 @@ void VueSchemaElectrique::dessinerFolioDOffice(QPainter& g, const Feuille& f, co
   const double marge = 6 * m_echelle;
   const QRectF zone = dessin.adjusted(marge, marge, -marge, -marge);
   const QPen trait(CADRE, std::max(1.0, 0.15 * m_echelle));
+  if (type == TypeFolio::Cablage) {
+    // Le faisceau du folio (sinon le premier) : connecteurs et leurs cavités, fils (numéro, section, couleur, réseau),
+    // câbles cerclés, blindage en tirets et drain, paires torsadées, épissures
+    const auto faisceaux = prom::elec::cablages(pe);
+    const prom::elec::Cablage* h = nullptr;
+    for (const auto& x : faisceaux)
+      if (x.uuid == pe.folio(f.uuid).faisceau) h = &x;
+    if (!h && !faisceaux.empty()) h = &faisceaux.front();
+    if (!h) {
+      ecrire(dessin.center(), QStringLiteral("Aucun faisceau : crée-le dans l’onglet Faisceau (« Câblage… »), il se dessine ici."), 4, 0, CADRE, false);
+      return;
+    }
+    ecrire(QPointF(zone.left(), zone.top() + 3 * m_echelle), QStringLiteral("Câblage du faisceau %1").arg(QString::fromStdString(h->nom)), 5, -1, ENCRE, true);
+    const double W = zone.width() / m_echelle, H = zone.height() / m_echelle - 12;
+    const prom::elec::DispositionCablage d = prom::elec::disposerFolioCablage(*h, prom::elec::bibliothequeCablageIntegree(), W, H);
+    const QPointF o = zone.topLeft() + QPointF(0, 12 * m_echelle);
+    auto P = [&](double x, double y) { return o + QPointF(x * m_echelle, y * m_echelle); };
+    for (const auto& b : d.boites) {
+      g.setPen(QPen(ENCRE, std::max(1.0, 0.35 * m_echelle)));
+      g.setBrush(Qt::NoBrush);
+      g.drawRect(QRectF(P(b.x, b.y), P(b.x + b.largeur, b.y + b.hauteur)));
+      ecrire(P(b.x + b.largeur / 2, b.y + 4.5), QString::fromStdString(b.titre), 3, 0, ENCRE, true);
+      for (const auto& [numero, y] : b.cavites) ecrire(P(b.droite ? b.x + b.largeur - 2 : b.x + 2, y + 1), QString::fromStdString(numero), 2.4, b.droite ? 1 : -1, ENCRE, false);
+    }
+    for (const auto& t : d.traits) {
+      QColor c(QString::fromStdString(prom::elec::couleurAffichage(t.couleur)));
+      if (t.couleur.empty() || c.lightness() > 230) c = ENCRE;  // fil blanc ou nu : tracé à l'encre
+      QPen pen(c, std::max(1.0, 0.35 * m_echelle));
+      if (t.drain) pen.setStyle(Qt::DashLine);
+      g.setPen(pen);
+      g.drawLine(P(t.x0, t.y0), P(t.x1, t.y1));
+      const QPointF m = (P(t.x0, t.y0) + P(t.x1, t.y1)) / 2;
+      if (t.paire > 0) {
+        // Paire torsadée : deux petites boucles au milieu
+        g.setPen(QPen(ENCRE, std::max(1.0, 0.2 * m_echelle)));
+        for (const double dx : {-4.0, 4.0}) g.drawEllipse(m + QPointF(dx * m_echelle, 0), 1.6 * m_echelle, 1.1 * m_echelle);
+      }
+      ecrire(QPointF(std::min(P(t.x0, t.y0).x(), P(t.x1, t.y1).x()) + 8 * m_echelle, m.y() - 0.9 * m_echelle), QString::fromStdString(t.texte), 2.2, -1, CADRE, false);
+    }
+    for (const auto& c : d.cables) {
+      QPen pen(ENCRE, std::max(1.0, 0.3 * m_echelle));
+      if (c.blinde) pen.setStyle(Qt::DashLine);
+      g.setPen(pen);
+      g.setBrush(Qt::NoBrush);
+      g.drawEllipse(QRectF(P(c.x - 4, c.y0), P(c.x + 4, c.y1)));
+      ecrire(P(c.x, c.y0 - 1.5), QString::fromStdString(c.texte) + (c.blinde ? QStringLiteral(" (blindé)") : QString()), 2.6, 0, ENCRE, true);
+    }
+    g.setBrush(ENCRE);
+    for (const auto& [repere, p] : d.epissures) {
+      g.drawEllipse(P(p.first, p.second), 1.2 * m_echelle, 1.2 * m_echelle);
+      ecrire(P(p.first, p.second - 2.5), QString::fromStdString(repere), 2.4, 0, ENCRE, true);
+    }
+    g.setBrush(Qt::NoBrush);
+    return;
+  }
   if (type == TypeFolio::Grafcet) {
     // Le grafcet du folio (sinon le premier du projet), à l'échelle 1 s'il tient, réduit sinon ; entrées et sorties en légende
     const prom::elec::InfosFolio& info = pe.folio(f.uuid);

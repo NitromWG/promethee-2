@@ -48,7 +48,8 @@ struct ReglagesElectriques {
 // ---------- Folios ----------
 // Garde, Borniers, Implantation, Nomenclature et Grafcet sont dessinés d'office (sommaire, plan des borniers,
 // armoire, liste du matériel, grafcet du projet), tenus à jour à chaque modification ; les autres reçoivent le schéma
-enum class TypeFolio : std::uint8_t { Garde, Puissance, Commande, Automate, Distribution, Unifilaire, Borniers, Implantation, Nomenclature, Grafcet, Libre };
+// Cablage (0.34, 19.10) : schéma de câblage d'un faisceau, dessiné d'office depuis le faisceau qu'il nomme
+enum class TypeFolio : std::uint8_t { Garde, Puissance, Commande, Automate, Distribution, Unifilaire, Borniers, Implantation, Nomenclature, Grafcet, Libre, Cablage };
 bool folioDessineDOffice(TypeFolio t);
 const char* nomTypeFolio(TypeFolio t);
 const char* codeTypeFolio(TypeFolio t);
@@ -58,6 +59,7 @@ struct InfosFolio {
   std::string commentaire;
   std::string origine;  // folio tiré d'un calcul (« distribution », « photovoltaique ») : remplacé quand on le régénère
   std::string grafcet;  // folio Grafcet : UUID du grafcet qu'il dessine
+  std::string faisceau;  // folio de câblage : UUID du faisceau qu'il dessine (vide : le premier)
 };
 // Cadre d'un folio électrique (CEI 61082) : bandeaux de repères (colonnes numérotées en haut et en bas, lignes
 // lettrées à gauche et à droite), zone de dessin, cartouche sur toute la largeur en bas

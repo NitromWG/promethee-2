@@ -244,6 +244,10 @@ RegistreActions::RegistreActions() {
   ajouter("schema.depuisCircuit", QStringLiteral("Schéma déduit du circuit (un symbole par composant, réseaux du cuivre)"), P::Atelier, {});
   ajouter("circuit.retouches", QStringLiteral("Retouches de la révision fabriquée"), P::Atelier, {});
   ajouter("circuit.schemaLignes", QStringLiteral("Schéma de lignes et topologie du réseau routé"), P::Atelier, {});
+  // 0.34, lot L19 : bibliothèque d'équipe, achats, liaisons d'entreprise
+  ajouter("bibliotheque.equipe", QStringLiteral("Bibliothèque d'équipe : demandes d'articles, santé, doublons"), P::Atelier, {});
+  ajouter("fabrication.achats", QStringLiteral("Liste d'achat par conditionnements et tableau de bord de la nomenclature"), P::Atelier, {});
+  ajouter("fabrication.plm", QStringLiteral("Publication vers le PLM (dossier d'équipe) et retour"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
   ajouter("schema.alimentation.3v3", QStringLiteral("Alimentation +3V3"), P::Schema, {});
@@ -553,6 +557,9 @@ RegistreActions::RegistreActions() {
       {"schema.depuisCircuit", "Schéma déduit", "schema", "un symbole par composant de la carte, une étiquette au nom du réseau du cuivre sur chaque broche"},
       {"circuit.retouches", "Retouches…", "couper", "fils de reprise, pistes coupées, composants changés d’une révision fabriquée, par numéro de série"},
       {"circuit.schemaLignes", "Lignes…", "piste", "schéma de lignes, topologie extraite du cuivre, moignons de chaîne et de via"},
+      {"bibliotheque.equipe", "Équipe…", "composants", "demandes d’articles manquants, santé de la bibliothèque d’équipe, doublons comparés et fusionnés"},
+      {"fabrication.achats", "Achats…", "rapport", "liste d’achat pour N cartes (bobines, bandes coupées, port, douane), note de la nomenclature sur 10, page pour les acheteurs"},
+      {"fabrication.plm", "Vers le PLM…", "exporter", "nomenclature commune, structure PLMXML et modèles déposés dans le dossier d’équipe ; états revenus du PLM"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},
       {"schema.etiquetteGlobale", "Étiquette globale", "etiquette", "relie les fils du même nom sur toutes les feuilles"},

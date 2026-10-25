@@ -263,7 +263,8 @@ TexteCircuit texteParDefaut(const ConceptionElec& c, Couche couche, const std::s
   t.texte = texte;
   t.couche = couche;
   t.p = p;
-  const DefautsFamille& f = familleDefauts(defautsCarte(c), couche);
+  const DefautsCarte defauts = defautsCarte(c);  // gardé en vie : familleDefauts rend une référence dedans
+  const DefautsFamille& f = familleDefauts(defauts, couche);
   if (f.tailleTexte > 0) t.hauteur = f.tailleTexte;
   else if (couche == Couche::SerigraphieDessus || couche == Couche::SerigraphieDessous) t.hauteur = c.circuit.serigraphie.hauteur;
   return t;
@@ -273,7 +274,8 @@ DessinCircuit dessinParDefaut(const ConceptionElec& c, Couche couche) {
   DessinCircuit d;
   d.uuid = nouvelUuid();
   d.couche = couche;
-  const DefautsFamille& f = familleDefauts(defautsCarte(c), couche);
+  const DefautsCarte defauts = defautsCarte(c);
+  const DefautsFamille& f = familleDefauts(defauts, couche);
   if (f.epaisseurTrait > 0) d.epaisseur = f.epaisseurTrait;
   return d;
 }

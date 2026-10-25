@@ -7,7 +7,7 @@
       "titre": "Schéma",
       "groupes": [
         {"titre": "Composant", "forme": "grand", "actions": ["schema.choisirComposant", "bibliotheque.articles", "composant.creer"]},
-        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats", "bibliotheque.importerAutres", "composants.nomenclatureEntree", "bibliotheque.convertirDossier", "bibliotheque.conceptionReference", "aide.guideAncienOutil"]},
+        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats", "bibliotheque.importerAutres", "composants.nomenclatureEntree", "bibliotheque.convertirDossier", "bibliotheque.conceptionReference", "bibliotheque.equipe", "aide.guideAncienOutil"]},
         {"titre": "Fil", "forme": "grand", "actions": ["schema.fil"]},
         {"titre": "Étiquette", "forme": "grand", "actions": ["schema.etiquette", "schema.etiquetteGlobale"]},
         {"titre": "Alimentation", "forme": "grand", "actions": ["schema.alimentation.gnd", "schema.alimentation.5v", "schema.alimentation.3v3", "schema.alimentation.12v", "schema.alimentation.vcc", "schema.drapeauAlimentation"]},
@@ -84,7 +84,7 @@
         {"titre": "Échanges", "forme": "grand", "actions": ["fabrication.kicad", "fabrication.netlistKicad", "fabrication.netlistTierce", "fabrication.exporterPads", "fabrication.exporterPadsLogic", "fabrication.exporterPcad", "fabrication.archiveAltium", "fabrication.ipc"]},
         {"titre": "Autres logiciels", "forme": "grille", "actions": ["fabrication.importerNetlist", "fabrication.dsn", "fabrication.ses", "fabrication.dxfMeca", "fabrication.boardview", "fabrication.ipc2581", "fabrication.gerberCarte"]},
         {"titre": "Boîtier", "forme": "grand", "actions": ["fabrication.boitier"]},
-        {"titre": "Fabricant", "forme": "grille", "actions": ["fabrication.panneau", "fabrication.devis", "fabrication.controler", "fabrication.visionneuse"]}
+        {"titre": "Fabricant", "forme": "grille", "actions": ["fabrication.panneau", "fabrication.devis", "fabrication.controler", "fabrication.visionneuse", "fabrication.achats", "fabrication.plm"]}
       ]
     }
   ]

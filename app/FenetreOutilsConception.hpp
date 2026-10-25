@@ -11,6 +11,7 @@
 #include <QString>
 #include <QWidget>
 
+#include "promethee/liste_achat.hpp"
 #include "promethee/projet_partage.hpp"
 
 class AtelierElectronique;
@@ -30,6 +31,16 @@ class FenetreOutilsConception : public QWidget {
   QString rapport(const QString& onglet) const;  // texte du rapport de l'onglet
   QComboBox* varianteActive() const { return m_variante; }
   QSpinBox* cartes() const { return m_cartes; }
+  // 0.34, lot L19 (OutilsConception034L19.cpp) : tableau de bord de la nomenclature, recalculé à chaque commande sur
+  // les seules lignes touchées, et liste d'achat (19.7) ; dépôt vers le PLM et retour (19.14)
+  const prom::ecad::TableauBordNomenclature& tableauBord() const { return m_tableauBord; }
+  const prom::ecad::ListeAchat& listeAchat() const { return m_listeAchat; }
+  const prom::ecad::ListeAchat& calculerAchats(int cartes, const QString& fichierFrais = {});
+  bool exporterPanier(const QString& distributeur, const QString& chemin);
+  bool exporterPageAcheteurs(const QString& chemin);
+  QString deposerPlm(const QString& dossierEquipe, const QString& revision, bool modeles = true);  // dossier du dépôt, vide sinon
+  // Programme séparé d'accès en ligne (décision D13) lancé sur le dernier dépôt : sortie et code (3 : désactivé)
+  int synchroniserPlm(const QString& operation, QString* sortie = nullptr);
 
  private:
   QWidget* onglet(const QString& id, const QString& titre, const std::function<QString()>& html, const std::vector<std::pair<QString, std::function<void()>>>& boutons = {});
@@ -45,4 +56,10 @@ class FenetreOutilsConception : public QWidget {
   void ajouterOnglets034();
   QString m_bilanReversement;                   // dernier reversement de la copie locale (12.15)
   std::vector<prom::DonneeAchat> m_donneesAchat;  // données d'achat lues (12.18)
+  void ajouterOnglets034L19();
+  void majTableauBord();
+  prom::ecad::TableauBordNomenclature m_tableauBord;
+  prom::ecad::ListeAchat m_listeAchat;
+  int m_cartesAchat = 0;
+  QString m_dernierDepot, m_dossierEquipePlm, m_sortiePlm;
 };

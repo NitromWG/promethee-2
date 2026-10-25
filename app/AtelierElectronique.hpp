@@ -305,6 +305,9 @@ class AtelierElectronique : public QWidget {
   bool deduireSchema();
   class FenetreRetouches* retouches();
   class FenetreLignes* lignes();
+  // Bibliothèque d'équipe (L19 : 19.4) : demandes, santé, comparaison et fusion annulables
+  class FenetreBibliothequeEquipe* bibliothequeEquipe(const QString& onglet = {});
+  void verifierDemandesServies();  // à l'ouverture : les articles demandés publiés depuis la dernière fois
   void montrerBroche(const std::string& composant, const std::string& numero);
   void demanderAssistant(const prom::ecad::Violation& v);  // « Demander à l'assistant » sur une violation
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
@@ -422,6 +425,7 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandesL16();     // platine d'essai, documents de câblage, guitare (0.34, Platine034.cpp)
   void enregistrerCommandesL16b();    // enseignement (0.34, Enseignement034.cpp)
   void enregistrerCommandesL17();     // schéma déduit, retouches, schéma de lignes (0.34, Lignes034.cpp)
+  void enregistrerCommandesL19();     // bibliothèque d'équipe, achats, PLM (0.34, Bibliotheque034.cpp)
   QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
   QPointer<class DialogueConversionSerie> m_conversionSerie;
   QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
@@ -480,6 +484,7 @@ class AtelierElectronique : public QWidget {
   QPointer<class FenetreEnseignement> m_enseignement;
   QPointer<class FenetreRetouches> m_retouches;
   QPointer<class FenetreLignes> m_lignes;
+  QPointer<class FenetreBibliothequeEquipe> m_bibliothequeEquipe;
   QPointer<class FenetreOutilsConception> m_outilsConception;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;

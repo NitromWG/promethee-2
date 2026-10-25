@@ -48,6 +48,7 @@ class AtelierElectrique : public QWidget {
   // celui du travail : dessiner (schéma, armoire, faisceau), concevoir l'installation, calculer, sortir les rapports
   enum Mode { Schema = 0, Armoire = 1, Faisceau = 2, Rapports = 3, Calculs = 4, Logement = 5, Distribution = 6, Photovoltaique = 7, Grafcet = 8 };
   explicit AtelierElectrique(Document* doc, QWidget* parent = nullptr);
+  Document* document() const { return m_doc; }
   void ouvrir(int projet, int mode, int folio = 0);
   int projet() const { return m_projet; }
   int mode() const;
@@ -75,6 +76,9 @@ class AtelierElectrique : public QWidget {
   void implanter(bool toutReplacer);
   int nouvelleArmoire();
   int nouveauFaisceau();
+  // Faisceau de câblage (0.34, lot L19 : 19.10 à 19.13) : schéma de câblage, planche, longueurs, fabrication
+  class FenetreCablage* cablage(const QString& onglet = {});
+  void modifierProjetNomme(const std::function<void(prom::elec::ProjetElectrique&)>& f, const QString& nom);
   // 0 appareils, 1 nomenclature (chiffrée), 2 borniers, 3 câbles, 4 carnet, 5 E/S, 6 folios, 7 bilan de puissance,
   // 8 liste de coupe, 9 chiffrage
   static constexpr int NB_RAPPORTS = 10;
@@ -216,6 +220,7 @@ class AtelierElectrique : public QWidget {
   VueSchemaElectrique* m_schema = nullptr;
   VueArmoire* m_armoire = nullptr;
   VueFaisceau* m_faisceau = nullptr;
+  QPointer<class FenetreCablage> m_cablage;
   QWidget* m_pageRapports = nullptr;
   QWidget* m_pageCalculs = nullptr;
   QWidget* m_pageLogement = nullptr;

@@ -106,6 +106,7 @@ QString iconeFolio(TypeFolio t) {
     case TypeFolio::Implantation: return QStringLiteral("armoire");
     case TypeFolio::Nomenclature: return QStringLiteral("rapport");
     case TypeFolio::Grafcet: return QStringLiteral("grafcet");
+    case TypeFolio::Cablage: return QStringLiteral("cablage");
     case TypeFolio::Libre: break;
   }
   return QStringLiteral("schema");
@@ -288,6 +289,15 @@ void AtelierElectrique::modifierProjet(const std::function<void(ProjetElectrique
   m_doc->modifier([&](prom::Projet& p) {
     if (i >= 0 && i < static_cast<int>(p.electrique.size())) f(p.electrique[static_cast<std::size_t>(i)]);
   });
+}
+
+void AtelierElectrique::modifierProjetNomme(const std::function<void(ProjetElectrique&)>& f, const QString& nom) {
+  const int i = m_projet;
+  m_doc->modifier(
+      [&](prom::Projet& p) {
+        if (i >= 0 && i < static_cast<int>(p.electrique.size())) f(p.electrique[static_cast<std::size_t>(i)]);
+      },
+      nom);
 }
 
 void AtelierElectrique::ouvrir(int projet, int mode, int folio) {
@@ -813,7 +823,7 @@ QWidget* AtelierElectrique::construireGauche() {
     plus->setPopupMode(QToolButton::InstantPopup);
     auto* menu = new QMenu(plus);
     for (TypeFolio t : {TypeFolio::Puissance, TypeFolio::Commande, TypeFolio::Automate, TypeFolio::Distribution, TypeFolio::Unifilaire, TypeFolio::Borniers, TypeFolio::Implantation,
-                        TypeFolio::Nomenclature, TypeFolio::Grafcet, TypeFolio::Garde, TypeFolio::Libre})
+                        TypeFolio::Nomenclature, TypeFolio::Grafcet, TypeFolio::Cablage, TypeFolio::Garde, TypeFolio::Libre})
       menu->addAction(icone(iconeFolio(t)), QString::fromUtf8(nomTypeFolio(t)), this, [this, t] { ajouterFolio(t); });
     plus->setMenu(menu);
     tete->addWidget(plus);
@@ -1704,7 +1714,7 @@ void AtelierElectrique::panneauSchema(QVBoxLayout* col) {
     f->addRow(QStringLiteral("Titre"), titreFolio);
     auto* type = new QComboBox;
     for (TypeFolio t : {TypeFolio::Garde, TypeFolio::Puissance, TypeFolio::Commande, TypeFolio::Automate, TypeFolio::Distribution, TypeFolio::Unifilaire, TypeFolio::Borniers,
-                        TypeFolio::Implantation, TypeFolio::Nomenclature, TypeFolio::Grafcet, TypeFolio::Libre})
+                        TypeFolio::Implantation, TypeFolio::Nomenclature, TypeFolio::Grafcet, TypeFolio::Cablage, TypeFolio::Libre})
       type->addItem(icone(iconeFolio(t)), QString::fromUtf8(nomTypeFolio(t)), static_cast<int>(t));
     type->setCurrentIndex(type->findData(static_cast<int>(pe.folio(F.uuid).type)));
     const std::string uuidFolio = F.uuid;
@@ -2423,6 +2433,14 @@ void AtelierElectrique::panneauArmoire(QVBoxLayout* col) {
 
 void AtelierElectrique::panneauFaisceau(QVBoxLayout* col) {
   const ProjetElectrique& pe = *projetCourant();
+  {
+    // 0.34 : schéma de câblage du faisceau (connecteurs de carte, câbles, contacts), planche, longueurs, fabrication
+    auto* c = new QPushButton(icone(QStringLiteral("cablage")), QStringLiteral("Câblage, planche et fabrication…"));
+    c->setObjectName(QStringLiteral("ouvrirCablage"));
+    c->setToolTip(QStringLiteral("Fils numérotés, câbles blindés et paires, connecteurs de carte, contacts ; planche à l’échelle 1 ; longueurs 3D et chutes de tension ; plan, classeur, machines, devis"));
+    connect(c, &QPushButton::clicked, this, [this] { cablage(); });
+    col->addWidget(c);
+  }
   const int fi = m_faisceau->faisceau();
   if (fi < 0 || fi >= static_cast<int>(pe.faisceaux.size())) {
     auto* b = new QPushButton(icone(QStringLiteral("faisceau")), QStringLiteral("Créer un faisceau"));
