@@ -192,6 +192,20 @@ struct SimulationContinue::Etat {
 };
 
 namespace {
+// Un circuit refusé : la ligne « Error on line … » ne dit que l'endroit. Un modèle numérique introuvable (MIF-ERROR)
+// veut dire, presque toujours, que ngspice a été installé sans ses modèles XSPICE (sous Linux, libngspice0 seul) :
+// le message le dit, avec ce qu'il faut installer
+std::string expliquerErreurCircuit(const std::vector<std::string>& console, const std::string& erreur) {
+  for (const auto& l : console)
+    if (const auto p = l.find("MIF-ERROR"); p != std::string::npos) {
+      std::string detail = l.substr(p);
+      while (!detail.empty() && std::isspace(static_cast<unsigned char>(detail.back()))) detail.pop_back();
+      return "les modèles numériques de ngspice (XSPICE : portes, bascules, ponts) ne sont pas chargés (" + detail +
+             ") ; installer ngspice en entier : sous Linux, le paquet « ngspice » en plus de « libngspice0 »";
+    }
+  return erreur;
+}
+
 int recevoirPas(ValeursPas* v, int, int, void*) {
   const std::shared_ptr<SimulationContinue::Etat> s = sessionCourante();
   if (!s || !v || !v->valeurs) return 0;
@@ -419,6 +433,7 @@ ResultatSimulation simuler(const std::string& netlist, const OptionsMoteur& o, c
     std::lock_guard<std::mutex> g(m.etat);
     for (const auto& l : m.console)
       if (l.find("stderr Error") != std::string::npos || l.find("Error on line") != std::string::npos) r.erreur = l.substr(l.find("Error"));
+    if (!r.erreur.empty()) r.erreur = expliquerErreurCircuit(m.console, r.erreur);
   }
   if (!r.erreur.empty()) {
     std::lock_guard<std::mutex> g(m.etat);
@@ -634,6 +649,7 @@ bool SimulationContinue::demarrer(const std::string& netlist, const std::vector<
     std::lock_guard<std::mutex> g(m.etat);
     for (const auto& l : m.console)
       if (l.find("stderr Error") != std::string::npos || l.find("Error on line") != std::string::npos) e->erreur = l.substr(l.find("Error"));
+    if (!e->erreur.empty()) e->erreur = expliquerErreurCircuit(m.console, e->erreur);
   }
   if (!e->erreur.empty()) {
     m.sessionActive = false;

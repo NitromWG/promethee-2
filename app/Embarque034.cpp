@@ -920,7 +920,10 @@ bool FenetreEmbarque::verifierTableGhdl(QString* detail) {
   const ConceptionElec* c = m_atelier.conceptionCourante();
   if (!c) return false;
   const CircuitLogique cl = circuitLogique(*c);
-  const auto [e, s] = portsDuCircuit(cl);
+  // Variables nommées plutôt qu'une liaison structurée : les lambdas ci-dessous les prennent (AppleClang 15)
+  const auto ports = portsDuCircuit(cl);
+  const auto& e = ports.first;
+  const auto& s = ports.second;
   const auto schema = tableVerite(cl, e, s);
   std::string erreur;
   const auto ghdl = tableVeriteGhdl(cl, e, s, dossierTemporaire(QStringLiteral("ghdl")).toStdString(), &erreur);

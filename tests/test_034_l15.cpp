@@ -585,7 +585,11 @@ TEST_CASE("15.7 · compteur écrit en Verilog et câblé au schéma : mêmes sor
   g.decalage = 2.5;
   s.regler(sourceExterne("VG1"), g);
   s.ajouter(hdl);
-  REQUIRE(s.demarrer(n.texte, sondes, oc, &erreur));
+  const bool demarre = s.demarrer(n.texte, sondes, oc, &erreur);
+  INFO(erreur);
+  // ngspice installé sans ses modèles numériques (sous Linux, libngspice0 seul) : le message le dit, l'essai est sauté
+  if (!demarre && erreur.find("XSPICE") != std::string::npos) SKIP(erreur);
+  REQUIRE(demarre);
   REQUIRE(attendreTemps(s, 0.255, 120));
   s.arreter();
   CHECK(hdl->evaluations() >= 20);

@@ -154,7 +154,7 @@ void essaisElectronique034L17(FenetrePrincipale& f, const Verifier& verifier0) {
     int justes = 0;
     std::string manquant;
     for (const auto& [nom, broches] : attendus) {
-      const auto it = std::find_if(deduits.begin(), deduits.end(), [&](const auto& x) { return x.second == broches; });
+      const auto it = std::find_if(deduits.begin(), deduits.end(), [&b = broches](const auto& x) { return x.second == b; });
       if (it != deduits.end() && it->first == nom) ++justes;
       else if (manquant.empty()) manquant = nom;
     }

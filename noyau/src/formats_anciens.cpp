@@ -1773,7 +1773,7 @@ class Page {
     // Broches cachées : citées par net= sans être dessinées
     if (composant && !port)
       for (const auto& [b, reseau] : imposes)
-        if (std::none_of(s->broches.begin(), s->broches.end(), [&](const Broche& x) { return numero(x) == b; })) lu.points.push_back({o, ref, b, reseau, false});
+        if (std::none_of(s->broches.begin(), s->broches.end(), [&, &b = b](const Broche& x) { return numero(x) == b; })) lu.points.push_back({o, ref, b, reseau, false});
   }
   // Port d'une feuille fille : symbole d'entrée, de sortie ou d'entrée-sortie (in-1.sym, out-1.sym, io-1.sym :
   // « device=INPUT », « OUTPUT », « IO », ou les plots IPAD, OPAD, IOPAD)

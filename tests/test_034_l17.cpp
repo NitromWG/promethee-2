@@ -70,7 +70,7 @@ TEST_CASE("17.6 · circuit de l'exemple au NE555 privé de son schéma : schéma
   const auto deduits = reseauxMultiples(carte);
   for (const auto& [nom, broches] : attendus) {
     INFO("réseau " << nom);
-    const auto it = std::find_if(deduits.begin(), deduits.end(), [&](const auto& x) { return x.second == broches; });
+    const auto it = std::find_if(deduits.begin(), deduits.end(), [&b = broches](const auto& x) { return x.second == b; });
     REQUIRE(it != deduits.end());
     CHECK(it->first == nom);
   }

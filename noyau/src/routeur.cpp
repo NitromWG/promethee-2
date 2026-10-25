@@ -261,7 +261,7 @@ ResultatTrace contournerDans(const ConceptionElec& c, Pt a, Pt b, const OptionsT
     bx.etendre(u);
     bx.etendre(v);
     const Nm g = t.w2 + c.circuit.regles.bord + s * 2;
-    marquer(bx.gonflee(g), [&](Pt p) { return distancePointSegment(p, u, v) - static_cast<double>(t.w2) - static_cast<double>(c.circuit.regles.bord); });
+    marquer(bx.gonflee(g), [&, u = u, v = v](Pt p) { return distancePointSegment(p, u, v) - static_cast<double>(t.w2) - static_cast<double>(c.circuit.regles.bord); });
   }
   for (const auto& x : t.obs) {
     const Nm g = t.w2 + static_cast<Nm>(t.iso(x.reseau)) + s * 2;

@@ -240,8 +240,8 @@ TEST_CASE("8.15 · placement d'un panneau 3 × 2 : chaque composant six fois et 
   const std::string g = gerber(pf.modele, Couche::CuivreDessus, "0.34");
   const LectureGerber lu = lireGerber(g);
   for (const auto& [ex, ey] : attendues) {
-    CHECK(std::any_of(p.begin(), p.end(), [&](const Position& x) { return x.genre == "mire" && std::abs(x.x - ex) < 0.01 && std::abs(x.y - ey) < 0.01; }));
-    CHECK(std::any_of(lu.objets.begin(), lu.objets.end(), [&](const ObjetGerber& x) {
+    CHECK(std::any_of(p.begin(), p.end(), [ex = ex, ey = ey](const Position& x) { return x.genre == "mire" && std::abs(x.x - ex) < 0.01 && std::abs(x.y - ey) < 0.01; }));
+    CHECK(std::any_of(lu.objets.begin(), lu.objets.end(), [ex = ex, ey = ey](const ObjetGerber& x) {
       return x.genre == ObjetGerber::Genre::Flash && std::abs(mm(x.a.x) - ex) < 0.01 && std::abs(mm(x.a.y) - ey) < 0.01;
     }));
   }

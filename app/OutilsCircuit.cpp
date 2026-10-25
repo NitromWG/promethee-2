@@ -169,7 +169,7 @@ class VueCircuit::OutilSelection : public OutilBase {
       }
       const Pt p = v.surGrilleRoutage(v.monde(m_souris));
       const int ci = v.m_conception;
-      const auto [b, k] = m_sommetContour;
+      const auto b = m_sommetContour.first, k = m_sommetContour.second;  // pris par la lambda : pas de liaison structurée
       v.m_doc->pendantGeste([&](prom::Projet& pr) {
         if (ci < 0 || ci >= static_cast<int>(pr.electronique.size())) return;
         deplacerSommetContour(pr.electronique[static_cast<std::size_t>(ci)], b, static_cast<std::size_t>(k), p);
@@ -278,7 +278,9 @@ class VueCircuit::OutilSelection : public OutilBase {
         });
         return;
       }
-      const auto [i, p] = v.areteSous(g.ecran);
+      const std::pair<int, Pt> arete = v.areteSous(g.ecran);
+      const int i = arete.first;
+      const Pt p = arete.second;
       if (i >= 0) {
         v.modifier([&](ConceptionElec& c) {
           for (auto& z : c.circuit.zones)

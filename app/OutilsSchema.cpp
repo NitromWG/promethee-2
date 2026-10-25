@@ -1413,7 +1413,7 @@ class VueSchema::OutilEtiquette : public OutilBase {
         ChoixBandeau x;
         x.libelle = QString::fromUtf8(nom);
         x.coche = m_type == t;
-        x.faire = [moi, t] { moi->m_type = t; };
+        x.faire = [moi, t = t] { moi->m_type = t; };
         type.choix.push_back(x);
       }
       c.actions.push_back(type);

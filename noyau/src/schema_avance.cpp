@@ -629,7 +629,7 @@ int appliquerDirectives(ConceptionElec& c) {
   Regles& R = c.circuit.regles;
   for (const auto& [nom, x] : cc.reseaux) {
     if (x.classe.empty()) continue;
-    auto cl = std::find_if(R.classes.begin(), R.classes.end(), [&](const ClasseReseau& y) { return y.nom == x.classe; });
+    auto cl = std::find_if(R.classes.begin(), R.classes.end(), [&x = x](const ClasseReseau& y) { return y.nom == x.classe; });
     if (cl == R.classes.end()) {
       ClasseReseau nouvelle;
       nouvelle.nom = x.classe;

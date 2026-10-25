@@ -743,7 +743,7 @@ TEST_CASE("10.15 · fichier composé (CFB) écrit puis relu : grands flux, petit
   const auto relus = prom::lireCfb(cfb);
   REQUIRE(relus.size() == flux.size());
   for (const auto& [n, c] : flux) {
-    const auto it = std::find_if(relus.begin(), relus.end(), [&](const auto& x) { return x.first == n; });
+    const auto it = std::find_if(relus.begin(), relus.end(), [&n = n](const auto& x) { return x.first == n; });
     REQUIRE(it != relus.end());
     CHECK(it->second == c);
   }

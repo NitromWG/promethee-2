@@ -712,7 +712,7 @@ EtatRoutage etatRoutage(const ConceptionElec& c, const Connectivite& k, const Re
     CourtCircuit cc{*ens.begin(), *std::next(ens.begin()), {}};
     // Position : un contact entre deux réseaux différents dans ce morceau de cuivre ; à défaut, le contact d'un
     // cuivre sans réseau qui fait le pont (texte en cuivre, piste orpheline : C20)
-    const auto dansMorceau = [&](bool deuxReseaux) {
+    const auto dansMorceau = [&, rac = rac](bool deuxReseaux) {
       return std::find_if(contacts.begin(), contacts.end(), [&](const Contact& k2) { return k2.deuxReseaux == deuxReseaux && u.racine(k2.objet) == rac; });
     };
     if (auto it = dansMorceau(true); it != contacts.end()) cc.position = it->position;

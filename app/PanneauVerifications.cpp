@@ -355,7 +355,7 @@ void PanneauVerifications::menuElement(const QPoint& p) {
   if (!groupe) {
     const auto& [v, estErc] = m_affichees[static_cast<std::size_t>(it->data(0, ROLE_INDICE).toInt())];
     const Violation copie = v;
-    menu->addAction(QStringLiteral("Aller au problème"), this, [this, copie, estErc] { aller(copie, estErc); });
+    menu->addAction(QStringLiteral("Aller au problème"), this, [this, copie, erc = estErc] { aller(copie, erc); });
     menu->addAction(QStringLiteral("Demander à l’assistant"), this, [this, copie] { m_atelier.demanderAssistant(copie); });
     if (const QString c = correction(v); !c.isEmpty() && estErc) menu->addAction(c, this, [this, copie] { corriger(copie); });
     {  // ERC comme DRC : les exclusions du projet valent pour les deux (2.33)

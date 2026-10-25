@@ -120,8 +120,11 @@ TEST_CASE("14.2 · bouton poussoir cliqué en simulation continue : le compteur 
   const NetlistSpice n = netlistContinue(m.c, oc, {}, sondes);
   SimulationContinue s;
   std::string erreur;
-  REQUIRE(s.demarrer(n.texte, sondes, oc, &erreur));
+  const bool demarre = s.demarrer(n.texte, sondes, oc, &erreur);
   INFO(erreur);
+  // ngspice installé sans ses modèles numériques (sous Linux, libngspice0 seul) : le message le dit, l'essai est sauté
+  if (!demarre && erreur.find("XSPICE") != std::string::npos) SKIP(erreur);
+  REQUIRE(demarre);
   auto compte = [&] {
     std::vector<double> v;
     for (const auto& b : bits) v.push_back(s.valeur(b));

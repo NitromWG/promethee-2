@@ -28,9 +28,10 @@ jobs:
           sudo python3 -m pip install --break-system-packages --quiet gerbonara || echo "gerbonara indisponible : troisième lecteur sauté"
           # Lecteur JSON Schema indépendant des formats de fichier (1.22, ECH-10)
           sudo python3 -m pip install --break-system-packages --quiet jsonschema
-          # Outils que les essais de la 0.34 emploient quand ils sont là (microcontrôleur et simavr, HDL, PDF, pilote
-          # SQLite du programme d'accès en ligne, page de classe) ; chacun absent est dit et ses essais sont sautés
-          for p in gcc-avr avr-libc libsimavr-dev libelf-dev gdb-avr ghdl iverilog yosys verilator poppler-utils libqt6sql6-sqlite nodejs git; do
+          # Outils que les essais de la 0.34 emploient quand ils sont là (modèles numériques XSPICE de ngspice,
+          # microcontrôleur et simavr, HDL, PDF, pilote SQLite du programme d'accès en ligne, page de classe) ; chacun
+          # absent est dit et ses essais sont sautés
+          for p in ngspice gcc-avr avr-libc libsimavr-dev libelf-dev gdb-avr ghdl iverilog yosys verilator poppler-utils libqt6sql6-sqlite nodejs git; do
             sudo apt-get install -y --no-install-recommends "$p" > /dev/null 2>&1 || echo "::notice::$p indisponible : ses essais sont sautés"
           done
       - name: Configuration
@@ -40,7 +41,8 @@ jobs:
         run: |
           # Les erreurs du compilateur deviennent des annotations du passage, lisibles sans télécharger le journal
           set -o pipefail
-          if ! cmake --build build 2>&1 | tee compilation.log; then
+          # Ninja poursuit après une erreur (-k 0) : toutes les erreurs du passage en une fois
+          if ! cmake --build build -- -k 0 2>&1 | tee compilation.log; then
             # GitHub garde dix annotations d'erreur par étape : la première erreur de chacun des dix premiers fichiers
             grep -E "error:|fatal error|undefined reference|Undefined symbols|ld: " compilation.log | awk -F: '!vu[$1]++' | head -10 | while IFS= read -r l; do echo "::error::${l:0:900}"; done
             exit 1
@@ -287,7 +289,8 @@ jobs:
         run: |
           # Les erreurs du compilateur deviennent des annotations du passage, lisibles sans télécharger le journal
           set -o pipefail
-          if ! cmake --build build 2>&1 | tee compilation.log; then
+          # Ninja poursuit après une erreur (-k 0) : toutes les erreurs du passage en une fois
+          if ! cmake --build build -- -k 0 2>&1 | tee compilation.log; then
             # GitHub garde dix annotations d'erreur par étape : la première erreur de chacun des dix premiers fichiers
             grep -E "error:|fatal error|undefined reference|Undefined symbols|ld: " compilation.log | awk -F: '!vu[$1]++' | head -10 | while IFS= read -r l; do echo "::error::${l:0:900}"; done
             exit 1

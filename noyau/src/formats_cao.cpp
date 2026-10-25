@@ -154,7 +154,7 @@ ConceptionElec cao_interne::assemblerCarte(CarteLue& l, const std::string& nom, 
   if (!l.carteSeule.empty()) {
     std::erase_if(l.netlist.composants, [&](const ComposantNetlist& x) { return l.carteSeule.count(x.reference) > 0; });
     for (auto& [n, v] : l.netlist.reseaux)
-      std::erase_if(v, [&](const Broche& b) {
+      std::erase_if(v, [&l, &n = n](const Broche& b) {
         if (!l.carteSeule.count(b.first)) return false;
         l.reseauxCarteSeule[b] = n;
         return true;
