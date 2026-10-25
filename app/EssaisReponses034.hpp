@@ -14,6 +14,7 @@
 #include <QInputDialog>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QStringList>
 #include <QTimer>
 
 namespace essais034 {
@@ -24,8 +25,18 @@ struct Reponse {
   bool oui = true;
   QString fichier;
 };
+// Ce que les réponses ont fait (fichier choisi, boîte attendue en vain) : le détail d'un essai en échec le cite
+inline QStringList& journalReponses() {
+  static QStringList j;
+  return j;
+}
 inline void repondreDans(const std::vector<Reponse>& suite, std::size_t i = 0, int essais = 0) {
-  if (i >= suite.size() || essais > 80) return;
+  if (i >= suite.size()) return;
+  if (essais > 80) {
+    QWidget* w = QApplication::activeModalWidget();
+    journalReponses() << QStringLiteral("réponse %1 abandonnée, boîte active : %2").arg(i).arg(w ? QString::fromLatin1(w->metaObject()->className()) + QStringLiteral(" « ") + w->windowTitle() + QStringLiteral(" »") : QStringLiteral("aucune"));
+    return;
+  }
   QTimer::singleShot(100, [suite, i, essais] {
     QWidget* w = QApplication::activeModalWidget();
     const Reponse& r = suite[i];
@@ -45,9 +56,11 @@ inline void repondreDans(const std::vector<Reponse>& suite, std::size_t i = 0, i
       }
     if (r.genre == Reponse::Genre::Fichier)
       if (auto* d = qobject_cast<QFileDialog*>(w)) {
+        d->setDirectory(QFileInfo(r.fichier).absolutePath());  // le dossier d'abord : le nom seul est repris ensuite
         d->selectFile(r.fichier);
         // Le nom proposé par la commande reste dans le champ : il prend celui de l'essai
         if (auto* e = d->findChild<QLineEdit*>(QStringLiteral("fileNameEdit"))) e->setText(QFileInfo(r.fichier).fileName());
+        journalReponses() << QStringLiteral("fichier %1 → %2").arg(r.fichier, d->selectedFiles().join(QLatin1Char(',')));
         if (qEnvironmentVariableIsSet("PROMETHEE_ESSAIS_DEBUG")) std::printf("(fichier : %s → %s)\n", qPrintable(r.fichier), qPrintable(d->selectedFiles().join(QLatin1Char(','))));
         static_cast<QDialog*>(d)->accept();  // protégé dans QFileDialog, public dans QDialog
         fait = true;

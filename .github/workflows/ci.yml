@@ -208,7 +208,8 @@ jobs:
           # livré (Mesa), que Prométhée reconnaît et partage entre Qt et OpenCascade.
           Copy-Item "$essai\opengl32sw.dll" "$essai\opengl32.dll"
           & "$essai\Promethee.exe" --version | Out-Host
-          # Tous les parcours passent ; les deux premières vérifications en échec de chacun deviennent des annotations
+          # Tous les parcours passent ; les neuf premières vérifications en échec de chacun deviennent des annotations
+          # (GitHub en garde dix par étape)
           $echecs = @()
           foreach ($mode in "--essais-interface", "--essais-onglets", "--essais-electronique", "--essais-electrique") {
             $p = Start-Process -FilePath "$essai\Promethee.exe" -ArgumentList $mode -PassThru -NoNewWindow -RedirectStandardOutput "sortie$mode.txt" -RedirectStandardError "erreurs$mode.txt"
@@ -217,7 +218,7 @@ jobs:
             if (-not $p.WaitForExit(3600000)) { $p.Kill(); Write-Host "::error::$mode : délai dépassé"; $echecs += $mode; continue }
             Get-Content "sortie$mode.txt"
             if ($p.ExitCode -ne 0) {
-              Select-String -Path "sortie$mode.txt" -Pattern "^(ÉCHEC|BOÎTE)" -Encoding utf8 | Select-Object -First 2 | ForEach-Object { $l = $_.Line; Write-Host "::error::$mode : $($l.Substring(0, [Math]::Min(600, $l.Length)))" }
+              Select-String -Path "sortie$mode.txt" -Pattern "^(ÉCHEC|BOÎTE)" -Encoding utf8 | Select-Object -First 9 | ForEach-Object { $l = $_.Line; Write-Host "::error::$mode : $($l.Substring(0, [Math]::Min(900, $l.Length)))" }
               Get-Content "$env:TEMP\promethee-journal.txt" -ErrorAction SilentlyContinue | Select-Object -Last 60
               $echecs += "$mode ($($p.ExitCode))"
             }

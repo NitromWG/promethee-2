@@ -10,6 +10,7 @@
 #include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
+#include <QTextDocumentFragment>
 #include <QDockWidget>
 #include <QEventLoop>
 #include <QFile>
@@ -141,7 +142,10 @@ void essaisElectronique034L8(FenetrePrincipale& f, const Verifier& verifier) {
     AtelierElectronique* a = ouvrir(f, c0);
     bool pdfOk = false, signauxOk = false, xlsxOk = false;
     std::string detail;
+    QString messages;  // ce que l'atelier a dit pendant les commandes : cité si un fichier manque
     if (a) {
+      journalReponses().clear();
+      QObject::connect(a, &AtelierElectronique::messageChange, a, [&messages](const QString& t) { messages += t + QStringLiteral(" | "); });
       const QString pdf = QDir(dossier).filePath(QStringLiteral("couches.pdf"));
       repondreDans({fichier(pdf)});
       a->executerAction("fabrication.pdfCouches");
@@ -166,6 +170,9 @@ void essaisElectronique034L8(FenetrePrincipale& f, const Verifier& verifier) {
       // En-tête, le signal, la ligne des totaux
       xlsxOk = QFileInfo(xlsx).size() > 1000 && lireXlsx(prom::lireFichier(prom::cheminFichier(xlsx.toStdString()))).size() == 3;
       detail += xlsxOk ? ", classeur écrit" : ", classeur absent";
+      QObject::disconnect(a, &AtelierElectronique::messageChange, a, nullptr);
+      if (!pdfOk || !xlsxOk)
+        detail += " ; réponses : " + journalReponses().join(QStringLiteral(" ; ")).toStdString() + " ; messages : " + QTextDocumentFragment::fromHtml(messages).toPlainText().left(400).toStdString();
     }
     verifier(pdfOk, "8.29 : PDF du circuit par couches depuis le ruban, une page et un signet par couche", detail);
     verifier(signauxOk && xlsxOk, "8.26 : signal suivi à travers la résistance série, récapitulatif en XLSX", detail);
