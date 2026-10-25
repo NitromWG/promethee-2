@@ -36,7 +36,15 @@ jobs:
       - name: Configuration
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Compilation
-        run: cmake --build build
+        shell: bash
+        run: |
+          # Les erreurs du compilateur deviennent des annotations du passage, lisibles sans télécharger le journal
+          set -o pipefail
+          if ! cmake --build build 2>&1 | tee compilation.log; then
+            # GitHub garde dix annotations d'erreur par étape : la première erreur de chacun des dix premiers fichiers
+            grep -E "error:|fatal error|undefined reference|Undefined symbols|ld: " compilation.log | awk -F: '!vu[$1]++' | head -10 | while IFS= read -r l; do echo "::error::${l:0:900}"; done
+            exit 1
+          fi
       - name: Tests
         run: ctest --test-dir build --output-on-failure
       - name: Détail des tests en échec (visible sur la page du run, sans connexion)
@@ -275,7 +283,15 @@ jobs:
       - name: Configuration
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_PREFIX_PATH="$(brew --prefix)"
       - name: Compilation
-        run: cmake --build build
+        shell: bash
+        run: |
+          # Les erreurs du compilateur deviennent des annotations du passage, lisibles sans télécharger le journal
+          set -o pipefail
+          if ! cmake --build build 2>&1 | tee compilation.log; then
+            # GitHub garde dix annotations d'erreur par étape : la première erreur de chacun des dix premiers fichiers
+            grep -E "error:|fatal error|undefined reference|Undefined symbols|ld: " compilation.log | awk -F: '!vu[$1]++' | head -10 | while IFS= read -r l; do echo "::error::${l:0:900}"; done
+            exit 1
+          fi
       - name: Tests
         run: ctest --test-dir build --output-on-failure
       - name: Détail des tests en échec (visible sur la page du run, sans connexion)
