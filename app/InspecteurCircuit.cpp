@@ -28,6 +28,7 @@
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
+#include "promethee/calculateurs_electronique.hpp"
 #include "promethee/circuit_edition.hpp"
 #include "AtelierElectronique.hpp"
 #include "ChampValeur.hpp"
@@ -305,6 +306,15 @@ class PagePiste : public PageCircuit {
       const Piste* t = piste();
       return t ? t->reseau : std::string();
     });
+    // Ce que vaut la piste (11.17) : longueur, délai, résistance, courant admissible (IPC-2221, ΔT 10 °C)
+    auto* electrique = inspecteur::texte();
+    electrique->setObjectName(QStringLiteral("proprietesPiste"));
+    fl->addRow(QStringLiteral("Électrique"), electrique);
+    suivre([this, electrique] {
+      const Piste* t = piste();
+      const ConceptionElec* c = conception();
+      electrique->setText(t && c ? q(proprietesPiste(*c, *t).resume()).toHtmlEscaped() : QString());
+    });
     colonne()->addStretch(1);
   }
 
@@ -359,6 +369,15 @@ class PageVia : public PageCircuit {
       const Via* v = via();
       sans->setVisible(v && v->reseau.empty());
       sans->setText(QStringLiteral("<span style='color:%1'>Sans réseau, la via n’est reliée à rien : la DRC la signale.</span>").arg(teintes::alerte()));
+    });
+    // Ce que vaut la via (11.17) : longueur, résistance, inductance, courant admissible
+    auto* electrique = inspecteur::texte();
+    electrique->setObjectName(QStringLiteral("proprietesVia"));
+    fl->addRow(QStringLiteral("Électrique"), electrique);
+    suivre([this, electrique] {
+      const Via* v = via();
+      const ConceptionElec* c = conception();
+      electrique->setText(v && c ? q(proprietesVia(*c, *v).resume()).toHtmlEscaped() : QString());
     });
     colonne()->addStretch(1);
   }

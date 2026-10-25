@@ -135,6 +135,18 @@ struct SecondeSource {
   int rang = 2;
   friend bool operator==(const SecondeSource&, const SecondeSource&) = default;
 };
+// Modèle de simulation d'un article (lot L11, 11.5 ; SIM-03) : texte .model ou .subckt (ou contenu d'un .lib), nom
+// du modèle ou du sous-circuit appelé, broches du symbole dans l'ordre des nœuds de l'élément (une entrée par
+// instance : « 3 2 8 4 1 », « 5 6 8 4 7 » pour les deux amplis d'un LM358), compatibilité du texte (« ps », « lt »,
+// « hs » : PSpice, LTspice, HSPICE), fichier d'origine, genre (« sous-circuit », « diode », « bipolaire », « mos »,
+// « jfet », « verilog-a », « ibis ») et source (fiche technique citée, ajustement…)
+struct ModeleSpice {
+  std::string texte, nom;
+  std::vector<std::string> broches;
+  std::string compatibilite, fichier, genre, source;
+  bool vide() const { return texte.empty(); }
+  friend bool operator==(const ModeleSpice&, const ModeleSpice&) = default;
+};
 struct Article {
   std::string id, nom, description, categorie, symbole, empreinte, valeur;
   std::string fabricant, mpn, fiche, lcsc;
@@ -155,6 +167,7 @@ struct Article {
   // Équipe (lot L19, 19.3, 19.5) : état du cycle de vie (« brouillon », « pré-série », « production », « fin de
   // série », « obsolète ») et numéro d'article de l'entreprise, relié aux références fabricant validées
   std::string etatCycle, numeroInterne;
+  ModeleSpice modeleSpice;  // 11.5
   friend bool operator==(const Article&, const Article&) = default;
 };
 

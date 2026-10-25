@@ -71,6 +71,14 @@ J articleVersJson(const Article& a) {
   mettre("exigences", a.exigences);
   mettre("etatCycle", a.etatCycle);
   mettre("numeroInterne", a.numeroInterne);
+  if (!a.modeleSpice.vide()) {
+    const ModeleSpice& m = a.modeleSpice;
+    J x = {{"texte", m.texte}, {"nom", m.nom}};
+    if (!m.broches.empty()) x["broches"] = m.broches;
+    for (const auto& [k, v] : {std::pair<const char*, const std::string*>{"compatibilite", &m.compatibilite}, {"fichier", &m.fichier}, {"genre", &m.genre}, {"source", &m.source}})
+      if (!v->empty()) x[k] = *v;
+    o["modeleSpice"] = x;
+  }
   o["version"] = a.version;
   return o;
 }
@@ -125,6 +133,19 @@ Article articleDepuisJson(const J& o) {
   a.exigences = txt(o, "exigences");
   a.etatCycle = txt(o, "etatCycle");
   a.numeroInterne = txt(o, "numeroInterne");
+  if (o.contains("modeleSpice") && o["modeleSpice"].is_object()) {
+    const J& x = o["modeleSpice"];
+    ModeleSpice& m = a.modeleSpice;
+    m.texte = txt(x, "texte");
+    m.nom = txt(x, "nom");
+    if (x.contains("broches") && x["broches"].is_array())
+      for (const auto& b : x["broches"])
+        if (b.is_string()) m.broches.push_back(b.get<std::string>());
+    m.compatibilite = txt(x, "compatibilite");
+    m.fichier = txt(x, "fichier");
+    m.genre = txt(x, "genre");
+    m.source = txt(x, "source");
+  }
   if (o.contains("version") && o["version"].is_number_integer()) a.version = std::max(1, o["version"].get<int>());
   return a;
 }
@@ -314,6 +335,7 @@ Article resoudreArticle(const Article& a, const std::function<const Article*(con
     prendre("modele3D", r.modele3D, b->modele3D);
     if (r.brochage.empty() && !a.nonHerites.count("brochage")) r.brochage = b->brochage;
     if (r.hauteur <= 0 && !a.nonHerites.count("hauteur")) r.hauteur = b->hauteur;
+    if (r.modeleSpice.vide() && !a.nonHerites.count("modeleSpice")) r.modeleSpice = b->modeleSpice;
     for (const auto& [k, val] : b->parametres)
       if (!r.parametres.count(k) && !a.nonHerites.count("parametre:" + k)) r.parametres[k] = val;
   }
@@ -852,7 +874,7 @@ std::vector<ResultatRecherche> IndexArticles::chercher(const std::string& requet
     if (filtres.avecFiche) garde &= !a.fiche.empty();
     if (filtres.avecReference) garde &= !a.mpn.empty();
     if (filtres.avec3D) garde &= !a.modele3D.empty() || (!a.empreinte.empty() && (a.hauteur > 0 || genererEmpreinte(a.empreinte).has_value()));
-    if (filtres.avecSimulation) garde &= a.parametres.count("modeleSpice") > 0 || familleArticle(a) != FamilleValeur::Aucune;
+    if (filtres.avecSimulation) garde &= !a.modeleSpice.vide() || a.parametres.count("modeleSpice") > 0 || familleArticle(a) != FamilleValeur::Aucune;
     if (!garde) continue;
     // Valeur et boîtier demandés : en tête
     if (valeurVoulue) {

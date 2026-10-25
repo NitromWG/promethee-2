@@ -196,6 +196,8 @@ RegistreActions::RegistreActions() {
   ajouter("fabrication.importerNetlist", QStringLiteral("Mettre à jour depuis une netlist"), P::Atelier, {});
   ajouter("fabrication.gerberCarte", QStringLiteral("Relire un dossier Gerber en carte"), P::Atelier, {});
   ajouter("simulation.ouvrir", QStringLiteral("Simuler le schéma (ngspice)"), P::Atelier, {});
+  ajouter("simulation.calculateurs", QStringLiteral("Calculateurs de l’électronique"), P::Atelier, {});
+  ajouter("simulation.modele", QStringLiteral("Modèle de simulation du composant"), P::Atelier, {});
   ajouter("outils.conception", QStringLiteral("Outils de conception (variantes, revue, système, essais, intégrité, logique, atelier, exigences)"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
@@ -463,6 +465,8 @@ RegistreActions::RegistreActions() {
       {"fabrication.importerNetlist", "Netlist…", "fil", "la conception mise à jour d’une netlist KiCad ou Prométhée, rapport CSV"},
       {"fabrication.gerberCarte", "Gerber en carte…", "composants", "un dossier de fabrication relu en carte modifiable, réseaux tirés du cuivre"},
       {"simulation.ouvrir", "Simuler…", "erc", "point de repos, balayage, fréquence, transitoire par ngspice ; courbes, curseurs et mesures"},
+      {"simulation.calculateurs", "Calculateurs…", "proprietes", "pistes, vias, isolement, filtres, atténuateurs, couleurs des résistances, autonomie, radiateur"},
+      {"simulation.modele", "Modèle SPICE…", "composants", "modèle intégré, tiré de la fiche technique, IBIS ou fichier d’un autre simulateur, rattaché à l’article"},
       {"outils.conception", "Outils…", "proprietes", "variantes et coût, revue, comparaison, système, notes, historique, mise en service, intégrité, logique, atelier, exigences"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},

@@ -273,6 +273,9 @@ class AtelierElectronique : public QWidget {
   void ouvrirOutilsConception();  // outils des lots L12 à L19 (FenetreOutilsConception)
   class FenetreOutilsConception* outilsConception() const;
   class FenetreSimulation* simulation() const;
+  class FenetreCalculateurs* calculateurs();  // calculateurs de l'électronique, montrés (11.7)
+  // Modèle de simulation du composant (du composant choisi s'il n'est pas donné), montré ; nul sans composant
+  class DialogueModeleSimulation* modeleSimulation(const std::string& composant = {});
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
   void creerEmpreinte(const std::string& composant);
   // Symbole à plusieurs unités : pose l'unité suivante non posée du composant de ce symbole, à côté de lui
@@ -381,6 +384,7 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandesCuivre();  // commandes du cuivre et de la carte (lot L5, OutilsCuivre.cpp)
   void enregistrerCommandesL8();      // fabrication, signaux, impédance, routage par stratégies (0.34, OutilsFabrication034.cpp)
   void enregistrerCommandesL10();     // imports des autres logiciels (0.34, ImportsTiers034.cpp)
+  void enregistrerCommandesL11();     // calculateurs et modèles de simulation (0.34, OutilsSimulation034.cpp)
   QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
   QPointer<class DialogueConversionSerie> m_conversionSerie;
   QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
@@ -427,6 +431,8 @@ class AtelierElectronique : public QWidget {
   QPointer<class GestionnaireContraintes> m_contraintes;
   QPointer<class FenetreDevis> m_devis;
   QPointer<class FenetreSimulation> m_simulation;
+  QPointer<class FenetreCalculateurs> m_calculateurs;
+  QPointer<class DialogueModeleSimulation> m_modeleSimulation;
   QPointer<class FenetreOutilsConception> m_outilsConception;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;

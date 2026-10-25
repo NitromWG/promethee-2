@@ -6,9 +6,16 @@
 #include <set>
 
 #include <QApplication>
+#include <QBuffer>
+#include <QCheckBox>
+#include <QDateTime>
+#include <QFileDialog>
+#include <QInputDialog>
 #include <QComboBox>
 #include <QDoubleSpinBox>
+#include <QFileInfo>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QLabel>
@@ -21,13 +28,19 @@
 #include <QPlainTextEdit>
 #include <QPointer>
 #include <QPushButton>
+#include <QRegularExpression>
+#include <QSignalBlocker>
 #include <QSplitter>
 #include <QTabWidget>
 #include <QTableWidget>
 #include <QVBoxLayout>
 
 #include "AtelierElectronique.hpp"
+#include "SelectionElectronique.hpp"
+#include "VueSchema.hpp"
+#include "promethee/fichiers.hpp"
 #include "FilDeFond.hpp"
+#include "promethee/csv.hpp"
 #include "promethee/valeurs.hpp"
 
 using namespace prom::ecad;
@@ -71,29 +84,120 @@ void TraceCourbes::setCourbes(std::vector<Courbe> c, const QString& axeX, const 
   m_axeX = axeX;
   m_axeY = axeY;
   m_logX = logX;
+  cadrer();
+}
+
+// Abscisses tracées d'une courbe : les siennes, ou celles de la première en tracé XY
+namespace {
+const std::vector<double>& abscisses(const std::vector<TraceCourbes::Courbe>& c, std::size_t i, bool xy) { return xy && c.size() > 1 ? c[0].y : c[i].x; }
+}  // namespace
+
+void TraceCourbes::cadrer() {
   bool premier = true;
-  for (const auto& k : m_courbes)
-    for (std::size_t i = 0; i < k.x.size() && i < k.y.size(); ++i) {
-      if (!std::isfinite(k.y[i]) || (m_logX && k.x[i] <= 0)) continue;
+  for (std::size_t j = 0; j < m_courbes.size(); ++j) {
+    if (m_xy && m_courbes.size() > 1 && j == 0) continue;
+    const auto& k = m_courbes[j];
+    const auto& xs = abscisses(m_courbes, j, m_xy);
+    for (std::size_t i = 0; i < xs.size() && i < k.y.size(); ++i) {
+      if (!std::isfinite(k.y[i]) || (m_logX && xs[i] <= 0) || (m_logY && k.y[i] <= 0)) continue;
       if (premier) {
-        m_x0 = m_x1 = k.x[i];
+        m_x0 = m_x1 = xs[i];
         m_y0 = m_y1 = k.y[i];
         premier = false;
       }
-      m_x0 = std::min(m_x0, k.x[i]);
-      m_x1 = std::max(m_x1, k.x[i]);
+      m_x0 = std::min(m_x0, xs[i]);
+      m_x1 = std::max(m_x1, xs[i]);
       m_y0 = std::min(m_y0, k.y[i]);
       m_y1 = std::max(m_y1, k.y[i]);
     }
-  if (premier) m_x0 = 0, m_x1 = 1, m_y0 = 0, m_y1 = 1;
-  if (m_y1 - m_y0 < 1e-12) m_y0 -= 0.5, m_y1 += 0.5;
-  const double marge = (m_y1 - m_y0) * 0.06;
-  m_y0 -= marge;
-  m_y1 += marge;
+  }
+  if (premier) m_x0 = m_logX ? 1 : 0, m_x1 = m_logX ? 10 : 1, m_y0 = m_logY ? 1 : 0, m_y1 = m_logY ? 10 : 1;
+  if (m_x1 - m_x0 < 1e-300) m_x1 = m_x0 + 1;
+  if (m_logY) {
+    if (m_y1 / m_y0 < 1.0001) m_y0 /= 2, m_y1 *= 2;
+  } else {
+    if (m_y1 - m_y0 < 1e-12) m_y0 -= 0.5, m_y1 += 0.5;
+    const double marge = (m_y1 - m_y0) * 0.06;
+    m_y0 -= marge;
+    m_y1 += marge;
+  }
   m_curseurs[0] = m_logX ? std::pow(10.0, std::log10(m_x0) + (std::log10(m_x1) - std::log10(m_x0)) / 3) : m_x0 + (m_x1 - m_x0) / 3;
   m_curseurs[1] = m_logX ? std::pow(10.0, std::log10(m_x0) + 2 * (std::log10(m_x1) - std::log10(m_x0)) / 3) : m_x0 + 2 * (m_x1 - m_x0) / 3;
   update();
   emit curseursChanges();
+}
+
+void TraceCourbes::setLogY(bool v) {
+  m_logY = v;
+  cadrer();
+}
+void TraceCourbes::setXY(bool v) {
+  m_xy = v;
+  cadrer();
+}
+
+bool TraceCourbes::exporterPng(const QString& chemin) { return grab().save(chemin, "PNG"); }
+
+std::string TraceCourbes::svg() const {
+  // Dessin vectoriel écrit par Prométhée : cadre, graduations, courbes, légende ; 800 × 500 points
+  const double L = 800, H = 500, x0 = 70, y0 = 20, w = L - 90, h = H - 70;
+  auto X = [&](double x) { return x0 + (m_logX ? (std::log10(std::max(x, 1e-300)) - std::log10(m_x0)) / (std::log10(m_x1) - std::log10(m_x0)) : (x - m_x0) / (m_x1 - m_x0)) * w; };
+  auto Y = [&](double y) { return y0 + h - (m_logY ? (std::log10(std::max(y, 1e-300)) - std::log10(m_y0)) / (std::log10(m_y1) - std::log10(m_y0)) : (y - m_y0) / (m_y1 - m_y0)) * h; };
+  auto nb = [](double v) { return QString::number(v, 'f', 2).toStdString(); };
+  auto esc = [](const QString& t) { return t.toHtmlEscaped().toStdString(); };
+  std::string s = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"800\" height=\"500\" viewBox=\"0 0 800 500\" font-family=\"sans-serif\" font-size=\"11\">\n";
+  s += "<rect width=\"800\" height=\"500\" fill=\"white\"/>\n";
+  for (double x : graduations(m_x0, m_x1, m_logX))
+    s += "<line x1=\"" + nb(X(x)) + "\" y1=\"" + nb(y0) + "\" x2=\"" + nb(X(x)) + "\" y2=\"" + nb(y0 + h) + "\" stroke=\"#ddd\"/><text x=\"" + nb(X(x)) + "\" y=\"" + nb(y0 + h + 15) +
+         "\" text-anchor=\"middle\">" + esc(si(x)) + "</text>\n";
+  for (double y : graduations(m_y0, m_y1, m_logY))
+    s += "<line x1=\"" + nb(x0) + "\" y1=\"" + nb(Y(y)) + "\" x2=\"" + nb(x0 + w) + "\" y2=\"" + nb(Y(y)) + "\" stroke=\"#ddd\"/><text x=\"" + nb(x0 - 6) + "\" y=\"" + nb(Y(y) + 4) +
+         "\" text-anchor=\"end\">" + esc(si(y)) + "</text>\n";
+  s += "<rect x=\"" + nb(x0) + "\" y=\"" + nb(y0) + "\" width=\"" + nb(w) + "\" height=\"" + nb(h) + "\" fill=\"none\" stroke=\"#333\"/>\n";
+  s += "<text x=\"" + nb(x0 + w / 2) + "\" y=\"" + nb(H - 12) + "\" text-anchor=\"middle\">" + esc(m_axeX) + "</text>\n";
+  s += "<text transform=\"translate(14," + nb(y0 + h / 2) + ") rotate(-90)\" text-anchor=\"middle\">" + esc(m_axeY) + "</text>\n";
+  double ly = y0 + 14;
+  for (std::size_t j = 0; j < m_courbes.size(); ++j) {
+    const auto& k = m_courbes[j];
+    if (m_xy && m_courbes.size() > 1 && j == 0) continue;
+    const auto& xs = abscisses(m_courbes, j, m_xy);
+    std::string pts;
+    for (std::size_t i = 0; i < xs.size() && i < k.y.size(); ++i)
+      if (std::isfinite(k.y[i]) && (!m_logX || xs[i] > 0) && (!m_logY || k.y[i] > 0)) pts += nb(X(xs[i])) + "," + nb(Y(k.y[i])) + " ";
+    s += "<polyline fill=\"none\" stroke=\"" + k.couleur.name().toStdString() + "\" stroke-width=\"1.6\"" + (k.attenuee ? " stroke-opacity=\"0.3\"" : "") + " points=\"" + pts + "\"/>\n";
+    if (!k.attenuee) {
+      s += "<line x1=\"" + nb(x0 + w - 150) + "\" y1=\"" + nb(ly - 4) + "\" x2=\"" + nb(x0 + w - 130) + "\" y2=\"" + nb(ly - 4) + "\" stroke=\"" + k.couleur.name().toStdString() +
+           "\" stroke-width=\"3\"/><text x=\"" + nb(x0 + w - 125) + "\" y=\"" + nb(ly) + "\">" + esc(k.nom) + "</text>\n";
+      ly += 15;
+    }
+  }
+  return s + "</svg>\n";
+}
+
+std::string TraceCourbes::csv() const {
+  // Une paire de colonnes par courbe tracée (abscisse, ordonnée), au réglage CSV du poste
+  prom::EcrivainCsv w;
+  std::vector<std::string> tete;
+  std::size_t n = 0;
+  for (const auto& k : m_courbes) {
+    tete.push_back(m_axeX.toStdString() + " — " + k.nom.toStdString());
+    tete.push_back(k.nom.toStdString());
+    n = std::max(n, k.y.size());
+  }
+  w.ligne(tete);
+  for (std::size_t i = 0; i < n; ++i) {
+    for (const auto& k : m_courbes) {
+      if (i < k.x.size() && i < k.y.size()) {
+        w.nombre(k.x[i], 9);
+        w.nombre(k.y[i], 9);
+      } else {
+        w.champ({});
+        w.champ({});
+      }
+    }
+    w.fin();
+  }
+  return w.texte();
 }
 
 void TraceCourbes::setCurseur(int i, double x) {
@@ -122,7 +226,10 @@ void TraceCourbes::paintEvent(QPaintEvent*) {
   grille.setAlphaF(0.15);
   g.fillRect(rect(), fond);
   const QRectF z = zone();
-  auto Y = [&](double y) { return z.bottom() - (y - m_y0) / (m_y1 - m_y0) * z.height(); };
+  auto Y = [&](double y) {
+    const double t = m_logY ? (std::log10(std::max(y, 1e-300)) - std::log10(m_y0)) / (std::log10(m_y1) - std::log10(m_y0)) : (y - m_y0) / (m_y1 - m_y0);
+    return z.bottom() - t * z.height();
+  };
   g.setFont(QFont(font().family(), 8));
   for (double x : graduations(m_x0, m_x1, m_logX)) {
     const double px = versEcranX(x);
@@ -131,7 +238,7 @@ void TraceCourbes::paintEvent(QPaintEvent*) {
     g.setPen(texte);
     g.drawText(QRectF(px - 40, z.bottom() + 4, 80, 14), Qt::AlignCenter, si(x));
   }
-  for (double y : graduations(m_y0, m_y1, false)) {
+  for (double y : graduations(m_y0, m_y1, m_logY)) {
     const double py = Y(y);
     g.setPen(QPen(grille, 1));
     g.drawLine(QPointF(z.left(), py), QPointF(z.right(), py));
@@ -147,14 +254,24 @@ void TraceCourbes::paintEvent(QPaintEvent*) {
   g.drawText(QRectF(-z.height() / 2, -8, z.height(), 16), Qt::AlignCenter, m_axeY);
   g.restore();
   g.setClipRect(z);
-  for (const auto& k : m_courbes) {
+  for (std::size_t j = 0; j < m_courbes.size(); ++j) {
+    const auto& k = m_courbes[j];
+    if (m_xy && m_courbes.size() > 1 && j == 0) continue;
+    const auto& xs = abscisses(m_courbes, j, m_xy);
     QPolygonF p;
-    for (std::size_t i = 0; i < k.x.size() && i < k.y.size(); ++i)
-      if (std::isfinite(k.y[i]) && (!m_logX || k.x[i] > 0)) p << QPointF(versEcranX(k.x[i]), Y(k.y[i]));
+    for (std::size_t i = 0; i < xs.size() && i < k.y.size(); ++i)
+      if (std::isfinite(k.y[i]) && (!m_logX || xs[i] > 0) && (!m_logY || k.y[i] > 0)) p << QPointF(versEcranX(xs[i]), Y(k.y[i]));
     QColor c = k.couleur;
     if (k.attenuee) c.setAlphaF(0.3);
     g.setPen(QPen(c, k.attenuee ? 1.2 : 1.8));
     g.drawPolyline(p);
+    // Tronçons hors de la bande de la référence : épais, hachurés
+    for (const auto& [a, b] : k.surlignes) {
+      QPolygonF h;
+      for (std::size_t i = a; i <= b && i < xs.size() && i < k.y.size(); ++i) h << QPointF(versEcranX(xs[i]), Y(k.y[i]));
+      g.setPen(QPen(QColor(0xC8, 0x2A, 0x2A), 4, Qt::DashLine));
+      g.drawPolyline(h);
+    }
   }
   // Curseurs
   for (int i = 0; i < 2; ++i) {
@@ -176,7 +293,35 @@ void TraceCourbes::paintEvent(QPaintEvent*) {
   }
 }
 
+QPointF TraceCourbes::versEcran(double x, double y) const {
+  const QRectF z = zone();
+  const double t = m_logY ? (std::log10(std::max(y, 1e-300)) - std::log10(m_y0)) / (std::log10(m_y1) - std::log10(m_y0)) : (y - m_y0) / (m_y1 - m_y0);
+  return {versEcranX(x), z.bottom() - t * z.height()};
+}
+
+int TraceCourbes::courbeA(const QPointF& p, double tolerance) const {
+  int meilleure = -1;
+  double d = tolerance;
+  for (std::size_t j = 0; j < m_courbes.size(); ++j) {
+    const auto& k = m_courbes[j];
+    if (k.attenuee || (m_xy && m_courbes.size() > 1 && j == 0)) continue;
+    const auto& xs = abscisses(m_courbes, j, m_xy);
+    for (std::size_t i = 1; i < xs.size() && i < k.y.size(); ++i) {
+      if (!std::isfinite(k.y[i]) || !std::isfinite(k.y[i - 1]) || (m_logX && (xs[i] <= 0 || xs[i - 1] <= 0))) continue;
+      const QPointF a = versEcran(xs[i - 1], k.y[i - 1]), b = versEcran(xs[i], k.y[i]);
+      const QPointF ab = b - a, ap = p - a;
+      const double l2 = QPointF::dotProduct(ab, ab);
+      const double t = l2 > 0 ? std::clamp(QPointF::dotProduct(ap, ab) / l2, 0.0, 1.0) : 0.0;
+      const QPointF h = a + t * ab;
+      const double e = std::hypot(p.x() - h.x(), p.y() - h.y());
+      if (e < d) d = e, meilleure = static_cast<int>(j);
+    }
+  }
+  return meilleure;
+}
+
 void TraceCourbes::mousePressEvent(QMouseEvent* e) {
+  if (const int j = courbeA(e->position()); j >= 0) emit courbeCliquee(m_courbes[static_cast<std::size_t>(j)].nom);
   const double px = e->position().x();
   m_tenu = std::abs(px - versEcranX(m_curseurs[0])) <= std::abs(px - versEcranX(m_curseurs[1])) ? 0 : 1;
   setCurseur(m_tenu, depuisEcranX(px));
@@ -209,15 +354,45 @@ FenetreSimulation::FenetreSimulation(AtelierElectronique& a, QWidget* parent) : 
   m_duree = champ(QStringLiteral("duree"), QStringLiteral("10m"), QStringLiteral("Durée (s)"));
   m_fDebut = champ(QStringLiteral("fDebut"), QStringLiteral("1"), QStringLiteral("De (Hz)"));
   m_fFin = champ(QStringLiteral("fFin"), QStringLiteral("1meg"), QStringLiteral("À (Hz)"));
+  m_points = champ(QStringLiteral("pointsDecade"), QStringLiteral("20"), QStringLiteral("Points par décade"));
   m_source = champ(QStringLiteral("source"), QStringLiteral("V1"), QStringLiteral("Source balayée"));
   m_dcDebut = champ(QStringLiteral("dcDebut"), QStringLiteral("0"), QStringLiteral("De"));
   m_dcFin = champ(QStringLiteral("dcFin"), QStringLiteral("5"), QStringLiteral("À"));
   m_dcPas = champ(QStringLiteral("dcPas"), QStringLiteral("0.1"), QStringLiteral("Pas"));
+  // Compatibilité des modèles d'autres simulateurs (11.8) : réglage ngbehavior de ngspice
+  m_compat = new QComboBox;
+  m_compat->setObjectName(QStringLiteral("compatibilite"));
+  m_compat->addItem(QStringLiteral("ngspice"), QString());
+  m_compat->addItem(QStringLiteral("PSpice"), QStringLiteral("ps"));
+  m_compat->addItem(QStringLiteral("LTspice"), QStringLiteral("lt"));
+  m_compat->addItem(QStringLiteral("HSPICE"), QStringLiteral("hs"));
+  m_compat->addItem(QStringLiteral("LTspice et PSpice"), QStringLiteral("ltps"));
+  m_compat->setToolTip(QStringLiteral("Les modèles des articles disent leur compatibilité ; ce réglage l’impose à tout le calcul"));
+  f->addRow(QStringLiteral("Compatibilité"), m_compat);
+  // Partie simulée seule (11.8) : liaisons coupées réglées dans l'onglet Partie
+  m_partie = new QComboBox;
+  m_partie->setObjectName(QStringLiteral("partieSimulee"));
+  m_partie->addItems({QStringLiteral("Tout le schéma"), QStringLiteral("La feuille affichée"), QStringLiteral("La sélection")});
+  f->addRow(QStringLiteral("Simuler"), m_partie);
   gauche->addLayout(f);
   gauche->addWidget(new QLabel(QStringLiteral("<b>Sondes</b> (tensions des réseaux)")));
   m_sondes = new QListWidget;
   m_sondes->setObjectName(QStringLiteral("sondes"));
   gauche->addWidget(m_sondes, 1);
+  // Courbes calculées (11.13) : expressions évaluées par Prométhée à chaque calcul
+  gauche->addWidget(new QLabel(QStringLiteral("<b>Courbes calculées</b> (db(V(SORTIE)/V(ENTREE)), V(A,B), V(S)*I(R3)…)")));
+  m_expressions = new QListWidget;
+  m_expressions->setObjectName(QStringLiteral("expressions"));
+  m_expressions->setMaximumHeight(80);
+  gauche->addWidget(m_expressions);
+  auto* ajoutExpr = new QLineEdit;
+  ajoutExpr->setObjectName(QStringLiteral("nouvelleExpression"));
+  ajoutExpr->setPlaceholderText(QStringLiteral("Expression, puis Entrée"));
+  gauche->addWidget(ajoutExpr);
+  connect(ajoutExpr, &QLineEdit::returnPressed, this, [this, ajoutExpr] {
+    if (!ajoutExpr->text().trimmed().isEmpty()) ajouterExpression(ajoutExpr->text().trimmed());
+    ajoutExpr->clear();
+  });
   auto* reglage = new QFormLayout;
   m_regle = new QComboBox;
   m_regle->setObjectName(QStringLiteral("composantRegle"));
@@ -246,6 +421,11 @@ FenetreSimulation::FenetreSimulation(AtelierElectronique& a, QWidget* parent) : 
   m_etat->setObjectName(QStringLiteral("etatSimulation"));
   m_etat->setWordWrap(true);
   gauche->addWidget(m_etat);
+  // Après un échec (11.9) : les remèdes, essayés dans l'ordre jusqu'au premier qui fait aboutir le calcul
+  m_boutonRemedes = new QPushButton(QStringLiteral("Essayer les remèdes dans l’ordre"));
+  m_boutonRemedes->setObjectName(QStringLiteral("essayerRemedes"));
+  m_boutonRemedes->setVisible(false);
+  gauche->addWidget(m_boutonRemedes);
   auto* g = new QWidget;
   g->setLayout(gauche);
   g->setMaximumWidth(330);
@@ -258,6 +438,146 @@ FenetreSimulation::FenetreSimulation(AtelierElectronique& a, QWidget* parent) : 
   m_tableMesures->setHorizontalHeaderLabels({QStringLiteral("Mesure"), QStringLiteral("Valeur")});
   m_tableMesures->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
   m_onglets->addTab(m_tableMesures, QStringLiteral("Mesures"));
+  // Préparation (11.9) : chaque constat mène à son composant d'un double-clic
+  auto* prep = new QWidget;
+  auto* pl = new QVBoxLayout(prep);
+  m_tablePreparation = new QTableWidget(0, 3);
+  m_tablePreparation->setObjectName(QStringLiteral("tablePreparation"));
+  m_tablePreparation->setHorizontalHeaderLabels({QStringLiteral("Niveau"), QStringLiteral("Constat"), QStringLiteral("Remèdes")});
+  m_tablePreparation->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+  m_tablePreparation->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  pl->addWidget(m_tablePreparation, 1);
+  auto* deduire = new QPushButton(QStringLiteral("Déduire du repère les modèles qui manquent (un seul Ctrl+Z)"));
+  deduire->setObjectName(QStringLiteral("deduireModeles"));
+  pl->addWidget(deduire);
+  m_onglets->addTab(prep, QStringLiteral("Préparation"));
+  // Partie (11.8) : chaque réseau qui relie la partie au reste, bouclé sur une source, une charge ou rien
+  m_tableLiaisons = new QTableWidget(0, 3);
+  m_tableLiaisons->setObjectName(QStringLiteral("tableLiaisons"));
+  m_tableLiaisons->setHorizontalHeaderLabels({QStringLiteral("Liaison coupée"), QStringLiteral("Bouclée sur"), QStringLiteral("Valeur (V ou Ω)")});
+  m_tableLiaisons->horizontalHeader()->setSectionResizeMode(QHeaderView::Stretch);
+  m_onglets->addTab(m_tableLiaisons, QStringLiteral("Partie"));
+  // Classeur (11.14, 11.15) : analyses enregistrées, résultats figés, référence et verdict, courbe sur la feuille
+  auto* cla = new QWidget;
+  auto* cl = new QVBoxLayout(cla);
+  m_listeClasseur = new QListWidget;
+  m_listeClasseur->setObjectName(QStringLiteral("listeClasseur"));
+  cl->addWidget(m_listeClasseur, 1);
+  auto* bc = new QGridLayout;
+  auto* enr = new QPushButton(QStringLiteral("Enregistrer l’analyse…"));
+  auto* ouv = new QPushButton(QStringLiteral("Ouvrir"));
+  auto* fig = new QPushButton(QStringLiteral("Figer le résultat…"));
+  auto* ref = new QPushButton(QStringLiteral("Prendre un figé pour référence…"));
+  auto* cmp = new QPushButton(QStringLiteral("Comparer à la référence"));
+  auto* pos = new QPushButton(QStringLiteral("Poser la courbe sur la feuille"));
+  auto* csvO = new QPushButton(QStringLiteral("Exporter (CSV)…"));
+  auto* csvI = new QPushButton(QStringLiteral("Importer un CSV en figé…"));
+  auto* img = new QPushButton(QStringLiteral("Exporter le tracé (PNG, SVG)…"));
+  auto* logy = new QCheckBox(QStringLiteral("Axe vertical logarithmique"));
+  auto* xy = new QCheckBox(QStringLiteral("Tracé XY (en fonction de la première courbe)"));
+  int ib = 0;
+  for (QWidget* w : std::initializer_list<QWidget*>{enr, ouv, fig, ref, cmp, pos, csvO, csvI, img, logy, xy}) bc->addWidget(w, ib / 2, ib % 2), ++ib;
+  cl->addLayout(bc);
+  m_verdict = new QLabel;
+  m_verdict->setObjectName(QStringLiteral("verdictReference"));
+  m_verdict->setWordWrap(true);
+  cl->addWidget(m_verdict);
+  m_onglets->addTab(cla, QStringLiteral("Classeur"));
+  connect(deduire, &QPushButton::clicked, this, [this] {
+    const ConceptionElec* c = m_atelier.conceptionCourante();
+    if (!c) return;
+    std::vector<std::string> u;
+    for (const auto& x : c->composants) u.push_back(x.uuid);
+    std::vector<std::string> aSaisir;
+    int n = 0;
+    m_atelier.modifierConception([&](ConceptionElec& y) { n = deduireModeles(y, u, &aSaisir); }, QStringLiteral("Modèles de simulation déduits du repère"));
+    m_etat->setText(QStringLiteral("%1 modèle(s) déduit(s)%2").arg(n).arg(aSaisir.empty() ? QString() : QStringLiteral(" ; valeur à saisir : ") + q([&] {
+      std::string t;
+      for (const auto& r : aSaisir) t += (t.empty() ? "" : ", ") + r;
+      return t;
+    }())));
+    preparer();
+  });
+  connect(m_tablePreparation, &QTableWidget::cellDoubleClicked, this, [this](int r, int) {
+    if (auto* it = m_tablePreparation->item(r, 1); it && !it->data(Qt::UserRole).toString().isEmpty()) m_atelier.montrerComposant(it->data(Qt::UserRole).toString().toStdString());
+  });
+  connect(enr, &QPushButton::clicked, this, [this] {
+    bool ok = false;
+    const QString n = QInputDialog::getText(this, QStringLiteral("Classeur"), QStringLiteral("Nom de l’analyse"), QLineEdit::Normal, m_onglet.isEmpty() ? QStringLiteral("Analyse") : m_onglet, &ok);
+    if (ok && !n.trimmed().isEmpty()) enregistrerOnglet(n.trimmed());
+  });
+  connect(ouv, &QPushButton::clicked, this, [this] {
+    if (auto* it = m_listeClasseur->currentItem(); it && it->data(Qt::UserRole).toString() == QStringLiteral("onglet")) ouvrirOnglet(it->text());
+  });
+  connect(m_listeClasseur, &QListWidget::itemDoubleClicked, this, [this](QListWidgetItem* it) {
+    if (it->data(Qt::UserRole).toString() == QStringLiteral("onglet")) ouvrirOnglet(it->text());
+  });
+  connect(fig, &QPushButton::clicked, this, [this] {
+    bool ok = false;
+    const QString n = QInputDialog::getText(this, QStringLiteral("Figer le résultat"), QStringLiteral("Nom du résultat figé"), QLineEdit::Normal,
+                                            QStringLiteral("Figé %1").arg(QDateTime::currentDateTime().toString(QStringLiteral("HH:mm:ss"))), &ok);
+    if (ok && !n.trimmed().isEmpty()) figerResultat(n.trimmed());
+  });
+  connect(ref, &QPushButton::clicked, this, [this] {
+    QStringList figes;
+    for (const auto& x : classeur().figes) figes << q(x.nom);
+    if (figes.isEmpty()) return;
+    bool ok = false;
+    const QString f = QInputDialog::getItem(this, QStringLiteral("Référence"), QStringLiteral("Résultat figé"), figes, 0, false, &ok);
+    if (!ok) return;
+    QString courbe;
+    for (int i = 0; i < m_sondes->count() && courbe.isEmpty(); ++i)
+      if (m_sondes->item(i)->checkState() == Qt::Checked) courbe = m_sondes->item(i)->text();
+    const QString c = QInputDialog::getText(this, QStringLiteral("Référence"), QStringLiteral("Courbe comparée (réseau ou expression)"), QLineEdit::Normal, courbe, &ok);
+    if (!ok || c.isEmpty()) return;
+    const double b = QInputDialog::getDouble(this, QStringLiteral("Référence"), QStringLiteral("Bande de tolérance (%)"), 1, 0.001, 100, 3, &ok);
+    if (ok) prendreReference(f, c, b / 100);
+  });
+  connect(cmp, &QPushButton::clicked, this, [this] { comparer(); });
+  connect(pos, &QPushButton::clicked, this, [this] { poserCourbeSurFeuille(); });
+  connect(csvO, &QPushButton::clicked, this, [this] {
+    const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Résultat en CSV"), QStringLiteral("simulation.csv"), QStringLiteral("CSV (*.csv)"));
+    if (f.isEmpty()) return;
+    try {
+      prom::ecrireFichierAtomique(prom::cheminFichier(f.toStdString()), csvResultat(m_resultat));
+    } catch (const std::exception& e) {
+      m_etat->setText(QString::fromUtf8(e.what()).toHtmlEscaped());
+    }
+  });
+  connect(csvI, &QPushButton::clicked, this, [this] {
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("CSV à figer"), {}, QStringLiteral("CSV (*.csv *.txt)"));
+    if (f.isEmpty()) return;
+    std::string erreur;
+    std::optional<ResultatFige> r;
+    try {
+      r = resultatDepuisCsv(prom::lireFichier(prom::cheminFichier(f.toStdString())), QFileInfo(f).completeBaseName().toStdString(), &erreur);
+    } catch (const std::exception& e) {
+      erreur = e.what();
+    }
+    if (!r) {
+      m_etat->setText(QStringLiteral("CSV illisible : %1").arg(q(erreur).toHtmlEscaped()));
+      return;
+    }
+    m_atelier.modifierConception([&](ConceptionElec& c) {
+      ClasseurSimulation k = classeurDe(c);
+      k.figes.push_back(*r);
+      ecrireClasseur(c, k);
+    }, QStringLiteral("CSV figé dans le classeur"));
+    refaire();
+  });
+  connect(img, &QPushButton::clicked, this, [this] {
+    const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Tracé"), QStringLiteral("courbes.png"), QStringLiteral("Image PNG (*.png);;Dessin SVG (*.svg);;CSV (*.csv)"));
+    if (f.isEmpty()) return;
+    try {
+      if (f.endsWith(QStringLiteral(".svg"), Qt::CaseInsensitive)) prom::ecrireFichierAtomique(prom::cheminFichier(f.toStdString()), m_trace->svg());
+      else if (f.endsWith(QStringLiteral(".csv"), Qt::CaseInsensitive)) prom::ecrireFichierAtomique(prom::cheminFichier(f.toStdString()), m_trace->csv());
+      else m_trace->exporterPng(f);
+    } catch (const std::exception& e) {
+      m_etat->setText(QString::fromUtf8(e.what()).toHtmlEscaped());
+    }
+  });
+  connect(logy, &QCheckBox::toggled, this, [this](bool v) { m_trace->setLogY(v); });
+  connect(xy, &QCheckBox::toggled, this, [this](bool v) { m_trace->setXY(v); });
   auto* netlist = new QWidget;
   auto* nl = new QVBoxLayout(netlist);
   m_texteNetlist = new QPlainTextEdit;
@@ -267,10 +587,22 @@ FenetreSimulation::FenetreSimulation(AtelierElectronique& a, QWidget* parent) : 
   auto* essai = new QPushButton(QStringLiteral("Simuler cette netlist (le schéma ne change pas)"));
   nl->addWidget(essai);
   m_onglets->addTab(netlist, QStringLiteral("Netlist"));
+  auto* cons = new QWidget;
+  auto* col = new QVBoxLayout(cons);
   m_console = new QPlainTextEdit;
   m_console->setReadOnly(true);
   m_console->setFont(QFont(QStringLiteral("monospace")));
-  m_onglets->addTab(m_console, QStringLiteral("Console de ngspice"));
+  col->addWidget(m_console, 1);
+  // Commandes de lecture et de calcul passées à ngspice (11.8) ; « shell » et l'écriture de fichiers sont refusées
+  m_ligneConsole = new QLineEdit;
+  m_ligneConsole->setObjectName(QStringLiteral("ligneConsole"));
+  m_ligneConsole->setPlaceholderText(QStringLiteral("print v(n_sortie), meas, let, display… puis Entrée"));
+  col->addWidget(m_ligneConsole);
+  connect(m_ligneConsole, &QLineEdit::returnPressed, this, [this] {
+    console(m_ligneConsole->text());
+    m_ligneConsole->clear();
+  });
+  m_onglets->addTab(cons, QStringLiteral("Console de ngspice"));
   racine->addWidget(m_onglets, 1);
   connect(m_type, &QComboBox::currentIndexChanged, this, [this] { majChamps(); });
   connect(m_lancer, &QPushButton::clicked, this, [this] { lancer(); });
@@ -281,6 +613,17 @@ FenetreSimulation::FenetreSimulation(AtelierElectronique& a, QWidget* parent) : 
     if (!m_regle->currentText().isEmpty()) regler(m_regle->currentText().toStdString(), v);
   });
   connect(appliquer, &QPushButton::clicked, this, [this] { appliquerReglage(); });
+  connect(m_boutonRemedes, &QPushButton::clicked, this, [this] { essayerRemedes(); });
+  connect(m_compat, &QComboBox::currentIndexChanged, this, [this] { m_options.compatibilite = m_compat->currentData().toString().toStdString(); });
+  connect(m_partie, &QComboBox::activated, this, [this](int i) { setPartie(i); });
+  connect(m_trace, &TraceCourbes::courbeCliquee, this, [this](const QString& nom) {
+    // Le fil de la courbe : son réseau, ou le premier V(…) de son expression
+    QString r = nom;
+    r.remove(QStringLiteral(" (comparée)"));
+    static const QRegularExpression v(QStringLiteral("[Vv]\\(\\s*([^,)\\s]+)"));
+    if (const auto m = v.match(r); m.hasMatch()) r = m.captured(1);
+    if (!r.isEmpty()) m_atelier.surligner(r);
+  });
   majChamps();
   refaire();
   if (!ngspiceDisponible()) {
@@ -298,13 +641,31 @@ FenetreSimulation::~FenetreSimulation() {
 void FenetreSimulation::majChamps() {
   const int t = m_type->currentIndex();
   for (QLineEdit* e : {m_pas, m_duree}) e->setEnabled(t == 3);
-  for (QLineEdit* e : {m_fDebut, m_fFin}) e->setEnabled(t == 2);
+  for (QLineEdit* e : {m_fDebut, m_fFin, m_points}) e->setEnabled(t == 2);
   for (QLineEdit* e : {m_source, m_dcDebut, m_dcFin, m_dcPas}) e->setEnabled(t == 1);
 }
 
 void FenetreSimulation::refaire() {
   const ConceptionElec* c = m_atelier.conceptionCourante();
   if (!c) return;
+  // Autre conception (projet rouvert ou nouveau) : les réglages de la précédente ne la suivent pas
+  if (c->uuid != m_conceptionVue) {
+    if (!m_conceptionVue.empty()) {
+      m_options = {};
+      m_diagnostic = {};
+      m_retenu.clear();
+      m_onglet.clear();
+      m_reglee.clear();
+      m_facteurRegle = 1;
+      m_precedentes.clear();
+      if (m_expressions) m_expressions->clear();
+      if (m_partie) m_partie->setCurrentIndex(0);
+      if (m_compat) m_compat->setCurrentIndex(0);
+      if (m_boutonRemedes) m_boutonRemedes->setVisible(false);
+      majLiaisons();
+    }
+    m_conceptionVue = c->uuid;
+  }
   std::set<std::string> coches;
   for (int i = 0; i < m_sondes->count(); ++i)
     if (m_sondes->item(i)->checkState() == Qt::Checked) coches.insert(m_sondes->item(i)->text().toStdString());
@@ -328,11 +689,30 @@ void FenetreSimulation::refaire() {
   for (const auto& x : c->composants)
     if (x.symbole == "R" || x.symbole == "C" || x.symbole == "L" || x.symbole == "Potentiometre") m_regle->addItem(q(x.reference));
   m_regle->setCurrentText(avant);
+  // Classeur : analyses enregistrées, puis résultats figés
+  if (m_listeClasseur) {
+    m_listeClasseur->clear();
+    const ClasseurSimulation k = classeurDe(*c);
+    for (const auto& o : k.onglets) {
+      auto* it = new QListWidgetItem(q(o.nom));
+      it->setData(Qt::UserRole, QStringLiteral("onglet"));
+      it->setToolTip(o.verdict.empty() ? QStringLiteral("Analyse enregistrée") : QStringLiteral("Dernier verdict : ") + q(o.verdict));
+      m_listeClasseur->addItem(it);
+    }
+    for (const auto& f : k.figes) {
+      auto* it = new QListWidgetItem(QStringLiteral("❄ ") + q(f.nom));
+      it->setData(Qt::UserRole, QStringLiteral("fige"));
+      it->setToolTip(QStringLiteral("Résultat figé de « %1 » %2").arg(q(f.onglet), q(f.date)));
+      m_listeClasseur->addItem(it);
+    }
+  }
 }
 
 void FenetreSimulation::setAnalyse(const AnalyseSpice& a) {
+  m_analyse = a;  // ce que les champs ne montrent pas reste tel quel
   m_type->setCurrentIndex(static_cast<int>(a.type));
   const QLocale c = QLocale::c();
+  m_points->setText(QString::number(a.pointsParDecade));
   m_pas->setText(c.toString(a.pas, 'g', 6));
   m_duree->setText(c.toString(a.duree, 'g', 6));
   m_fDebut->setText(c.toString(a.fDebut, 'g', 6));
@@ -360,8 +740,9 @@ AnalyseSpice FenetreSimulation::analyse() const {
     const double v = t.toDouble(&ok);
     return ok ? v * f : defaut;
   };
-  AnalyseSpice a;
+  AnalyseSpice a = m_analyse;
   a.type = static_cast<AnalyseSpice::Type>(m_type->currentIndex());
+  a.pointsParDecade = std::max(1, static_cast<int>(lire(m_points, 20)));
   a.pas = lire(m_pas, 1e-5);
   a.duree = lire(m_duree, 1e-2);
   a.fDebut = lire(m_fDebut, 1);
@@ -392,8 +773,12 @@ ConceptionElec FenetreSimulation::conceptionReglee() const {
 
 void FenetreSimulation::lancer() {
   if (!m_atelier.conceptionCourante() || m_enCours) return;
-  m_netlist = netlistSpice(conceptionReglee(), analyse());
+  OptionsSimulation o = m_options;
+  o.parametres = classeurDe(*m_atelier.conceptionCourante()).parametres;
+  m_netlist = netlistSpice(conceptionReglee(), analyse(), o);
   m_texteNetlist->setPlainText(q(m_netlist.texte));
+  majPreparation(preparerSimulation(conceptionReglee(), analyse(), o));
+  m_boutonRemedes->setVisible(false);
   if (!m_netlist.valide()) {
     QString t = QStringLiteral("<span style='color:#c53030'><b>Avant le calcul :</b></span><ul>");
     for (const auto& e : m_netlist.erreurs) t += QStringLiteral("<li>%1</li>").arg(q(e).toHtmlEscaped());
@@ -417,9 +802,9 @@ void FenetreSimulation::lancerNetlist(const QString& texte) {
   m_etat->setText(QStringLiteral("Calcul en cours…") + avertissements);
   m_arret = std::make_shared<std::atomic<bool>>(false);
   QPointer<FenetreSimulation> moi(this);
-  m_fil = std::thread([moi, arret = m_arret, t = texte.toStdString()] {
+  m_fil = std::thread([moi, arret = m_arret, t = texte.toStdString(), mo = OptionsMoteur{m_netlist.compatibilite, m_netlist.chargements}] {
     prioriteDeFond();
-    auto r = std::make_shared<ResultatSimulation>(simuler(t, arret.get()));
+    auto r = std::make_shared<ResultatSimulation>(simuler(t, mo, arret.get()));
     QMetaObject::invokeMethod(qApp, [moi, r] {
       if (!moi) return;
       moi->m_enCours = false;
@@ -429,8 +814,20 @@ void FenetreSimulation::lancerNetlist(const QString& texte) {
       QString console;
       for (const auto& l : moi->m_resultat.console) console += q(l) + QLatin1Char('\n');
       moi->m_console->setPlainText(console);
-      moi->m_etat->setText(moi->m_resultat.reussi() ? QStringLiteral("Calcul terminé.") : QStringLiteral("<span style='color:#c53030'>%1</span>").arg(q(moi->m_resultat.erreur).toHtmlEscaped()));
+      if (moi->m_resultat.reussi()) moi->m_etat->setText(QStringLiteral("Calcul terminé."));
+      else {
+        // Échec analysé (11.9) : la cause en français, les remèdes proposés
+        moi->m_diagnostic = analyserEchec(moi->m_resultat, moi->m_netlist);
+        QString t = QStringLiteral("<span style='color:#c53030'>%1</span>").arg(q(moi->m_diagnostic.cause).toHtmlEscaped());
+        if (!moi->m_diagnostic.remedes.empty()) {
+          t += QStringLiteral("<br>Remèdes proposés :");
+          for (const auto& x : moi->m_diagnostic.remedes) t += QStringLiteral("<br>· %1").arg(q(libelleRemede(x)).toHtmlEscaped());
+        }
+        moi->m_etat->setText(t);
+        moi->m_boutonRemedes->setVisible(!moi->m_diagnostic.remedes.empty() && !moi->m_resultat.interrompu);
+      }
       moi->afficher();
+      moi->majImagesCourbes();
       emit moi->calculTermine();
     }, Qt::QueuedConnection);
   });
@@ -489,6 +886,28 @@ void FenetreSimulation::afficher(bool refaireTrace) {
     ligne(QStringLiteral("%1 : en A / en B").arg(q(s)), si(valeurA(k.x, k.y, m_trace->curseur(0))) + QStringLiteral(" / ") + si(valeurA(k.x, k.y, m_trace->curseur(1))));
     courbes.push_back(std::move(k));
   }
+  // Courbes calculées (11.13)
+  for (int i = 0; i < m_expressions->count(); ++i) {
+    if (m_expressions->item(i)->checkState() != Qt::Checked) continue;
+    const CourbeCalculee c = evaluerCourbe(m_expressions->item(i)->text().toStdString(), r, m_netlist);
+    if (!c.valide()) {
+      ligne(m_expressions->item(i)->text(), q(c.erreur));
+      continue;
+    }
+    TraceCourbes::Courbe k;
+    k.nom = m_expressions->item(i)->text();
+    k.couleur = TEINTES[teinte++ % 6];
+    k.x = c.x;
+    k.y = c.complexe && ac ? gainDb(c.y) : c.reels();
+    courbes.push_back(std::move(k));
+  }
+  // Mesures automatiques des sondes (11.15), refaites à chaque calcul
+  for (const auto& sd : sondes) {
+    const std::vector<GenreMesure> genres = ac ? std::vector<GenreMesure>{GenreMesure::Bande, GenreMesure::Q}
+                                               : std::vector<GenreMesure>{GenreMesure::Periode, GenreMesure::Montee, GenreMesure::Descente, GenreMesure::Depassement, GenreMesure::Moyenne, GenreMesure::Efficace};
+    for (const GenreMesure g : genres)
+      if (const ResultatMesure x = mesurer({g, sd, 0}, r, m_netlist); x.valide) ligne(q(sd) + QStringLiteral(" : ") + q(nomMesure(g)), si(x.valeur, 4) + q(x.unite));
+  }
   ligne(QStringLiteral("Curseurs A, B, B − A"), si(m_trace->curseur(0)) + QStringLiteral(", ") + si(m_trace->curseur(1)) + QStringLiteral(", ") + si(m_trace->curseur(1) - m_trace->curseur(0)));
   // Le tracé n'est refait qu'à un nouveau résultat (un curseur glissé ne remet pas les curseurs en place)
   if (refaireTrace)
@@ -534,4 +953,334 @@ bool FenetreSimulation::appliquerReglage() {
   m_facteur->setValue(1);
   m_facteur->blockSignals(false);
   return fait;
+}
+
+// ======================================================================================================================
+// 0.34 : compatibilité, courbes calculées, préparation, remèdes, classeur, console (11.8, 11.9, 11.13 à 11.15)
+// ======================================================================================================================
+void FenetreSimulation::setCompatibilite(const std::string& c) {
+  const int i = m_compat->findData(q(c));
+  m_compat->setCurrentIndex(std::max(0, i));
+  m_options.compatibilite = c;
+}
+
+void FenetreSimulation::ajouterExpression(const QString& expression) {
+  auto* it = new QListWidgetItem(expression);
+  it->setFlags(it->flags() | Qt::ItemIsUserCheckable | Qt::ItemIsEditable);
+  it->setCheckState(Qt::Checked);
+  m_expressions->addItem(it);
+  if (m_resultat.reussi()) afficher();
+}
+
+void FenetreSimulation::majPreparation(const std::vector<LignePreparation>& l) {
+  m_tablePreparation->setRowCount(0);
+  for (const auto& x : l) {
+    const int r = m_tablePreparation->rowCount();
+    m_tablePreparation->insertRow(r);
+    auto* n = new QTableWidgetItem(q(x.niveau));
+    n->setForeground(x.niveau == "erreur" ? QColor(0xC5, 0x30, 0x30) : x.niveau == "avertissement" ? QColor(0xB0, 0x6A, 0x10) : palette().color(QPalette::Text));
+    m_tablePreparation->setItem(r, 0, n);
+    auto* m = new QTableWidgetItem(q(x.message));
+    m->setData(Qt::UserRole, q(x.composant));
+    m_tablePreparation->setItem(r, 1, m);
+    std::string rem;
+    for (const auto& y : x.remedes) rem += (rem.empty() ? "" : " · ") + y;
+    m_tablePreparation->setItem(r, 2, new QTableWidgetItem(q(rem)));
+  }
+}
+
+std::vector<LignePreparation> FenetreSimulation::preparer() {
+  std::vector<LignePreparation> l;
+  if (const ConceptionElec* c = m_atelier.conceptionCourante()) {
+    OptionsSimulation o = m_options;
+    o.parametres = classeurDe(*c).parametres;
+    l = preparerSimulation(*c, analyse(), o);
+  }
+  majPreparation(l);
+  return l;
+}
+
+void FenetreSimulation::essayerRemedes() {
+  if (m_enCours || !m_atelier.conceptionCourante()) return;
+  if (m_fil.joinable()) m_fil.join();
+  m_enCours = true;
+  m_lancer->setEnabled(false);
+  m_boutonRemedes->setEnabled(false);
+  m_etat->setText(QStringLiteral("Remèdes essayés dans l’ordre…"));
+  m_arret = std::make_shared<std::atomic<bool>>(false);
+  QPointer<FenetreSimulation> moi(this);
+  OptionsSimulation o = m_options;
+  o.parametres = classeurDe(*m_atelier.conceptionCourante()).parametres;
+  m_fil = std::thread([moi, arret = m_arret, c = conceptionReglee(), a = analyse(), o]() mutable {
+    prioriteDeFond();
+    auto e = std::make_shared<EssaiRemedes>(simulerAvecRemedes(c, a, o, arret.get()));
+    auto opts = std::make_shared<OptionsSimulation>(o);
+    QMetaObject::invokeMethod(qApp, [moi, e, opts] {
+      if (!moi) return;
+      moi->m_enCours = false;
+      moi->m_lancer->setEnabled(true);
+      moi->m_boutonRemedes->setEnabled(true);
+      moi->m_resultat = e->resultat;
+      moi->m_netlist = e->netlist;
+      moi->m_texteNetlist->setPlainText(q(moi->m_netlist.texte));
+      if (e->resultat.reussi()) {
+        // Le remède retenu entre dans les réglages, avec sa note, et dans l'onglet ouvert du classeur
+        moi->m_options = *opts;
+        moi->m_retenu = q(e->retenu);
+        moi->m_boutonRemedes->setVisible(false);
+        moi->m_etat->setText(QStringLiteral("Calcul abouti avec « %1 » (noté dans les réglages de l’analyse).").arg(q(libelleRemede(e->retenu)).toHtmlEscaped()));
+        if (!moi->m_onglet.isEmpty()) moi->enregistrerOnglet(moi->m_onglet);
+      } else
+        moi->m_etat->setText(QStringLiteral("<span style='color:#c53030'>Aucun remède n’a fait aboutir le calcul (%1 essayé(s)).</span>").arg(e->essayes.size()));
+      moi->afficher();
+      emit moi->calculTermine();
+    }, Qt::QueuedConnection);
+  });
+}
+
+ClasseurSimulation FenetreSimulation::classeur() const {
+  const ConceptionElec* c = m_atelier.conceptionCourante();
+  return c ? classeurDe(*c) : ClasseurSimulation{};
+}
+
+bool FenetreSimulation::enregistrerOnglet(const QString& nom) {
+  OngletClasseur o;
+  o.nom = nom.toStdString();
+  o.analyse = analyse();
+  o.options = m_options;
+  for (int i = 0; i < m_sondes->count(); ++i)
+    if (m_sondes->item(i)->checkState() == Qt::Checked) o.sondes.push_back(m_sondes->item(i)->text().toStdString());
+  for (int i = 0; i < m_expressions->count(); ++i) o.expressions.push_back(m_expressions->item(i)->text().toStdString());
+  const ClasseurSimulation avant = classeur();
+  for (const auto& x : avant.onglets)
+    if (x.nom == o.nom) {
+      o.mesures = x.mesures;
+      o.reference = x.reference;
+      o.courbeReference = x.courbeReference;
+      o.bande = x.bande;
+      o.genreBande = x.genreBande;
+      o.verdict = x.verdict;
+    }
+  const bool fait = m_atelier.modifierConception([&](ConceptionElec& c) {
+    ClasseurSimulation k = classeurDe(c);
+    auto it = std::find_if(k.onglets.begin(), k.onglets.end(), [&](const OngletClasseur& x) { return x.nom == o.nom; });
+    if (it == k.onglets.end()) k.onglets.push_back(o);
+    else *it = o;
+    ecrireClasseur(c, k);
+  }, QStringLiteral("Analyse « %1 » enregistrée dans le classeur").arg(nom));
+  if (fait) m_onglet = nom;
+  refaire();
+  return fait;
+}
+
+void FenetreSimulation::setPartie(int genre) {
+  const ConceptionElec* c = m_atelier.conceptionCourante();
+  m_options.composants.clear();
+  m_options.liaisons.clear();
+  if (c && genre == 1 && m_atelier.vueSchema()) m_options.composants = composantsDeFeuille(*c, static_cast<std::size_t>(std::max(0, m_atelier.vueSchema()->feuille())));
+  if (c && genre == 2 && m_atelier.selection()) m_options.composants = m_atelier.selection()->composants();
+  if (c && !m_options.composants.empty()) m_options.liaisons = liaisonsDeLaPartie(*c, m_options.composants);
+  {
+    const QSignalBlocker b(m_partie);
+    m_partie->setCurrentIndex(m_options.composants.empty() ? 0 : genre);
+  }
+  majLiaisons();
+  if (genre != 0 && m_options.composants.empty()) m_etat->setText(QStringLiteral("Rien à simuler seul : choisis d’abord des composants (ou une feuille qui en porte)."));
+  else if (genre != 0)
+    m_etat->setText(QStringLiteral("%1 composant(s) simulé(s) seuls, %2 liaison(s) coupée(s) : leur bouclage se règle dans l’onglet Partie.").arg(m_options.composants.size()).arg(m_options.liaisons.size()));
+}
+
+bool FenetreSimulation::setBouclage(const std::string& reseau, BouclageLiaison b, double valeur) {
+  for (auto& l : m_options.liaisons)
+    if (l.reseau == reseau) {
+      l.bouclage = b;
+      if (b != BouclageLiaison::Rien) l.valeur = valeur;
+      majLiaisons();
+      return true;
+    }
+  return false;
+}
+
+void FenetreSimulation::majLiaisons() {
+  if (!m_tableLiaisons) return;
+  m_tableLiaisons->setRowCount(static_cast<int>(m_options.liaisons.size()));
+  for (int i = 0; i < static_cast<int>(m_options.liaisons.size()); ++i) {
+    const LiaisonCoupee& l = m_options.liaisons[static_cast<std::size_t>(i)];
+    auto* nom = new QTableWidgetItem(q(l.reseau));
+    nom->setFlags(nom->flags() & ~Qt::ItemIsEditable);
+    m_tableLiaisons->setItem(i, 0, nom);
+    auto* choix = new QComboBox;
+    choix->addItems({QStringLiteral("Rien"), QStringLiteral("Une source"), QStringLiteral("Une charge")});
+    choix->setCurrentIndex(static_cast<int>(l.bouclage));
+    m_tableLiaisons->setCellWidget(i, 1, choix);
+    auto* valeur = new QLineEdit(QLocale::c().toString(l.valeur, 'g', 6));
+    valeur->setEnabled(l.bouclage != BouclageLiaison::Rien);
+    m_tableLiaisons->setCellWidget(i, 2, valeur);
+    const std::string reseau = l.reseau;
+    connect(choix, &QComboBox::activated, this, [this, reseau, valeur](int k) {
+      setBouclage(reseau, static_cast<BouclageLiaison>(k), QLocale::c().toDouble(valeur->text()));
+    });
+    connect(valeur, &QLineEdit::editingFinished, this, [this, reseau, valeur] {
+      for (auto& x : m_options.liaisons)
+        if (x.reseau == reseau) x.valeur = QLocale::c().toDouble(valeur->text().replace(QLatin1Char(','), QLatin1Char('.')));
+    });
+  }
+}
+
+bool FenetreSimulation::ouvrirOnglet(const QString& nom) {
+  for (const auto& o : classeur().onglets)
+    if (q(o.nom) == nom) {
+      setAnalyse(o.analyse);
+      m_options = o.options;
+      {
+        const QSignalBlocker b(m_partie);
+        m_partie->setCurrentIndex(m_options.composants.empty() ? 0 : 2);
+      }
+      majLiaisons();
+      setCompatibilite(o.options.compatibilite);
+      sonder(o.sondes);
+      m_expressions->clear();
+      for (const auto& e : o.expressions) ajouterExpression(q(e));
+      m_onglet = nom;
+      m_verdict->setText(o.verdict.empty() ? QString() : QStringLiteral("Dernier verdict : <b>%1</b>").arg(q(o.verdict)));
+      return true;
+    }
+  return false;
+}
+
+bool FenetreSimulation::figerResultat(const QString& nom) {
+  if (!m_resultat.reussi()) return false;
+  const ResultatFige f = figer(m_resultat, m_netlist, nom.toStdString(), m_onglet.toStdString(), QDateTime::currentDateTime().toString(Qt::ISODate).toStdString());
+  const bool fait = m_atelier.modifierConception([&](ConceptionElec& c) {
+    ClasseurSimulation k = classeurDe(c);
+    k.figes.erase(std::remove_if(k.figes.begin(), k.figes.end(), [&](const ResultatFige& x) { return x.nom == f.nom; }), k.figes.end());
+    k.figes.push_back(f);
+    ecrireClasseur(c, k);
+  }, QStringLiteral("Résultat figé : %1").arg(nom));
+  refaire();
+  return fait;
+}
+
+bool FenetreSimulation::prendreReference(const QString& fige, const QString& courbe, double bande) {
+  if (m_onglet.isEmpty() && !enregistrerOnglet(QStringLiteral("Analyse"))) return false;
+  const bool fait = m_atelier.modifierConception([&](ConceptionElec& c) {
+    ClasseurSimulation k = classeurDe(c);
+    for (auto& o : k.onglets)
+      if (q(o.nom) == m_onglet) {
+        o.reference = fige.toStdString();
+        o.courbeReference = courbe.toStdString();
+        o.bande = bande;
+      }
+    ecrireClasseur(c, k);
+  }, QStringLiteral("Référence de « %1 » : %2").arg(m_onglet, fige));
+  refaire();
+  return fait;
+}
+
+Comparaison FenetreSimulation::comparer() {
+  Comparaison c;
+  const ClasseurSimulation k = classeur();
+  const OngletClasseur* o = nullptr;
+  for (const auto& x : k.onglets)
+    if (q(x.nom) == m_onglet) o = &x;
+  if (!o || o->reference.empty() || !m_resultat.reussi()) {
+    m_verdict->setText(QStringLiteral("Ouvre une analyse du classeur qui a une référence, puis lance le calcul."));
+    return c;
+  }
+  const ResultatFige* f = k.fige(o->reference);
+  if (!f) return c;
+  std::string expr = o->courbeReference;
+  if (expr.find('(') == std::string::npos) expr = "mag(V(" + expr + "))";
+  const CourbeCalculee ref = evaluerCourbe(expr, resultatDe(*f), noeudsDe(*f)), cour = evaluerCourbe(expr, m_resultat, m_netlist);
+  if (!ref.valide() || !cour.valide()) {
+    m_verdict->setText(QStringLiteral("Courbe « %1 » introuvable dans le résultat ou la référence.").arg(q(o->courbeReference)));
+    return c;
+  }
+  c = comparerCourbes(cour.x, cour.complexe ? cour.modules() : cour.reels(), ref.x, ref.complexe ? ref.modules() : ref.reels(), o->bande, o->genreBande);
+  // Écarts surlignés sur la courbe comparée, tracée en plus si besoin
+  TraceCourbes::Courbe k2;
+  k2.nom = q(o->courbeReference) + QStringLiteral(" (comparée)");
+  k2.couleur = QColor(0x44, 0x44, 0x44);
+  k2.x = cour.x;
+  k2.y = cour.complexe ? cour.modules() : cour.reels();
+  k2.surlignes = c.horsBande;
+  auto courbes = m_trace->courbes();
+  courbes.erase(std::remove_if(courbes.begin(), courbes.end(), [](const TraceCourbes::Courbe& x) { return x.nom.endsWith(QStringLiteral("(comparée)")); }), courbes.end());
+  courbes.push_back(k2);
+  const bool ac = m_resultat.echelle == "frequency";
+  m_trace->setCourbes(std::move(courbes), ac ? QStringLiteral("Fréquence (Hz)") : QStringLiteral("Temps (s)"), QStringLiteral("Valeur"), ac);
+  m_verdict->setText(QStringLiteral("<b>%1</b> : écart maximal %2 %3 à %4 ; %5 tronçon(s) hors de la bande de %6 %.")
+                         .arg(q(c.verdict()))
+                         .arg(QLocale().toString(o->genreBande == GenreBande::Relative ? 100 * c.ecartMax : c.ecartMax, 'g', 3))
+                         .arg(o->genreBande == GenreBande::Relative ? QStringLiteral("%") : QString())
+                         .arg(si(c.xPire))
+                         .arg(c.horsBande.size())
+                         .arg(QLocale().toString(100 * o->bande, 'g', 3)));
+  const std::string verdict = c.verdict();
+  m_atelier.modifierConception([&](ConceptionElec& cc) {
+    ClasseurSimulation kk = classeurDe(cc);
+    for (auto& x : kk.onglets)
+      if (q(x.nom) == m_onglet) x.verdict = verdict;
+    ecrireClasseur(cc, kk);
+  }, QStringLiteral("Verdict de « %1 » : %2").arg(m_onglet, q(verdict)));
+  return c;
+}
+
+namespace {
+std::string pngDuTrace(TraceCourbes* t) {
+  QByteArray octets;
+  QBuffer b(&octets);
+  b.open(QIODevice::WriteOnly);
+  t->grab().toImage().save(&b, "PNG");
+  return octets.toBase64().toStdString();
+}
+}  // namespace
+
+bool FenetreSimulation::poserCourbeSurFeuille() {
+  if (!m_resultat.reussi() || !m_atelier.vueSchema()) return false;
+  const int feuille = std::max(0, m_atelier.vueSchema()->feuille());
+  const std::string cle = "courbe:" + (m_onglet.isEmpty() ? std::string("analyse") : m_onglet.toStdString());
+  const std::string donnees = pngDuTrace(m_trace);
+  return m_atelier.modifierConception([&](ConceptionElec& c) {
+    if (feuille >= static_cast<int>(c.feuilles.size())) return;
+    auto& im = c.feuilles[static_cast<std::size_t>(feuille)].images;
+    for (auto& x : im)
+      if (x.fichier == cle) {
+        x.donnees = donnees;
+        return;
+      }
+    ImageSchema x;
+    x.uuid = nouvelUuid();
+    x.fichier = cle;
+    x.donnees = donnees;
+    x.p = ptMm(20, 20);
+    x.echelle = 0.5;
+    im.push_back(x);
+  }, QStringLiteral("Courbe posée sur la feuille"));
+}
+
+void FenetreSimulation::majImagesCourbes() {
+  // Les courbes posées sur les feuilles (« courbe:<analyse> ») sont refaites à chaque calcul de leur analyse
+  const ConceptionElec* c = m_atelier.conceptionCourante();
+  if (!c || !m_resultat.reussi()) return;
+  const std::string cle = "courbe:" + (m_onglet.isEmpty() ? std::string("analyse") : m_onglet.toStdString());
+  bool present = false;
+  for (const auto& f : c->feuilles)
+    for (const auto& im : f.images) present |= im.fichier == cle;
+  if (!present) return;
+  const std::string donnees = pngDuTrace(m_trace);
+  m_atelier.modifierConception([&](ConceptionElec& y) {
+    for (auto& f : y.feuilles)
+      for (auto& im : f.images)
+        if (im.fichier == cle) im.donnees = donnees;
+  }, QStringLiteral("Courbe de la feuille refaite"), QStringLiteral("courbe-feuille"));
+}
+
+std::vector<std::string> FenetreSimulation::console(const QString& commande) {
+  std::string refus;
+  const auto r = commandeConsole(commande.toStdString(), &refus);
+  m_console->appendPlainText(QStringLiteral("> ") + commande);
+  if (!refus.empty()) m_console->appendPlainText(QStringLiteral("refusé : ") + q(refus));
+  for (const auto& l : r) m_console->appendPlainText(q(l));
+  return r;
 }

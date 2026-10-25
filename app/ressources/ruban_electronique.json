@@ -19,7 +19,7 @@
         {"forme": "separateur"},
         {"titre": "Annoter", "forme": "grand", "actions": ["schema.annoter", "schema.renumeroter"]},
         {"titre": "Vérifier", "forme": "grand", "actions": ["schema.erc", "regles.contraintes"]},
-        {"titre": "Simuler", "forme": "grand", "actions": ["simulation.ouvrir"]},
+        {"titre": "Simuler", "forme": "grand", "actions": ["simulation.ouvrir", "simulation.modele", "simulation.calculateurs"]},
         {"titre": "Outils", "forme": "grand", "actions": ["outils.conception"]},
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
         {"titre": "Circuit", "forme": "grand", "actions": ["schema.creerCircuit"]},

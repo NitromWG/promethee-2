@@ -1,6 +1,8 @@
 // Prométhée : moteur de simulation ngspice, chargé comme bibliothèque partagée au moment du calcul (lot L11, 11.1).
 // Les déclarations de l'interface partagée de ngspice (sharedspice.h, licence BSD modifiée) sont reprises ici : la
 // bibliothèque n'est pas nécessaire pour compiler Prométhée, seulement pour simuler. Licence GPL-3.0-only.
+#include <algorithm>
+#include <cctype>
 #include <chrono>
 #include <condition_variable>
 #include <cstdlib>
@@ -173,7 +175,13 @@ std::string versionNgspice() {
   return moteur().version.empty() ? std::string("ngspice") : moteur().version;
 }
 
-ResultatSimulation simuler(const std::string& netlist, const std::atomic<bool>* arret, double delai) {
+ResultatSimulation simuler(const std::string& netlist, const std::atomic<bool>* arret, double delai) { return simuler(netlist, OptionsMoteur{}, arret, delai); }
+
+ResultatSimulation simuler(const NetlistSpice& n, const std::atomic<bool>* arret, double delai) {
+  return simuler(n.texte, OptionsMoteur{n.compatibilite, n.chargements}, arret, delai);
+}
+
+ResultatSimulation simuler(const std::string& netlist, const OptionsMoteur& o, const std::atomic<bool>* arret, double delai) {
   ResultatSimulation r;
   Moteur& m = moteur();
   if (!initialiser()) {
@@ -188,6 +196,18 @@ ResultatSimulation simuler(const std::string& netlist, const std::atomic<bool>* 
   }
   m.commande(const_cast<char*>("destroy all"));
   m.commande(const_cast<char*>("remcirc"));
+  // Compatibilité (ngbehavior, lue avec le circuit) et modèles compilés à charger avant lui
+  {
+    std::string c;
+    for (const char ch : o.compatibilite)
+      if (std::isalnum(static_cast<unsigned char>(ch))) c += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+    std::string cmd = c.empty() ? std::string("unset ngbehavior") : "set ngbehavior=" + c;
+    m.commande(cmd.data());
+    for (const auto& f : o.chargements) {
+      std::string x = "osdi '" + f + "'";
+      m.commande(x.data());
+    }
+  }
   // Le circuit, ligne par ligne
   std::vector<std::string> lignes;
   std::istringstream in(netlist);
@@ -264,6 +284,17 @@ ResultatSimulation simuler(const std::string& netlist, const std::atomic<bool>* 
   }
   std::lock_guard<std::mutex> g(m.etat);
   r.console = m.console;
+  // Un calcul arrêté en route (pas effondré, matrice singulière) laisse des vecteurs partiels : c'est un échec
+  for (const auto& l : m.console)
+    if (l.find("simulation(s) aborted") != std::string::npos || l.find("Timestep too small") != std::string::npos || l.find("timestep too small") != std::string::npos) {
+      for (auto it = m.console.rbegin(); it != m.console.rend(); ++it)
+        if (it->find("too small") != std::string::npos || it->find("singular") != std::string::npos || it->find("rror") != std::string::npos) {
+          r.erreur = *it;
+          break;
+        }
+      if (r.erreur.empty()) r.erreur = l;
+      break;
+    }
   if (r.reels.empty() && r.complexes.empty()) {
     for (auto it = m.console.rbegin(); it != m.console.rend(); ++it)
       if (it->find("rror") != std::string::npos || it->find("too small") != std::string::npos || it->find("singular") != std::string::npos) {
@@ -271,6 +302,45 @@ ResultatSimulation simuler(const std::string& netlist, const std::atomic<bool>* 
         break;
       }
     if (r.erreur.empty()) r.erreur = "ngspice n'a rendu aucun résultat";
+  }
+  return r;
+}
+
+std::vector<std::string> commandeConsole(const std::string& commande, std::string* refus) {
+  std::string mot;
+  for (const char ch : commande) {
+    if (std::isspace(static_cast<unsigned char>(ch))) {
+      if (mot.empty()) continue;
+      break;
+    }
+    mot += static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+  }
+  static const std::vector<std::string> permises = {"print", "let", "meas", "measure", "display", "show", "showmod", "listing", "setplot", "echo", "version",
+                                                    "op", "tran", "ac", "dc", "run", "alter", "altermod", "status", "noise", "tf", "four"};
+  if (std::find(permises.begin(), permises.end(), mot) == permises.end() || commande.find_first_of(";`|&<>") != std::string::npos) {
+    if (refus) *refus = mot.empty() ? std::string("commande vide") : "« " + mot + " » n’est pas permise dans la console (lecture et calcul seulement)";
+    return {};
+  }
+  Moteur& m = moteur();
+  if (!initialiser()) {
+    if (refus) *refus = "ngspice n'est pas installé";
+    return {};
+  }
+  std::lock_guard<std::mutex> unique(m.verrou);
+  std::size_t avant = 0;
+  {
+    std::lock_guard<std::mutex> g(m.etat);
+    avant = m.console.size();
+  }
+  std::string c = commande;
+  m.commande(c.data());
+  std::lock_guard<std::mutex> g(m.etat);
+  std::vector<std::string> r;
+  for (std::size_t i = std::min(avant, m.console.size()); i < m.console.size(); ++i) {
+    std::string l = m.console[i];
+    for (const char* p : {"stdout ", "stderr "})
+      if (l.rfind(p, 0) == 0) l = l.substr(7);
+    r.push_back(l);
   }
   return r;
 }
