@@ -359,6 +359,31 @@ FenetreOutilsConception::FenetreOutilsConception(AtelierElectronique& a, QWidget
          ecrire("decoupe.nc", gcodeDecoupe(*c, o));
          ecrire("pochoir-dessus.svg", pochoirSvg(*c, false));
          ecrire("pochoir-dessus.dxf", pochoirDxf(*c, false));
+         ecrire("nettoyage-dessous.nc", gcodeIsolement(*c, nettoyageCuivre(*c, Couche::CuivreDessous, o), o));
+         // Palpage de la plaque (16.8) : grille de 11 × 9 points sur la carte, relevé écrit par la machine
+         const Boite b = boite(c->circuit.contour.polygone());
+         OptionsPalpage p;
+         p.x1 = mm(b.largeur()), p.y1 = mm(b.hauteur());
+         ecrire("palpage-linuxcnc.nc", gcodePalpage(p));
+         p.machine = "grbl";
+         ecrire("palpage-grbl.nc", gcodePalpage(p));
+       }},
+      {QStringLiteral("Corriger d'après un relevé…"), [this] {
+         // Relevé de palpage (LinuxCNC, GRBL, Marlin) puis les G-code à corriger : « …-corrige.nc » à côté de chacun
+         const QString releve = QFileDialog::getOpenFileName(this, QStringLiteral("Relevé de palpage"), {}, QStringLiteral("Relevés (*.txt *.log *.csv);;Tous (*)"));
+         if (releve.isEmpty()) return;
+         std::string erreur;
+         const auto g = lireRelevePalpage(prom::lireFichier(prom::cheminFichier(releve.toStdString())), &erreur);
+         if (!g) {
+           m_textes[QStringLiteral("atelier")]->append(QStringLiteral("<p class='err'>") + h(erreur) + QStringLiteral("</p>"));
+           return;
+         }
+         const QStringList fichiers = QFileDialog::getOpenFileNames(this, QStringLiteral("G-code à corriger"), QFileInfo(releve).absolutePath(), QStringLiteral("G-code (*.nc *.ngc *.gcode)"));
+         for (const QString& f : fichiers) {
+           const QString sortie = QFileInfo(f).absoluteDir().filePath(QFileInfo(f).completeBaseName() + QStringLiteral("-corrige.nc"));
+           prom::ecrireFichierAtomique(prom::cheminFichier(sortie.toStdString()), corrigerProfondeur(prom::lireFichier(prom::cheminFichier(f.toStdString())), *g));
+           m_textes[QStringLiteral("atelier")]->append(QStringLiteral("<p>Profondeur corrigée (%1 × %2 points) : %3</p>").arg(g->nx).arg(g->ny).arg(h(sortie.toStdString())));
+         }
        }},
       {QStringLiteral("Dossier JLCPCB…"), [this, doc, conception] {
          const ConceptionElec* c = conception();

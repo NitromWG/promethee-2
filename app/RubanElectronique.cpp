@@ -466,6 +466,8 @@ void AtelierElectronique::enregistrerCommandes() {
   enregistrerCommandesL14();     // 0.34, lot L14 (Laboratoire034.cpp)
   enregistrerCommandesL15();     // 0.34, lot L15 (Embarque034.cpp)
   enregistrerCommandesL16();     // 0.34, lot L16 (Platine034.cpp)
+  enregistrerCommandesL16b();    // 0.34, lot L16 (Enseignement034.cpp)
+  enregistrerCommandesL17();     // 0.34, lots L17 et L18 (Lignes034.cpp)
 }
 
 // Couche active, couches visibles et opacité des cuivres inactifs (EL-25)
@@ -583,6 +585,7 @@ void AtelierElectronique::construireRuban() {
   auto entree = [this, &registre](const std::string& id, QObject* parent) -> QAction* {
     const ActionAtelier* a = registre.action(id);
     if (!a || a->controle) return nullptr;
+    if (!refusAction(id).isEmpty()) return nullptr;  // masquée par l'établissement ou l'enseignant
     auto* x = new QAction(icone(a->icone.isEmpty() ? QStringLiteral("aide") : a->icone), a->nomAffiche(), parent);
     const QString touches = registre.touches(id);
     QString bulle = a->nomAffiche();
@@ -657,7 +660,17 @@ void AtelierElectronique::construireRuban() {
     b->setObjectName(QStringLiteral("ruban:") + QString::fromStdString(onglet.id));
     b->setIconSize(QSize(30, 30));
     m_ruban->addTab(b, onglet.titre);
-    for (const DescriptionRuban::Groupe& g : onglet.groupes) switch (g.forme) {
+    // Interface simplifiée (16.10, 16.12) : les groupes d'un premier montage seulement
+    static const std::set<std::pair<std::string, QString>> simples{
+        {"schema", QStringLiteral("Composant")},     {"schema", QStringLiteral("Fil")},           {"schema", QStringLiteral("Étiquette")},   {"schema", QStringLiteral("Alimentation")},
+        {"schema", QStringLiteral("Modifier")},      {"schema", QStringLiteral("Vue")},           {"schema", QStringLiteral("Vérifier")},    {"schema", QStringLiteral("Simuler")},
+        {"schema", QStringLiteral("Laboratoire")},   {"schema", QStringLiteral("Platine")},       {"schema", QStringLiteral("Enseignement")}, {"circuit", QStringLiteral("Mettre à jour")},
+        {"circuit", QStringLiteral("Placer")},       {"circuit", QStringLiteral("Router")},       {"circuit", QStringLiteral("Modifier")},   {"circuit", QStringLiteral("Vue")},
+        {"circuit", QStringLiteral("DRC")},          {"fabrication", QStringLiteral("Valider")},  {"fabrication", QStringLiteral("Dossier")}, {"fabrication", QStringLiteral("Dessins")}};
+    const bool simplifiee = interfaceSimplifiee();
+    for (const DescriptionRuban::Groupe& g : onglet.groupes) {
+      if (simplifiee && onglet.id != "3d" && !simples.count({onglet.id, g.titre})) continue;
+      switch (g.forme) {
         case DescriptionRuban::Forme::Separateur: b->addSeparator(); break;
         case DescriptionRuban::Forme::Grille: grille(b, g); break;
         case DescriptionRuban::Forme::Controle:
@@ -668,6 +681,7 @@ void AtelierElectronique::construireRuban() {
           break;
         case DescriptionRuban::Forme::Grand: gros(b, g); break;
       }
+    }
   }
   if (courant >= 0) m_ruban->setCurrentIndex(std::min(courant, m_ruban->count() - 1));
   majSchemaSeul();

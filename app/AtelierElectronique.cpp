@@ -1473,6 +1473,11 @@ void AtelierElectronique::setMode(int mode) {
 // Action du registre lancée depuis le ruban, les menus de la fenêtre (G1) ou un script : une commande de l'atelier,
 // sinon la vue de sa portée, sinon la vue montrée
 bool AtelierElectronique::executerAction(std::string_view action) {
+  // Actions masquées par l'établissement ou par l'enseignant (16.10, 16.12) : refusées avec la raison
+  if (const QString refus = refusAction(std::string(action)); !refus.isEmpty()) {
+    afficherMessage(refus, NiveauMessage::Avertissement);
+    return false;
+  }
   if (const auto it = m_commandes.find(action); it != m_commandes.end()) {
     const auto faire = it->second;  // la commande peut reconstruire le ruban
     faire();

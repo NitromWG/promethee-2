@@ -2,6 +2,9 @@
 #include "Accueil.hpp"
 
 #include <algorithm>
+#include <array>
+#include <string>
+#include <vector>
 #include <iterator>
 #include <map>
 
@@ -23,6 +26,7 @@
 
 #include "Icones.hpp"
 #include "Theme.hpp"
+#include "promethee/enseignement.hpp"
 
 namespace {
 struct Metier {
@@ -359,6 +363,20 @@ Accueil::Accueil(QWidget* parent) : QWidget(parent) {
     };
     ligne(QStringLiteral("Pour commencer"), {"piece", "assemblage", "carte-nouvelle", "electrique-schema", "electrique-distribution", "electrique-logement"});
     ligne(QStringLiteral("Exemples à explorer"), {"exemple-elec", "electrique-exemple"});
+    // Recueil d'exemples de cours (16.10) : ouverts en un clic, prêts à simuler, chacun avec sa courte explication
+    {
+      static std::vector<std::array<std::string, 3>> textes;  // code, titre, explication
+      static std::vector<Choix> cours;
+      if (cours.empty()) {
+        for (const auto& e : prom::ecad::recueilExemples()) textes.push_back({"cours:" + e.id, e.titre, e.explication});
+        for (const auto& t : textes) cours.push_back({"elec", t[0].c_str(), t[1].c_str(), t[2].c_str(), "apprendre", true, "exemple cours tp enseignement eleve"});
+      }
+      v->addWidget(new QLabel(QStringLiteral("<span style='font-size:17px; font-weight:700; color:#232A45'>Recueil d’exemples de cours</span>")));
+      auto* g = new QGridLayout;
+      g->setSpacing(12);
+      for (std::size_t i = 0; i < cours.size(); ++i) g->addWidget(carte(cours[i], QStringLiteral("commencer-")), static_cast<int>(i) / 2, static_cast<int>(i) % 2);
+      v->addLayout(g);
+    }
     p->addWidget(m_commencer);
   }
   // Les créations de chaque métier ; une seule section visible à la fois

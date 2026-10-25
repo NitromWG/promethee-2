@@ -1,6 +1,7 @@
 // Prométhée : le document ouvert. Licence GPL-3.0-only.
 #include "Document.hpp"
 
+#include "promethee/enseignement.hpp"
 #include "promethee/collaboration.hpp"
 #include "promethee/historique_local.hpp"
 #include "promethee/fichiers.hpp"
@@ -380,6 +381,12 @@ bool Document::modifierConception(int indice, const std::function<void(prom::eca
     emit refus(messageVerrou(c));
     return false;
   }
+  if (!m_coucheAutorisee)
+    if (const std::string r = prom::ecad::refusEnseignant(avant, c); !r.empty()) {
+      c = std::move(avant);
+      emit refus(QString::fromStdString(r));
+      return false;
+    }
   prom::ecad::ChangementConception ch = prom::ecad::differencier(avant, c);
   if (ch.vide()) return false;
   // Suites de la modification, dans le même pas (3.6, 3.14) : valeurs calculées, écarts sans risque du circuit

@@ -23,13 +23,14 @@
         {"titre": "Laboratoire", "forme": "grille", "actions": ["simulation.logique", "simulation.symbolique", "simulation.reseau", "simulation.alimentation", "simulation.mesures"]},
         {"titre": "Programme", "forme": "grille", "actions": ["programme.ouvrir", "programme.cosimuler", "programme.organigramme", "programme.hdl", "programme.machine", "programme.robot", "programme.logique"]},
         {"titre": "Platine", "forme": "grille", "actions": ["platine.ouvrir", "platine.monter", "platine.etape", "platine.verifier", "platine.3d", "platine.documents", "platine.guitare"]},
+        {"titre": "Enseignement", "forme": "grille", "actions": ["enseignement.consignes", "enseignement.couche", "enseignement.evaluer", "enseignement.classe", "enseignement.page"]},
         {"titre": "Outils", "forme": "grand", "actions": ["outils.conception"]},
         {"titre": "Automatiser", "forme": "grille", "actions": ["automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]},
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
         {"titre": "Circuit", "forme": "grand", "actions": ["schema.creerCircuit"]},
         {"titre": "Feuille", "forme": "grand", "actions": ["schema.feuilleNouvelle", "schema.feuilleSuivante", "schema.feuillePrecedente", "schema.feuilleSupprimer"]},
         {"titre": "Structure", "forme": "grille", "actions": ["schema.repeterFeuille", "schema.deplacerVersFeuille", "schema.migrerHierarchie", "schema.synchroniserPorts", "schema.feuilleMere"]},
-        {"titre": "Avancé", "forme": "grille", "actions": ["schema.echangerPortes", "schema.directives", "schema.grapheReseaux", "schema.importerFormes", "schema.enregistrerExtrait", "schema.poserExtrait", "schema.jeuxStyles", "schema.assistantSymbole"]}
+        {"titre": "Avancé", "forme": "grille", "actions": ["schema.echangerPortes", "schema.directives", "schema.grapheReseaux", "schema.importerFormes", "schema.enregistrerExtrait", "schema.poserExtrait", "schema.jeuxStyles", "schema.assistantSymbole", "schema.depuisCircuit"]}
       ]
     },
     {
@@ -52,7 +53,8 @@
         {"titre": "Vue", "forme": "grille", "actions": ["vue.toutVoir", "commun.inspecteur", "vue.zoomPlus", "vue.zoomMoins", "atelier.raccourcis"]},
         {"titre": "Couche active", "forme": "controle", "actions": ["circuit.coucheActive"]},
         {"titre": "Grille et unité", "forme": "controle", "actions": ["circuit.grilleUnite"]},
-        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes", "regles.signauxSerie", "regles.gabaritInterface", "regles.profilImpedance"]},
+        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes", "regles.signauxSerie", "regles.gabaritInterface", "regles.profilImpedance", "circuit.schemaLignes"]},
+        {"titre": "Révision", "forme": "grille", "actions": ["circuit.retouches", "schema.depuisCircuit"]},
         {"titre": "Réseaux", "forme": "grand", "actions": ["vue.reseaux"]},
         {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf", "carte.importerDansCarte", "carte.importerDessin", "carte.exporterDxfCouches", "carte.exporter3D", "carte.idxEnvoyer", "carte.idxRecevoir", "carte.idxHistorique"]},
         {"titre": "Automatiser", "forme": "grille", "actions": ["automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]}

@@ -295,6 +295,16 @@ class AtelierElectronique : public QWidget {
   // Platine d'essai (L16 : 16.2 à 16.4, 16.6) ; laboratoire déjà ouvert, sans le montrer
   class FenetrePlatine* platine(const QString& onglet = {});
   class FenetreLaboratoire* laboratoireOuvert() const;
+  // Enseignement (L16 : 16.10 à 16.14) : fenêtre de l'enseignant ; action refusée par l'établissement ou par la
+  // couche de l'enseignant (raison, vide si permise) ; interface simplifiée ; ruban refait après un changement
+  class FenetreEnseignement* enseignement(const QString& onglet = {});
+  QString refusAction(const std::string& action) const;
+  bool interfaceSimplifiee() const;
+  void appliquerRestrictions();
+  // Schéma déduit du circuit, retouches d'une révision fabriquée (L17 : 17.6), schéma de lignes (L18 : 18.4)
+  bool deduireSchema();
+  class FenetreRetouches* retouches();
+  class FenetreLignes* lignes();
   void montrerBroche(const std::string& composant, const std::string& numero);
   void demanderAssistant(const prom::ecad::Violation& v);  // « Demander à l'assistant » sur une violation
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
@@ -410,6 +420,8 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandesL14();     // laboratoire de simulation (0.34, Laboratoire034.cpp)
   void enregistrerCommandesL15();     // programme, logique et machines à états (0.34, Embarque034.cpp)
   void enregistrerCommandesL16();     // platine d'essai, documents de câblage, guitare (0.34, Platine034.cpp)
+  void enregistrerCommandesL16b();    // enseignement (0.34, Enseignement034.cpp)
+  void enregistrerCommandesL17();     // schéma déduit, retouches, schéma de lignes (0.34, Lignes034.cpp)
   QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
   QPointer<class DialogueConversionSerie> m_conversionSerie;
   QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
@@ -465,6 +477,9 @@ class AtelierElectronique : public QWidget {
   QPointer<class FenetreLaboratoire> m_laboratoire;
   QPointer<class FenetreEmbarque> m_embarque;
   QPointer<class FenetrePlatine> m_platine;
+  QPointer<class FenetreEnseignement> m_enseignement;
+  QPointer<class FenetreRetouches> m_retouches;
+  QPointer<class FenetreLignes> m_lignes;
   QPointer<class FenetreOutilsConception> m_outilsConception;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;

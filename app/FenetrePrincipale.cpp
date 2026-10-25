@@ -8,6 +8,7 @@
 #include "promethee/version.hpp"
 #include "promethee/fichiers.hpp"
 #include "FenetrePrincipale.hpp"
+#include "promethee/enseignement.hpp"
 
 #include "Theme.hpp"
 
@@ -1677,6 +1678,20 @@ void FenetrePrincipale::choixAccueil(const QString& code) {
   }
   if (code == QLatin1String("carte-nouvelle") || code == QLatin1String("schema-elec")) {
     nouvelleConceptionElec(!m_accueilAjoutElec || m_doc->estVierge(), code == QLatin1String("schema-elec"));
+    return;
+  }
+  if (code.startsWith(QLatin1String("cours:"))) {
+    // Exemple du recueil de cours (16.10) : un projet neuf, prêt à simuler, son explication affichée
+    const prom::ecad::ExempleCours* e = prom::ecad::exempleCours(code.mid(6).toStdString());
+    if (!e || !confirmerAbandon()) return;
+    Projet p = prom::projetVide();
+    p.sansCarte = true;
+    p.nom = e->titre;
+    p.electronique.push_back(e->creer());
+    m_doc->creer(p);
+    montrerProjet();
+    montrerElectronique(0, AtelierElectronique::Schema);
+    if (m_electronique) m_electronique->afficherMessage(QStringLiteral("<b>%1</b> — %2").arg(QString::fromStdString(e->titre), QString::fromStdString(e->explication)));
     return;
   }
   if (code == QLatin1String("exemple-elec")) {

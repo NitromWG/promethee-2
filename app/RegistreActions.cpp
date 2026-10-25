@@ -235,6 +235,15 @@ RegistreActions::RegistreActions() {
   ajouter("platine.3d", QStringLiteral("Platine équipée en 3D"), P::Atelier, {});
   ajouter("platine.documents", QStringLiteral("Documents de câblage (plan de chargement, fils, plaque à bandes)"), P::Atelier, {});
   ajouter("platine.guitare", QStringLiteral("Câblage de guitare : positions du sélecteur"), P::Atelier, {});
+  ajouter("enseignement.consignes", QStringLiteral("Consignes de l'enseignant (étapes vérifiées sur le projet de l'élève)"), P::Atelier, {});
+  ajouter("enseignement.couche", QStringLiteral("Couche de l'enseignant : verrous, restrictions, pannes cachées, sceau"), P::Atelier, {});
+  ajouter("enseignement.evaluer", QStringLiteral("Évaluer le montage de l'élève"), P::Atelier, {});
+  ajouter("enseignement.classe", QStringLiteral("Classe : devoirs, rendus, notes"), P::Atelier, {});
+  ajouter("enseignement.page", QStringLiteral("Page HTML autonome du circuit"), P::Atelier, {});
+  // 0.34, lots L17 et L18 : schéma déduit, retouches, schéma de lignes
+  ajouter("schema.depuisCircuit", QStringLiteral("Schéma déduit du circuit (un symbole par composant, réseaux du cuivre)"), P::Atelier, {});
+  ajouter("circuit.retouches", QStringLiteral("Retouches de la révision fabriquée"), P::Atelier, {});
+  ajouter("circuit.schemaLignes", QStringLiteral("Schéma de lignes et topologie du réseau routé"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
   ajouter("schema.alimentation.3v3", QStringLiteral("Alimentation +3V3"), P::Schema, {});
@@ -536,6 +545,14 @@ RegistreActions::RegistreActions() {
       {"platine.3d", "Platine 3D", "esquisse3d", "platine équipée en 3D, interrupteurs reliés au laboratoire"},
       {"platine.documents", "Câblage…", "rapport", "plan de chargement, liste des fils, impression à l’échelle, plaque à bandes"},
       {"platine.guitare", "Guitare…", "cablage", "positions du sélecteur et combinaisons de micros"},
+      {"enseignement.consignes", "Consignes…", "apprendre", "étapes écrites sans programmer, vérifiées seules sur le projet de l’élève"},
+      {"enseignement.couche", "Enseignant…", "valider", "parties verrouillées, actions masquées, pannes cachées ; couche scellée et relevée"},
+      {"enseignement.evaluer", "Évaluer", "erc", "montage comparé à la référence, aux repères près"},
+      {"enseignement.classe", "Classe…", "dossier", "devoirs publiés dans le dossier de la classe, rendus relevés, notes en CSV"},
+      {"enseignement.page", "Page HTML…", "exporter", "circuit simulé dans le navigateur, hors ligne"},
+      {"schema.depuisCircuit", "Schéma déduit", "schema", "un symbole par composant de la carte, une étiquette au nom du réseau du cuivre sur chaque broche"},
+      {"circuit.retouches", "Retouches…", "couper", "fils de reprise, pistes coupées, composants changés d’une révision fabriquée, par numéro de série"},
+      {"circuit.schemaLignes", "Lignes…", "piste", "schéma de lignes, topologie extraite du cuivre, moignons de chaîne et de via"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},
       {"schema.etiquetteGlobale", "Étiquette globale", "etiquette", "relie les fils du même nom sur toutes les feuilles"},

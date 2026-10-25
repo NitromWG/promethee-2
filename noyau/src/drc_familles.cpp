@@ -14,6 +14,7 @@
 #include "promethee/expressions.hpp"
 #include "promethee/regles_carte.hpp"
 #include "promethee/signaux.hpp"
+#include "promethee/topologie_lignes.hpp"
 
 namespace prom::ecad {
 
@@ -485,6 +486,9 @@ void verifierFamilles034(const ConceptionElec& c, const Connectivite& k, const R
   // Signaux (8.26) : tronçons From-To et ordre de raccordement
   if (!ci.regles.avancees.signaux.empty())
     for (auto& x : verifierSignaux(c)) v.push_back(std::move(x));
+  // Schémas de lignes (18.4) : moignons de via, de chaîne et de pastille, ordre de raccordement
+  if (c.extensions.count("lignes"))
+    for (auto& x : verifierMoignons(c)) v.push_back(std::move(x));
   (void)remplis;
 }
 

@@ -2,7 +2,11 @@
 // liaison au schéma et au chevelu, en un pas d'annulation (16.2) ; clignotant à NE555 monté de lui-même sans écart,
 // patte décalée en rouge et écart listé (16.3) ; interrupteur cliqué sur la platine en 3D pendant la simulation : la
 // LED s'allume, composant déplacé gardant ses liaisons (16.4) ; positions du sélecteur d'une guitare et documents
-// de câblage écrits (16.6). Appelés seuls avec PROMETHEE_ESSAIS_LOTS=034L16. Licence GPL-3.0-only.
+// de câblage écrits (16.6) ; poste neuf vérifié par ses essais intégrés, réglages de l'établissement appliqués
+// (16.10) ; consigne de trois étapes validées une à une sur le projet de l'élève (16.11) ; panne cachée « R2 coupée »
+// lue au voltmètre, partie verrouillée refusée, sceau relevé (16.12) ; montage de l'élève reconnu, résistance en trop
+// signalée (16.13) ; page HTML du filtre RC ouverte hors ligne, devoir publié, rendu, noté (16.14). Appelés seuls avec
+// PROMETHEE_ESSAIS_LOTS=034L16. Licence GPL-3.0-only.
 #include <filesystem>
 #include <functional>
 #include <random>
@@ -10,10 +14,14 @@
 #include <string>
 
 #include <QApplication>
+#include <QCoreApplication>
+#include <QDirIterator>
 #include <QDockWidget>
 #include <QEventLoop>
 #include <QFile>
 #include <QListWidget>
+#include <QProcess>
+#include <QProcessEnvironment>
 #include <QPushButton>
 #include <QTabWidget>
 #include <QTableWidget>
@@ -21,11 +29,14 @@
 
 #include "AtelierElectronique.hpp"
 #include "Document.hpp"
+#include "Enseignement034.hpp"
 #include "EvenementsReels.hpp"
 #include "FenetrePrincipale.hpp"
 #include "Laboratoire034.hpp"
 #include "Platine034.hpp"
+#include "promethee/archive.hpp"
 #include "promethee/electronique.hpp"
+#include "promethee/enseignement.hpp"
 #include "promethee/fichiers.hpp"
 #include "promethee/modele.hpp"
 #include "promethee/platine.hpp"
@@ -295,4 +306,227 @@ void essaisElectronique034L16(FenetrePrincipale& f, const Verifier& verifier0) {
              "034 L16 · 16.6 : documents de câblage : plan de chargement, liste des fils, platine à l'échelle en PDF, plaque à bandes en HPGL et plan miroir des coupures", d);
   }
   pl->close();
+
+  // ---------- 16.10 · Poste neuf : paquet portable, réglages de l'établissement, essais intégrés ----------
+  {
+    const std::string d = dossierEssai("poste");
+    QFile temoin(QString::fromStdString(d + "/promethee-portable.txt"));
+    if (temoin.open(QIODevice::WriteOnly)) temoin.write("paquet portable\n");
+    temoin.close();
+    ReglagesEtablissement r;
+    r.nom = "Lycée d'essai";
+    r.dossierBibliotheques = "bibliotheques";
+    r.profilFabricant = profilsFabricants().front().nom;
+    r.interfaceSimplifiee = true;
+    r.interfaceVerrouillee = true;
+    r.actionsMasquees = {"automatisation.python"};
+    prom::ecrireFichierAtomique(prom::cheminFichier(d + "/" + kFichierEtablissement), ecrireReglagesEtablissement(r));
+    QProcess poste;
+    QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    env.insert(QStringLiteral("PROMETHEE_DOSSIER_PROGRAMME"), QString::fromStdString(d));
+    env.insert(QStringLiteral("QT_QPA_PLATFORM"), QStringLiteral("offscreen"));
+    poste.setProcessEnvironment(env);
+    poste.start(QCoreApplication::applicationFilePath(), {QStringLiteral("--verifier-poste")});
+    const bool fini = poste.waitForFinished(180000);
+    const QString sortie = QString::fromUtf8(poste.readAllStandardOutput());
+    // Les réglages imposés sont écrits dans le paquet, pas dans le profil de l'utilisateur
+    bool reglesDansPaquet = false;
+    for (QDirIterator it(QString::fromStdString(d + "/promethee-donnees"), {QStringLiteral("*.ini"), QStringLiteral("*.conf")}, QDir::Files, QDirIterator::Subdirectories); it.hasNext();) {
+      QFile f(it.next());
+      reglesDansPaquet |= f.open(QIODevice::ReadOnly) && f.readAll().contains("dossierBibliotheque");
+    }
+    verifier(fini && poste.exitStatus() == QProcess::NormalExit && poste.exitCode() == 0 && sortie.contains(QStringLiteral("Réglages de l'établissement appliqués : Lycée d'essai")) &&
+                 sortie.contains(QStringLiteral("Essais intégrés")) && sortie.contains(QStringLiteral(", 0 échec")) && reglesDansPaquet && QDir(QString::fromStdString(d + "/bibliotheques")).exists(),
+             "034 L16 · 16.10 : poste neuf : paquet portable lancé sans droits d'administrateur, réglages de l'établissement appliqués, essais intégrés verts", sortie.toStdString());
+  }
+
+  // ---------- Le projet de la classe : la carte du professeur, celle de l'élève, le filtre RC ----------
+  prom::Projet classe = prom::projetVide();
+  classe.sansCarte = true;
+  classe.nom = "Classe";
+  ConceptionElec professeur = exempleDiviseur();
+  professeur.nom = "Professeur";
+  ConceptionElec eleve0 = nouvelleConception("Élève");
+  classe.electronique = {professeur, eleve0, exempleFiltreRC()};
+  enum { PROFESSEUR, ELEVE, FILTRE };
+  doc->creer(classe);
+  f.montrerElectronique(PROFESSEUR, AtelierElectronique::Schema);
+  attendre(300);
+  a = f.atelierElectronique();
+  if (!a) return;
+  auto remplacerEleve = [&](const Montage& m) {
+    doc->modifierConception(ELEVE, [&](ConceptionElec& c) {
+      const std::string u = c.uuid, nom = c.nom;
+      c = m.c;
+      c.uuid = u;
+      c.nom = nom;
+    });
+  };
+
+  // ---------- 16.11 · Consigne de trois étapes ----------
+  a->executerAction("enseignement.consignes");
+  attendre(250);
+  FenetreEnseignement* en = a->enseignement();
+  {
+    EtapeConsigne e1, e2, e3;
+    e1.titre = "Pose deux résistances de 10 kΩ";
+    e1.condition.genre = GenreCondition::ComposantPose;
+    e1.condition.symbole = "R";
+    e1.condition.valeur = "10k";
+    e1.condition.nombre = 2;
+    e2.titre = "Relie les deux résistances";
+    e2.condition.genre = GenreCondition::BrochesReliees;
+    e2.condition.a = "R9.2";
+    e2.condition.b = "R7.2";
+    e3.titre = "Mesure 2,5 V au point milieu";
+    e3.condition.genre = GenreCondition::MesureDansPlage;
+    e3.condition.a = "M";
+    e3.condition.min = 2.4;
+    e3.condition.max = 2.6;
+    en->nouvelleConsigne(QStringLiteral("diviseur"), QStringLiteral("Le diviseur de tension"));
+    for (const auto& e : {e1, e2, e3}) en->ajouterEtape(e);
+    const int pas0 = doc->positionHistorique();
+    const bool range = en->enregistrerConsigne() && doc->positionHistorique() == pas0 + 1 && consignesDe(doc->projet().electronique[PROFESSEUR]).size() == 1;
+    auto etats = [&] {
+      std::string t;
+      for (const auto& x : en->verifierSur(ELEVE)) t += x.faite ? '1' : '0';
+      return t;
+    };
+    const std::string vide = etats();
+    Montage m1("Élève");
+    m1.poser("R", "R9", "10k", {});
+    m1.poser("R", "R7", "10k", {});
+    remplacerEleve(m1);
+    const std::string poses = etats();
+    // Reliées, mais sans alimentation (un réseau nommé « +5V » serait alimenté d'office par la simulation)
+    Montage m2("Élève");
+    m2.poser("R", "R9", "10k", {{"2", "M"}, {"1", "VIN"}});
+    m2.poser("R", "R7", "10k", {{"2", "M"}, {"1", "GND"}});
+    remplacerEleve(m2);
+    const std::string relies = etats();
+    Montage m3("Élève");
+    m3.poser("R", "R9", "10k", {{"2", "M"}, {"1", "+5V"}});
+    m3.poser("R", "R7", "10k", {{"2", "M"}, {"1", "GND"}});
+    m3.poser("Pile", "B2", "5V", {{"1", "+5V"}, {"2", "GND"}});
+    remplacerEleve(m3);
+    const std::string complet = etats();
+    const bool mesure = !ngspiceDisponible() || complet == "111";
+    verifier(range && vide == "000" && poses == "100" && relies == "110" && mesure && (complet == "111" || complet == "110"),
+             "034 L16 · 16.11 : consigne de trois étapes écrite sans programmer : chaque étape se valide seule sur le projet de l'élève", vide + " → " + poses + " → " + relies + " → " + complet);
+  }
+
+  // ---------- 16.12 · Panne cachée « R2 coupée », partie verrouillée, sceau ----------
+  {
+    en->montrer(QStringLiteral("enseignant"));
+    en->recharger();
+    en->setSecret(QStringLiteral("secret du professeur"));
+    en->verrouiller(QStringLiteral("R1"), true);
+    PanneCachee coupe;
+    coupe.genre = GenrePanne::Coupure;
+    coupe.composant = "R2";
+    coupe.titre = "R2 coupée";
+    en->ajouterPanne(coupe);
+    en->masquerAction(QStringLiteral("simulation.calculateurs"), true);
+    const auto feuilles = doc->projet().electronique[PROFESSEUR].feuilles;
+    const bool scelle = en->sceller();
+    const bool feuilleIntacte = doc->projet().electronique[PROFESSEUR].feuilles == feuilles;
+    QString refus;
+    const auto lien = QObject::connect(doc, &Document::refus, [&refus](const QString& r) { refus = r; });
+    const bool modifie = a->modifierConception([](ConceptionElec& c) {
+      for (auto& x : c.composants)
+        if (x.reference == "R1") x.valeur = "1k";
+    });
+    QObject::disconnect(lien);
+    const bool masquee = !a->executerAction("simulation.calculateurs");
+    const bool intact = en->relever() == EtatSceau::Intact;
+    double volts = std::nan("");
+    if (ngspiceDisponible()) {
+      FenetreLaboratoire* lab = a->laboratoire(QStringLiteral("continu"));
+      lab->reglerMultimetre(QStringLiteral("MID"), 0);
+      QString erreur;
+      if (lab->demarrer(&erreur)) {
+        attendre(800);
+        lab->rafraichir();
+        volts = lab->mesureMultimetre();
+        lab->arreter();
+      }
+    }
+    const bool lu = !ngspiceDisponible() || std::abs(volts) < 0.05;
+    verifier(scelle && feuilleIntacte && !modifie && refus.contains(QStringLiteral("R1")) && masquee && intact && lu,
+             "034 L16 · 16.12 : panne cachée « R2 coupée » : la feuille ne change pas, et le voltmètre lit 0 V là où le montage juste donne 2,5 V ; partie verrouillée refusée, sceau intact au relevé",
+             refus.toStdString() + " ; voltmètre " + std::to_string(volts) + " V");
+  }
+
+  // ---------- 16.13 · Montage de l'élève comparé à la référence ----------
+  f.montrerElectronique(ELEVE, AtelierElectronique::Schema);
+  attendre(250);
+  {
+    en = a->enseignement(QStringLiteral("evaluation"));
+    const ResultatEvaluation juste = en->evaluer(PROFESSEUR, false);
+    Montage m4("Élève");
+    m4.poser("R", "R9", "10k", {{"2", "M"}, {"1", "+5V"}});
+    m4.poser("R", "R7", "10k", {{"2", "M"}, {"1", "GND"}});
+    m4.poser("Pile", "B2", "5V", {{"1", "+5V"}, {"2", "GND"}});
+    m4.poser("R", "R3", "10k", {{"1", "M"}, {"2", "GND"}});
+    remplacerEleve(m4);
+    const ResultatEvaluation trop = en->evaluer(PROFESSEUR, true);
+    auto* liste = en->findChild<QListWidget*>(QStringLiteral("ecartsEvaluation"));
+    const bool signale = liste && liste->count() > 0 && liste->item(0)->text().contains(QStringLiteral("résistance de trop"));
+    verifier(juste.juste && juste.correspondance.count("B2") && !trop.juste && signale && en->controlesComptes() == 1,
+             "034 L16 · 16.13 : montage d'élève équivalent, aux repères différents : reconnu juste ; avec une résistance en trop, l'écart est signalé",
+             trop.ecarts.empty() ? std::string() : trop.ecarts.front());
+  }
+
+  // ---------- 16.14 · Page HTML hors ligne, devoir de la classe ----------
+  f.montrerElectronique(FILTRE, AtelierElectronique::Schema);
+  attendre(250);
+  {
+    en = a->enseignement(QStringLiteral("diffusion"));
+    const std::string d = dossierEssai("diffusion");
+    const QString page = QString::fromStdString(d + "/filtre.html");
+    const bool ecrite = en->exporterPage(page);
+    QString lecture = QStringLiteral("Playwright absent");
+    bool coupure = true;
+    QProcess verif;
+    verif.start(QStringLiteral("python3"), {QStringLiteral("-c"), QStringLiteral("import playwright")});
+    if (verif.waitForFinished(30000) && verif.exitCode() == 0) {
+      const QString script = QString::fromStdString(d + "/navigateur.py");
+      prom::ecrireFichierAtomique(prom::cheminFichier(script.toStdString()),
+                                  "import sys\nfrom playwright.sync_api import sync_playwright\nwith sync_playwright() as p:\n    b = p.chromium.launch()\n"
+                                  "    c = b.new_context(offline=True)\n    g = c.new_page()\n    g.goto('file://' + sys.argv[1])\n"
+                                  "    g.wait_for_function('document.body.dataset.coupure !== undefined', timeout=20000)\n    print(g.inner_text('#resultat'))\n    b.close()\n");
+      QProcess navigateur;
+      navigateur.start(QStringLiteral("python3"), {script, page});
+      navigateur.waitForFinished(120000);
+      lecture = QString::fromUtf8(navigateur.readAllStandardOutput()).trimmed();
+      coupure = navigateur.exitCode() == 0 && lecture.contains(QStringLiteral("1,00 kHz"));
+    }
+    // Classe : devoir publié, rendu déposé, relevé, noté, notes et paquet Common Cartridge
+    en = a->enseignement(QStringLiteral("classe"));
+    const std::string dossierClasse = dossierEssai("classe");
+    en->setDossierClasse(QString::fromStdString(dossierClasse));
+    Devoir dv;
+    dv.id = "filtre-rc";
+    dv.titre = "Filtre RC";
+    dv.consigne = "Monte le filtre et mesure sa coupure.";
+    dv.echeance = "2099-01-01T00:00";
+    dv.interdits = {"simulation.calculateurs"};
+    const bool publie = en->publier(dv);
+    const bool depose = en->deposer(QStringLiteral("filtre-rc"), QStringLiteral("Alice Martin"));
+    const bool note = en->noter(QStringLiteral("filtre-rc"), QStringLiteral("Alice Martin"), 16, QStringLiteral("bien"));
+    const auto rendus = en->relever(QStringLiteral("filtre-rc"));
+    const QString csv = QString::fromStdString(d + "/notes.csv"), cc = QString::fromStdString(d + "/devoir.imscc");
+    const bool exports = en->exporterNotes(QStringLiteral("filtre-rc"), csv) && en->exporterCartouche(QStringLiteral("filtre-rc"), cc);
+    bool manifeste = false;
+    try {
+      for (const auto& [nom, contenu] : prom::lireZip(prom::lireFichier(prom::cheminFichier(cc.toStdString())))) manifeste |= nom == "imsmanifest.xml";
+    } catch (...) {
+    }
+    QFile notes(csv);
+    const bool csvJuste = notes.open(QIODevice::ReadOnly) && notes.readAll().contains("Alice Martin;filtre-rc;16;bien");
+    verifier(ecrite && coupure, "034 L16 · 16.14 : page HTML d'un filtre RC ouverte hors ligne dans un navigateur : la simulation tourne et donne la coupure à 1 kHz", lecture.toStdString());
+    verifier(publie && depose && note && rendus.size() == 1 && !rendus[0].enRetard && exports && manifeste && csvJuste,
+             "034 L16 · 16.14 : devoir publié dans le dossier de la classe, rendu relevé et noté, notes en CSV, paquet IMS Common Cartridge", dossierClasse);
+  }
+  en->close();
 }

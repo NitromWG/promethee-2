@@ -27,6 +27,7 @@
 
 #include "promethee/csv.hpp"
 #include "promethee/micro_simulation.hpp"
+#include "Enseignement034.hpp"
 #include "Accueil.hpp"
 #include "ChienDeGarde.hpp"
 #include "Document.hpp"
@@ -232,6 +233,19 @@ int main(int argc, char** argv) {
   if (const QString avant = RegistreReglages::instance().reprendreVersionPrecedente(QCoreApplication::applicationVersion()); !avant.isEmpty())
     journal("réglages repris de la version " + avant.toStdString());
   RegistreReglages::instance().relireSynchronise();
+  // Réglages de l'établissement (16.10) : un « etablissement.json » posé à côté du paquet s'impose aux réglages du poste
+  if (const auto& e = etablissement::actifs()) journal("réglages de l'établissement appliqués : " + e->nom);
+  // --verifier-poste : essais intégrés d'un poste de salle de TP, sans fenêtre ; 0 quand tout est vert
+  if (app.arguments().contains(QStringLiteral("--verifier-poste"))) {
+    const QStringList l = etablissement::verifierPoste();
+    bool vert = true;
+    for (const QString& x : l) {
+      std::printf("%s\n", x.toUtf8().constData());
+      vert &= !x.startsWith(QStringLiteral("ÉCHEC"));
+    }
+    std::fflush(stdout);
+    return vert ? 0 : 1;
+  }
   // Écrivain CSV du noyau réglé une fois pour le poste (10.20)
   prom::reglerCsv(prom::reglagesCsvDepuisTexte(RegistreReglages::instance().valeur(QStringLiteral("echanges/csv")).toString().toStdString()));
 

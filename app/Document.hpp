@@ -88,6 +88,9 @@ public:
   QString dossierHistorique() const;
   static QString poste();
   bool consultation() const { return m_consultation; }
+  // Couche de l'enseignant (16.12) : ses parties verrouillées et la couche elle-même sont refusées avec la raison ;
+  // la fenêtre de l'enseignant lève le refus le temps de poser et sceller la couche (le sceau trahit toute autre pose)
+  void autoriserCoucheEnseignant(bool oui) { m_coucheAutorisee = oui; }
   // Geste sur une conception électronique (glisser) : seule elle est photographiée ; finGeste en fait un pas, et
   // Ctrl+Z pendant le geste ne fait que l'annuler, sans toucher à l'historique (A15)
   void debutGesteConception(int indice);
@@ -203,6 +206,7 @@ private:
   mutable std::optional<std::string> m_instantane;  // vidé à chaque modification du projet
   bool m_geste = false;
   bool m_consultation = false;
+  bool m_coucheAutorisee = false;
   std::function<std::vector<std::string>(const std::string&)> m_suiviSelection;
   Cible m_selection;
   QString m_chemin;
