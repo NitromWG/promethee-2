@@ -219,9 +219,15 @@ void essaisElectroniqueL9(FenetrePrincipale& f, const Verifier& verifier0) {
     demarre |= a->calculEnCours();
     const auto [duree, silence] = attendreCalcul(a);
     const Connectivite k = connectivite(*conception(doc));
-    std::snprintf(t, sizeof t, "travail %.1f ms par image (pire %.1f ms) ; avec la pose par le système %.1f ms (pire %.1f) ; rapide %d, déplacée de %.2f mm", moyenne, pireTravail,
-                  total / 30, pire, rapide ? 1 : 0, bouge);
-    verifier(rapide && moyenne <= 16.7 && std::abs(bouge - 3) < 0.5, "9.4 : sur la carte de 2 000 composants avec sa zone GND, une empreinte glissée reste à 60 images par seconde", t);
+    // Ce que le pointeur a parcouru, en millimètres : ses deux bouts sont des pixels entiers, et à ce zoom un pixel
+    // vaut plus de 0,2 mm (la police et la taille de la vue changent le zoom d'une machine à l'autre) ; l'empreinte
+    // le suit au pas de placement près, et au pixel de la prise près
+    const double pxParMm = vc->versEcran(e + ptMm(1, 0)).x() - vc->versEcran(e).x();
+    const double parcouru = pxParMm > 0 ? (arrivee.x() - depart.x()) / pxParMm : 3;
+    const double tolerance = mm(vc->pasPlacement()) + (pxParMm > 0 ? 1 / pxParMm : 0) + 0.05;
+    std::snprintf(t, sizeof t, "travail %.1f ms par image (pire %.1f ms) ; avec la pose par le système %.1f ms (pire %.1f) ; rapide %d, déplacée de %.2f mm pour %.2f mm parcourus", moyenne,
+                  pireTravail, total / 30, pire, rapide ? 1 : 0, bouge, parcouru);
+    verifier(rapide && moyenne <= 16.7 && std::abs(bouge - parcouru) <= tolerance, "9.4 : sur la carte de 2 000 composants avec sa zone GND, une empreinte glissée reste à 60 images par seconde", t);
     std::snprintf(t, sizeof t, "plan de masse et DRC refaits en fond en %.0f ms ; boucle d'événements jamais muette plus de %.0f ms (relâché en %.0f ms)", duree, silence, relache);
     // Objectif de 10 s, avec la marge de 20 % de la règle des mesures (9.1) : le calcul de fond, à priorité basse,
     // refait aussi les zones, l'ERC et les écarts, et partage la machine avec la saisie qui reste vivante
