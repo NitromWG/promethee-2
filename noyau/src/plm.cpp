@@ -15,6 +15,7 @@
 #include "promethee/fichiers.hpp"
 #include "promethee/hachage.hpp"
 #include "promethee/modele.hpp"
+#include "promethee/projet_partage.hpp"
 
 namespace prom {
 
@@ -286,6 +287,68 @@ bool ecrireEtatsPlm(const std::string& dossierEquipe, const std::vector<EtatPlm>
   } catch (...) {
     return false;
   }
+}
+
+std::vector<TicketPlm> lireTickets(const std::string& dossierEquipe, bool depuis) {
+  std::vector<TicketPlm> r;
+  try {
+    const Json j = Json::parse(lireFichier(cheminFichier(dossierEquipe) / (depuis ? kDossierDepuisPlm : kDossierVersPlm) / "tickets.json"));
+    for (const auto& x : j.value("tickets", Json::array()))
+      r.push_back({x.value("id", std::string()), x.value("distant", std::string()), x.value("titre", std::string()), x.value("texte", std::string()), x.value("etat", std::string("ouvert")),
+                   x.value("objet", std::string()), x.value("auteur", std::string()), x.value("date", std::string())});
+  } catch (...) {
+  }
+  return r;
+}
+
+bool ecrireTickets(const std::string& dossierEquipe, bool depuis, const std::vector<TicketPlm>& v) {
+  try {
+    const fs::path d = cheminFichier(dossierEquipe) / (depuis ? kDossierDepuisPlm : kDossierVersPlm);
+    fs::create_directories(d);
+    Json j = {{"format", "promethee-tickets"}, {"version", 1}, {"tickets", Json::array()}};
+    for (const auto& t : v)
+      j["tickets"].push_back({{"id", t.id}, {"distant", t.distant}, {"titre", t.titre}, {"texte", t.texte}, {"etat", t.etat}, {"objet", t.objet}, {"auteur", t.auteur}, {"date", t.date}});
+    ecrireFichierAtomique(d / "tickets.json", j.dump(1) + "\n");
+    return true;
+  } catch (...) {
+    return false;
+  }
+}
+
+std::vector<TicketPlm> ticketsDepuisRevues(const ecad::ConceptionElec& c, const std::vector<TicketPlm>& connus) {
+  std::vector<TicketPlm> r;
+  for (const auto& rv : revuesDe(c))
+    for (const auto& k : rv.constats) {
+      if (k.etat != "ouvert") continue;
+      TicketPlm t;
+      t.id = "revue-" + std::to_string(rv.numero) + "-" + k.id;
+      t.titre = (k.objet.empty() ? std::string() : k.objet + " : ") + k.texte.substr(0, 80);
+      t.texte = k.texte + " (revue " + std::to_string(rv.numero) + " « " + rv.titre + " », révision " + rv.revision + ")";
+      t.objet = k.objet;
+      t.auteur = k.auteur;
+      t.date = k.date;
+      for (const auto& x : connus)
+        if (x.id == t.id) t.distant = x.distant;
+      r.push_back(t);
+    }
+  return r;
+}
+
+int appliquerTickets(ecad::ConceptionElec& c, const std::vector<TicketPlm>& depuis, const std::string& par, const std::string& date) {
+  int n = 0;
+  for (const auto& t : depuis) {
+    if (t.etat != "clos" || t.id.rfind("revue-", 0) != 0) continue;
+    const std::size_t a = t.id.find('-'), b = t.id.find('-', a + 1);
+    if (b == std::string::npos) continue;
+    const int revue = std::atoi(t.id.substr(a + 1, b - a - 1).c_str());
+    const std::string constat = t.id.substr(b + 1);
+    bool ouvert = false;
+    for (const auto& rv : revuesDe(c))
+      if (rv.numero == revue)
+        for (const auto& k : rv.constats) ouvert = ouvert || (k.id == constat && k.etat == "ouvert");
+    if (ouvert && clore(c, revue, constat, "clos dans le gestionnaire de tickets" + (t.distant.empty() ? std::string() : " (" + t.distant + ")"), par, date)) ++n;
+  }
+  return n;
 }
 
 }  // namespace prom

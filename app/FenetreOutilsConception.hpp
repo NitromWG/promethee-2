@@ -41,6 +41,9 @@ class FenetreOutilsConception : public QWidget {
   QString deposerPlm(const QString& dossierEquipe, const QString& revision, bool modeles = true);  // dossier du dépôt, vide sinon
   // Programme séparé d'accès en ligne (décision D13) lancé sur le dernier dépôt : sortie et code (3 : désactivé)
   int synchroniserPlm(const QString& operation, QString* sortie = nullptr);
+  // Constats ouverts des revues en tickets (« Vers le PLM »), synchronisés par le programme d'accès en ligne ; ceux
+  // clos chez le gestionnaire se closent dans la conception, en un pas. Rend le nombre de constats clos (−1 : échec)
+  int synchroniserTickets(QString* sortie = nullptr);
 
  private:
   QWidget* onglet(const QString& id, const QString& titre, const std::function<QString()>& html, const std::vector<std::pair<QString, std::function<void()>>>& boutons = {});
@@ -58,6 +61,7 @@ class FenetreOutilsConception : public QWidget {
   std::vector<prom::DonneeAchat> m_donneesAchat;  // données d'achat lues (12.18)
   void ajouterOnglets034L19();
   void majTableauBord();
+  int lancerEnLigne(const QStringList& args, QString* sortie);
   prom::ecad::TableauBordNomenclature m_tableauBord;
   prom::ecad::ListeAchat m_listeAchat;
   int m_cartesAchat = 0;

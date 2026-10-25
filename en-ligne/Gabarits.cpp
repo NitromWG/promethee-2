@@ -15,7 +15,7 @@ struct Integre {
   const char* json;
 };
 const Integre kGabarits[] = {
-    {"simule", R"({
+    {"simule", R"G({
   "nom": "simule",
   "description": "Serveur PLM simulé des essais (tests/plm_simule.py) : dépôt, réservation, restitution en révision suivante",
   "authentification": "bearer",
@@ -27,16 +27,52 @@ const Integre kGabarits[] = {
                   "corps": "{\"utilisateur\": \"{utilisateur}\", \"manifeste\": {manifeste}, \"fichiers\": {fichiers}}"},
     "consulter": {"methode": "GET", "chemin": "/api/articles/{numero}"}
   }
-})"},
-    {"distributeur-simule", R"({
+})G"},
+    {"distributeur-simule", R"G({
   "nom": "distributeur-simule",
   "description": "Distributeur simulé des essais (tests/plm_simule.py) : offres d'une référence fabricant",
   "authentification": "bearer",
   "operations": {
     "offres": {"methode": "GET", "chemin": "/api/offres/{mpn}"}
   }
-})"},
-    {"windchill", R"({
+})G"},
+    {"tickets-simule", R"G({
+  "nom": "tickets-simule",
+  "description": "Gestionnaire de tickets simulé des essais (tests/plm_simule.py)",
+  "authentification": "bearer",
+  "operations": {
+    "creer": {"methode": "POST", "chemin": "/api/tickets",
+              "corps": "{\"reference\": \"{id}\", \"titre\": \"{titre}\", \"texte\": \"{texte}\", \"objet\": \"{objet}\", \"auteur\": \"{auteur}\"}",
+              "champs": {"id": "id"}},
+    "lister": {"methode": "GET", "chemin": "/api/tickets", "liste": "tickets",
+               "champs": {"id": "id", "reference": "reference", "titre": "titre", "etat": "etat"}, "clos": ["clos"]}
+  }
+})G"},
+    {"gitlab", R"G({
+  "nom": "gitlab",
+  "description": "GitLab : tickets du projet {projet} étiquetés « promethee » (jeton personnel en en-tête PRIVATE-TOKEN)",
+  "authentification": "aucune",
+  "operations": {
+    "creer": {"methode": "POST", "chemin": "/api/v4/projects/{projet}/issues",
+              "corps": "{\"title\": \"{titre}\", \"description\": \"{texte}\\n\\nProméthée : {id}\", \"labels\": \"promethee,{id}\"}",
+              "entetes": {"PRIVATE-TOKEN": "{jeton}"}, "champs": {"id": "iid"}},
+    "lister": {"methode": "GET", "chemin": "/api/v4/projects/{projet}/issues?labels=promethee&per_page=100", "liste": "",
+               "entetes": {"PRIVATE-TOKEN": "{jeton}"}, "champs": {"id": "iid", "reference": "labels.1", "titre": "title", "etat": "state"}, "clos": ["closed"]}
+  }
+})G"},
+    {"jira", R"G({
+  "nom": "jira",
+  "description": "Jira : tickets du projet {projet} étiquetés « promethee »",
+  "authentification": "basic",
+  "operations": {
+    "creer": {"methode": "POST", "chemin": "/rest/api/2/issue",
+              "corps": "{\"fields\": {\"project\": {\"key\": \"{projet}\"}, \"summary\": \"{titre}\", \"description\": \"{texte}\", \"issuetype\": {\"name\": \"Task\"}, \"labels\": [\"promethee\", \"{id}\"]}}",
+              "champs": {"id": "key"}},
+    "lister": {"methode": "GET", "chemin": "/rest/api/2/search?jql=labels%3Dpromethee&fields=summary,status,labels", "liste": "issues",
+               "champs": {"id": "key", "reference": "fields.labels.1", "titre": "fields.summary", "etat": "fields.status.name"}, "clos": ["Done", "Closed", "Terminé", "Fermé"]}
+  }
+})G"},
+    {"windchill", R"G({
   "nom": "windchill",
   "description": "PTC Windchill, Windchill REST Services (OData, domaine ProdMgmt) ; jeton CSRF demandé par PTC/GetCSRFToken() selon la version",
   "authentification": "basic",
@@ -50,8 +86,8 @@ const Integre kGabarits[] = {
                   "corps": "{\"CheckInNote\": \"Révision publiée par Prométhée\"}", "revision": "Revision", "etat": "State.Display", "entetes": {"CSRF_NONCE": "{csrf}"}},
     "consulter": {"methode": "GET", "chemin": "/Windchill/servlet/odata/ProdMgmt/Parts?$filter=Number%20eq%20'{numero}'", "revision": "value.0.Revision", "etat": "value.0.State.Display"}
   }
-})"},
-    {"teamcenter", R"({
+})G"},
+    {"teamcenter", R"G({
   "nom": "teamcenter",
   "description": "Siemens Teamcenter, services REST (Teamcenter Service-Oriented Architecture) : création, réservation (checkout), restitution (checkin), révision",
   "authentification": "basic",
@@ -65,8 +101,8 @@ const Integre kGabarits[] = {
     "consulter": {"methode": "POST", "chemin": "/tc/RestServices/Core-2007-01-DataManagement/getItemFromId",
                   "corps": "{\"body\": {\"infos\": [{\"itemId\": \"{numero}\"}]}}", "revision": "output.0.itemRevOutput.0.itemRevision.props.item_revision_id.dbValues.0"}
   }
-})"},
-    {"3dexperience", R"({
+})G"},
+    {"3dexperience", R"G({
   "nom": "3dexperience",
   "description": "Dassault Systèmes 3DEXPERIENCE, services web Engineering (dseng) et Lifecycle (dslc) : création, réservation, révision",
   "authentification": "bearer",
@@ -80,8 +116,8 @@ const Integre kGabarits[] = {
                   "corps": "{\"data\": [{\"id\": \"{identifiant}\", \"type\": \"VPMReference\"}]}", "entetes": {"ENO_CSRF_TOKEN": "{csrf}"}},
     "consulter": {"methode": "GET", "chemin": "/resources/v1/modeler/dseng/dseng:EngItem/{identifiant}", "revision": "member.0.revision", "etat": "member.0.state"}
   }
-})"},
-    {"agile", R"({
+})G"},
+    {"agile", R"G({
   "nom": "agile",
   "description": "Oracle Agile PLM, interface REST : articles (items), ordres de modification, révision",
   "authentification": "basic",
@@ -92,7 +128,7 @@ const Integre kGabarits[] = {
     "restituer": {"methode": "POST", "chemin": "/Agile/rest/items/{numero}/release", "corps": "{\"comment\": \"Révision publiée par Prométhée\"}", "revision": "revision", "etat": "lifecyclePhase"},
     "consulter": {"methode": "GET", "chemin": "/Agile/rest/items/{numero}", "revision": "revision", "etat": "lifecyclePhase"}
   }
-})"}};
+})G"}};
 }  // namespace
 
 QStringList gabaritsIntegres() {

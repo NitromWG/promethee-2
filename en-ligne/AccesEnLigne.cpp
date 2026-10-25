@@ -111,6 +111,10 @@ std::optional<Gabarit> lireGabarit(const QByteArray& json, QString* erreur) {
     op.champEtat = x.value(QStringLiteral("etat")).toString(QStringLiteral("etat"));
     const QJsonObject h = x.value(QStringLiteral("entetes")).toObject();
     for (auto k = h.begin(); k != h.end(); ++k) op.entetes[k.key()] = k.value().toString();
+    op.liste = x.value(QStringLiteral("liste")).toString();
+    const QJsonObject ch = x.value(QStringLiteral("champs")).toObject();
+    for (auto k = ch.begin(); k != ch.end(); ++k) op.champs[k.key()] = k.value().toString();
+    for (const QJsonValue& c : x.value(QStringLiteral("clos")).toArray()) op.clos << c.toString();
     g.operations[it.key()] = op;
   }
   if (g.nom.isEmpty() || g.operations.empty()) {
@@ -161,17 +165,18 @@ QString remplir(QString modele, const std::map<QString, QString>& valeurs, bool 
   }
   return modele;
 }
-QString champ(const QJsonObject& o, const QString& chemin) {
-  // Chemin pointé (« value.0.Version ») dans la réponse
-  QJsonValue v = o;
+QString champ(const QJsonObject& o, const QString& chemin) { return valeurJson(o, chemin); }
+}  // namespace
+
+QString valeurJson(const QJsonValue& racine, const QString& chemin) {
+  QJsonValue v = racine;
   for (const QString& p : chemin.split(QLatin1Char('.'), Qt::SkipEmptyParts)) {
     bool nombre = false;
     const int i = p.toInt(&nombre);
     v = nombre && v.isArray() ? v.toArray().at(i) : v.toObject().value(p);
   }
-  return v.isString() ? v.toString() : v.isDouble() ? QString::number(v.toDouble()) : QString();
+  return v.isString() ? v.toString() : v.isDouble() ? QString::number(v.toDouble(), 'g', 15) : QString();
 }
-}  // namespace
 
 ReponsePlm executer(const Reglages& r, const QString& fonction, const Gabarit& g, const QString& operation, const std::map<QString, QString>& valeurs) {
   ReponsePlm rep;
@@ -211,6 +216,7 @@ ReponsePlm executer(const Reglages& r, const QString& fonction, const Gabarit& g
   reponse->deleteLater();
   const QJsonDocument d = QJsonDocument::fromJson(lu);
   if (d.isObject()) rep.corps = d.object();
+  else if (d.isArray()) rep.tableau = d.array();
   rep.ok = rep.statut >= 200 && rep.statut < 300;
   if (!rep.ok && rep.erreur.isEmpty()) rep.erreur = QStringLiteral("le serveur a répondu %1 %2").arg(rep.statut).arg(rep.corps.value(QStringLiteral("erreur")).toString());
   rep.revision = champ(rep.corps, op.champRevision);

@@ -14,6 +14,9 @@
 #include <vector>
 
 namespace prom {
+namespace ecad {
+struct ConceptionElec;
+}
 
 struct Projet;
 
@@ -61,5 +64,20 @@ struct EtatPlm {
 std::vector<EtatPlm> lireEtatsPlm(const std::string& dossierEquipe);  // « Depuis le PLM/etats.json »
 std::string texteEtatsPlm(const std::vector<EtatPlm>& v);
 bool ecrireEtatsPlm(const std::string& dossierEquipe, const std::vector<EtatPlm>& v);
+
+// ---------- Tickets, synchronisés dans les deux sens par le programme d'accès en ligne ----------
+// « Vers le PLM/tickets.json » : ceux que Prométhée ouvre (constats des revues formelles de 12.13) ; « Depuis le
+// PLM/tickets.json » : ceux que le gestionnaire de tickets rend, avec leur état et leur numéro chez lui
+struct TicketPlm {
+  std::string id, distant, titre, texte, etat = "ouvert", objet, auteur, date;
+  friend bool operator==(const TicketPlm&, const TicketPlm&) = default;
+};
+std::vector<TicketPlm> lireTickets(const std::string& dossierEquipe, bool depuisLePlm);
+bool ecrireTickets(const std::string& dossierEquipe, bool depuisLePlm, const std::vector<TicketPlm>& v);
+// Constats ouverts des revues de la conception, un ticket chacun (« revue-<n>-<constat> ») ; les numéros chez le
+// gestionnaire déjà connus (« connus ») sont gardés
+std::vector<TicketPlm> ticketsDepuisRevues(const ecad::ConceptionElec& c, const std::vector<TicketPlm>& connus = {});
+// Tickets clos chez le gestionnaire : leurs constats se closent dans la conception ; rend le nombre de constats clos
+int appliquerTickets(ecad::ConceptionElec& c, const std::vector<TicketPlm>& depuis, const std::string& par, const std::string& date);
 
 }  // namespace prom

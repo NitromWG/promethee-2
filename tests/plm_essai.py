@@ -39,7 +39,8 @@ def reglages(chemin, port, actif, plm, base=""):
         json.dump({"format": "promethee-acces-en-ligne", "version": 1, "actif": actif, "journal": "journal-connexions.csv",
                    "fonctions": {"plm": {"actif": plm, "adaptateur": "simule", "adresse": f"http://127.0.0.1:{port}", "utilisateur": "evan", "jeton": "secret"},
                                  "distributeurs": {"actif": plm, "adaptateur": "distributeur-simule", "adresse": f"http://127.0.0.1:{port}", "jeton": "secret"},
-                                 "erp": {"actif": plm, "pilote": "QSQLITE", "base": base, "requete": "SELECT mpn, distributeur, stock, delai, agree, risque, prix FROM achats"}}}, f)
+                                 "erp": {"actif": plm, "pilote": "QSQLITE", "base": base, "requete": "SELECT mpn, distributeur, stock, delai, agree, risque, prix FROM achats"},
+                                 "tickets": {"actif": plm, "adaptateur": "tickets-simule", "adresse": f"http://127.0.0.1:{port}", "jeton": "secret"}}}, f)
 
 
 def lignes(chemin):
@@ -127,14 +128,35 @@ def main():
             print("ERP ignoré : Qt SQL ou son pilote SQLite absent")
         elif code != 0 or len(achats) != 2 or "Stock interne" not in achats[1]:
             echecs.append(f"ERP : code {code}, {achats}, {sortie.strip()}")
+        # Tickets dans les deux sens : créés chez le gestionnaire, un clos là-bas revient clos
+        os.makedirs(os.path.join(equipe, "Vers le PLM"), exist_ok=True)
+        with open(os.path.join(equipe, "Vers le PLM", "tickets.json"), "w", encoding="utf-8") as f:
+            json.dump({"format": "promethee-tickets", "version": 1, "tickets": [{"id": "revue-1-c1", "titre": "R3 : valeur à revoir", "etat": "ouvert"},
+                                                                                {"id": "revue-1-c2", "titre": "U1 : découplage manquant", "etat": "ouvert"}]}, f)
+        reglages(fichierReglages, port, False, False, base)
+        code, sortie = lancer("--equipe", equipe, "tickets", "synchroniser")
+        if code != 3:
+            echecs.append(f"tickets désactivés : code {code}, {sortie.strip()}")
+        reglages(fichierReglages, port, True, True, base)
+        code, sortie = lancer("--equipe", equipe, "tickets", "synchroniser")
+        if code != 0 or "2 ticket(s) créé(s)" not in sortie:
+            echecs.append(f"tickets : code {code}, {sortie.strip()}")
+        import urllib.request
+        urllib.request.urlopen(urllib.request.Request(f"http://127.0.0.1:{port}/api/tickets/T-2/clore", data=b"{}", method="POST", headers={"Authorization": "Bearer secret"})).read()
+        code, sortie = lancer("--equipe", equipe, "tickets", "synchroniser")
+        depuis = json.load(open(os.path.join(equipe, "Depuis le PLM", "tickets.json"), encoding="utf-8"))["tickets"]
+        etats = {t["id"]: t["etat"] for t in depuis}
+        locaux = json.load(open(os.path.join(equipe, "Vers le PLM", "tickets.json"), encoding="utf-8"))["tickets"]
+        if code != 0 or "0 ticket(s) créé(s)" not in sortie or etats != {"revue-1-c1": "ouvert", "revue-1-c2": "clos"} or [t["distant"] for t in locaux] != ["T-1", "T-2"]:
+            echecs.append(f"tickets relus : code {code}, {etats}, {sortie.strip()}")
         # Dépôt altéré : refusé avant toute connexion
         with open(os.path.join(depotA, "nomenclature.csv"), "a", encoding="utf-8") as f:
             f.write("ajout\r\n")
         code, sortie = lancer("plm", "deposer", depotA)
         if code != 5:
             echecs.append(f"dépôt altéré : code {code}, {sortie.strip()}")
-        if len(lignes(journalServeur)) != 5:
-            echecs.append("un dépôt altéré est parti")
+        if len(lignes(journalServeur)) != 10:  # 4 PLM, 1 distributeur, 3 + 1 tickets, 1 clôture faite par l'essai
+            echecs.append(f"un dépôt altéré est parti ({len(lignes(journalServeur))} connexions)")
     finally:
         serveur.terminate()
         serveur.wait(timeout=10)

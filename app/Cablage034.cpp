@@ -24,10 +24,16 @@
 #include <QTableWidget>
 #include <QVBoxLayout>
 
+#include <QPainter>
+
+#include <gp_Ax2.hxx>
+
 #include "AtelierElectrique.hpp"
 #include "Document.hpp"
 #include "VueFaisceau.hpp"
+#include "promethee/dessin.hpp"
 #include "promethee/fichiers.hpp"
+#include "promethee/geometrie.hpp"
 #include "promethee/modele.hpp"
 
 using namespace prom::elec;
@@ -52,6 +58,61 @@ QPushButton* bouton(const QString& texte, const QString& nom, QWidget* parent, c
   return b;
 }
 }  // namespace
+
+// Feuille de topologie dessinée à l'échelle : espaces (couleur par espace), passages ouverts et fermés, route trouvée
+class VueTopologieCablage : public QWidget {
+ public:
+  explicit VueTopologieCablage(QWidget* parent = nullptr) : QWidget(parent) {
+    setMinimumHeight(180);
+    setObjectName(QStringLiteral("vueTopologie"));
+  }
+  void montrer(const Topologie& t, const RouteTopologie& r) {
+    m_t = t;
+    m_r = r;
+    update();
+  }
+  const Topologie& topologie() const { return m_t; }
+
+ protected:
+  void paintEvent(QPaintEvent*) override {
+    QPainter g(this);
+    g.setRenderHint(QPainter::Antialiasing);
+    g.fillRect(rect(), QColor(0xFA, 0xFB, 0xFE));
+    if (m_t.points.empty()) {
+      g.setPen(QColor(0x6B, 0x73, 0x93));
+      g.drawText(rect(), Qt::AlignCenter, QStringLiteral("« Router sur la topologie… » : la feuille de topologie se dessine ici, à l’échelle"));
+      return;
+    }
+    double x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18;
+    for (const auto& p : m_t.points) x0 = std::min(x0, p.x), y0 = std::min(y0, p.y), x1 = std::max(x1, p.x), y1 = std::max(y1, p.y);
+    const double k = std::min((width() - 40) / std::max(1.0, x1 - x0), (height() - 40) / std::max(1.0, y1 - y0));  // une seule échelle : à l'échelle
+    auto P = [&](const PointTopologie& p) { return QPointF(20 + (p.x - x0) * k, height() - 20 - (p.y - y0) * k); };
+    std::map<std::string, const PointTopologie*> pts;
+    for (const auto& p : m_t.points) pts[p.id] = &p;
+    for (const auto& pa : m_t.passages) {
+      if (!pts.count(pa.a) || !pts.count(pa.b)) continue;
+      QPen pen(pa.ouvert ? QColor(0x8D, 0x99, 0xAE) : QColor(0xB9, 0x1C, 0x1C), 2);
+      if (!pa.ouvert) pen.setStyle(Qt::DashLine);
+      g.setPen(pen);
+      g.drawLine(P(*pts[pa.a]), P(*pts[pa.b]));
+    }
+    g.setPen(QPen(QColor(0x1D, 0x4E, 0xD8), 3.5));
+    for (std::size_t i = 1; i < m_r.points.size(); ++i)
+      if (pts.count(m_r.points[i - 1]) && pts.count(m_r.points[i])) g.drawLine(P(*pts[m_r.points[i - 1]]), P(*pts[m_r.points[i]]));
+    for (const auto& p : m_t.points) {
+      const QColor c = QColor::fromHsv(static_cast<int>(std::hash<std::string>{}(p.espace) % 360), 140, 200);
+      g.setPen(Qt::NoPen);
+      g.setBrush(c);
+      g.drawEllipse(P(p), 4.5, 4.5);
+      g.setPen(QColor(0x23, 0x2A, 0x45));
+      g.drawText(P(p) + QPointF(6, -6), QString::fromStdString(p.id + (p.espace.empty() ? std::string() : " (" + p.espace + ")")));
+    }
+  }
+
+ private:
+  Topologie m_t;
+  RouteTopologie m_r;
+};
 
 FenetreCablage::FenetreCablage(AtelierElectrique& a, QWidget* parent) : QWidget(parent, Qt::Window), m_atelier(a) {
   setObjectName(QStringLiteral("fenetreCablage"));
@@ -564,6 +625,23 @@ void FenetreCablage::construirePlanche(QWidget* page) {
     const QString format = QInputDialog::getItem(this, QStringLiteral("Format"), QStringLiteral("Pages :"), {QStringLiteral("A4"), QStringLiteral("A3"), QStringLiteral("A2")}, 0, false, &ok);
     if (ok) exporterPages(f, format);
   }));
+  sorties->addWidget(bouton(QStringLiteral("Dessin du connecteur (modèle 3D)…"), QStringLiteral("dessinConnecteur"), page, [this] {
+    const auto h = courant();
+    if (!h || h->connecteurs.empty()) return;
+    QStringList reperes;
+    for (const auto& k : h->connecteurs) reperes << q(k.repere);
+    bool ok = false;
+    const QString r = QInputDialog::getItem(this, QStringLiteral("Dessin du connecteur"), QStringLiteral("Connecteur :"), reperes, 0, false, &ok);
+    if (!ok) return;
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Modèle 3D du connecteur"), {}, QStringLiteral("STEP (*.step *.stp)"));
+    if (f.isEmpty()) return;
+    const QString vue = QInputDialog::getItem(this, QStringLiteral("Dessin du connecteur"), QStringLiteral("Vue :"), {QStringLiteral("face"), QStringLiteral("côté")}, 0, false, &ok);
+    if (!ok) return;
+    const double rotation = QInputDialog::getDouble(this, QStringLiteral("Dessin du connecteur"), QStringLiteral("Rotation (°) :"), 0, -360, 360, 0, &ok);
+    if (!ok) return;
+    const int rep = QInputDialog::getInt(this, QStringLiteral("Dessin du connecteur"), QStringLiteral("Répétitions :"), 1, 1, 20, 1, &ok);
+    if (ok) dessinerConnecteur(r, f, vue, rotation, rep);
+  }));
   sorties->addWidget(bouton(QStringLiteral("Coupe du tronçon (SVG)…"), QStringLiteral("exporterCoupe"), page, [this] {
     const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Coupe"), QStringLiteral("coupe.svg"), QStringLiteral("SVG (*.svg)"));
     if (!f.isEmpty()) exporterCoupe(std::max(0, m_troncons->currentRow()), f);
@@ -669,11 +747,68 @@ bool FenetreCablage::exporterCoupe(int troncon, const QString& chemin) {
   return ecrire(this, chemin, svgCoupe(*h, m_bibliotheque, h->troncons[static_cast<std::size_t>(troncon)].uuid));
 }
 
+bool FenetreCablage::dessinerConnecteur(const QString& repere, const QString& modele, const QString& vue, double rotation, int repetitions) {
+  TopoDS_Shape forme;
+  try {
+    forme = prom::lireStep(s(modele));
+  } catch (const std::exception& e) {
+    m_etat->setText(QString::fromUtf8(e.what()).toHtmlEscaped());
+    return false;
+  }
+  if (forme.IsNull()) return false;
+  // Projection de la mise en plan : arêtes vues et cachées, de face (le connecteur vu de dessus) ou de côté
+  const gp_Ax2 ax = vue == QStringLiteral("côté") ? gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, -1, 0), gp_Dir(1, 0, 0)) : gp_Ax2(gp_Pnt(0, 0, 0), gp_Dir(0, 0, 1), gp_Dir(1, 0, 0));
+  const auto traits = prom::projeter(forme, ax, true, false, false);
+  double x0 = 1e18, y0 = 1e18, x1 = -1e18, y1 = -1e18;
+  for (const auto& t : traits)
+    for (const auto& [x, y] : t.points) x0 = std::min(x0, x), y0 = std::min(y0, y), x1 = std::max(x1, x), y1 = std::max(y1, y);
+  if (x1 < x0) return false;
+  DessinConnecteur d;
+  d.vue = s(vue);
+  d.rotation = rotation;
+  d.repetitions = std::max(1, repetitions);
+  d.largeur = x1 - x0;
+  d.hauteur = y1 - y0;
+  const double cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  for (const auto& t : traits) {
+    if (t.type != prom::TypeTrait::Vu && t.type != prom::TypeTrait::Cache) continue;
+    std::vector<std::pair<double, double>> l;
+    for (const auto& [x, y] : t.points) l.push_back({x - cx, y - cy});
+    (t.type == prom::TypeTrait::Cache ? d.caches : d.vus).push_back(l);
+  }
+  bool fait = modifier(
+      [&](Cablage& h, ProjetElectrique&) {
+        ConnecteurCablage* k = h.connecteur(s(repere));
+        if (!k) return;
+        // Numéros des cavités répartis en rangées dans le contour projeté
+        const int n = static_cast<int>(k->cavites.size());
+        const int colonnes = std::max(1, static_cast<int>(std::ceil(std::sqrt(n * std::max(0.2, d.largeur / std::max(0.1, d.hauteur))))));
+        const int rangees = std::max(1, (n + colonnes - 1) / colonnes);
+        DessinConnecteur x = d;
+        for (int i = 0; i < n; ++i)
+          x.cavites.push_back({k->cavites[static_cast<std::size_t>(i)].numero,
+                               {-d.largeur / 2 + (i % colonnes + 0.5) * d.largeur / colonnes, d.hauteur / 2 - (i / colonnes + 0.5) * d.hauteur / rangees}});
+        k->dessin = x;
+      },
+      QStringLiteral("Dessin du connecteur %1").arg(repere));
+  m_etat->setText(QStringLiteral("%1 : %2 trait(s) vus et %3 caché(s) projetés depuis le modèle 3D").arg(repere).arg(d.vus.size()).arg(d.caches.size()));
+  return fait;
+}
+
 // ======================================================================================================================
 // Longueurs et circuits
 // ======================================================================================================================
 void FenetreCablage::construireLongueurs(QWidget* page) {
   auto* l = new QVBoxLayout(page);
+  m_vueTopologie = new VueTopologieCablage(page);
+  l->addWidget(m_vueTopologie, 1);
+  l->addWidget(bouton(QStringLiteral("Faisceau tracé en 3D, mis à plat…"), QStringLiteral("mettreAPlat"), page, [this] {
+    const QString f = QFileDialog::getOpenFileName(this, QStringLiteral("Faisceau tracé en 3D"), {}, QStringLiteral("Branches (*.json)"));
+    if (f.isEmpty()) return;
+    QStringList alertes;
+    const int n = mettreAPlat(f, &alertes);
+    m_resultat->setText(QStringLiteral("%1 tronçon(s) mis à plat ; longueurs de la 3D gardées%2").arg(n).arg(alertes.isEmpty() ? QString() : QStringLiteral(" — ") + alertes.join(QStringLiteral(" ; "))));
+  }));
   auto* f = new QFormLayout;
   m_cable3D = new QComboBox;
   m_cable3D->setObjectName(QStringLiteral("cable3D"));
@@ -791,10 +926,36 @@ bool FenetreCablage::routerTopologie(const QString& fichier, const QString& cabl
     return false;
   }
   if (longueur) *longueur = r.longueur;
+  if (m_vueTopologie) m_vueTopologie->montrer(*t, r);
   const auto h = courant();
   m_atelier.modifierProjetNomme([&](ProjetElectrique& pe) { longueurDepuisTopologie(pe, s(cable), r, h ? h->surlongueur : 0); }, QStringLiteral("Longueur venue de la topologie"));
   recharger();
   return true;
+}
+
+int FenetreCablage::mettreAPlat(const QString& fichierBranches, QStringList* alertes) {
+  std::string erreur;
+  std::optional<std::vector<Branche3D>> b;
+  try {
+    b = lireBranches3D(prom::lireFichier(prom::cheminFichier(s(fichierBranches))), &erreur);
+  } catch (const std::exception& e) {
+    erreur = e.what();
+  }
+  if (!b) {
+    m_resultat->setText(QStringLiteral("Faisceau 3D illisible : ") + q(erreur).toHtmlEscaped());
+    return 0;
+  }
+  int n = 0;
+  std::vector<std::string> a;
+  modifier(
+      [&](Cablage& h, ProjetElectrique&) {
+        n = prom::elec::mettreAPlat(h, *b, &a);
+        prom::elec::dessinerPlanche(h, m_bibliotheque, false);
+      },
+      QStringLiteral("Faisceau 3D mis à plat"));
+  if (alertes)
+    for (const auto& x : a) *alertes << q(x);
+  return n;
 }
 
 BilanContinu FenetreCablage::circuit(const CircuitContinu& c) {

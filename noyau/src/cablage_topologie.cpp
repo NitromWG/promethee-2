@@ -199,6 +199,51 @@ int longueurDepuis3D(Cablage& h, const std::string& cable, double longueurMm) {
   return n;
 }
 
+int mettreAPlat(Cablage& h, const std::vector<Branche3D>& branches, std::vector<std::string>* alertes) {
+  h.noeuds.clear();
+  h.troncons.clear();
+  std::map<std::string, std::string> uuidDe;
+  auto noeud = [&](const std::string& nom) {
+    if (const auto it = uuidDe.find(nom); it != uuidDe.end()) return it->second;
+    NoeudCablage n{ecad::nouvelUuid(), nom, h.connecteur(nom) ? nom : std::string(), 0, 0};
+    h.noeuds.push_back(n);
+    uuidDe[nom] = n.uuid;
+    return n.uuid;
+  };
+  for (const auto& b : branches) {
+    const Route3D r = routerEn3D(b.points, b.rayon);
+    if (alertes)
+      for (const auto& a : r.alertes) alertes->push_back(b.a + "–" + b.b + " : " + a);
+    const std::string na = noeud(b.a), nb = noeud(b.b);
+    h.troncons.push_back({ecad::nouvelUuid(), na, nb, r.longueur, false});
+  }
+  longueursDepuisPlanche(h);
+  for (auto& f : h.fils)
+    if (f.provenance == ProvenanceLongueur::Planche) f.provenance = ProvenanceLongueur::Trace3D;
+  for (auto& w : h.cables)
+    if (w.provenance == ProvenanceLongueur::Planche) w.provenance = ProvenanceLongueur::Trace3D;
+  return static_cast<int>(h.troncons.size());
+}
+
+std::optional<std::vector<Branche3D>> lireBranches3D(const std::string& json, std::string* erreur) {
+  try {
+    const auto j = nlohmann::ordered_json::parse(json);
+    std::vector<Branche3D> r;
+    for (const auto& b : j.at("branches")) {
+      Branche3D x;
+      x.a = b.at("a").get<std::string>();
+      x.b = b.at("b").get<std::string>();
+      x.rayon = b.value("rayon", 0.0);
+      for (const auto& p : b.at("points")) x.points.push_back({p.at(0).get<double>(), p.at(1).get<double>(), p.at(2).get<double>()});
+      r.push_back(std::move(x));
+    }
+    return r;
+  } catch (const std::exception& e) {
+    if (erreur) *erreur = e.what();
+    return std::nullopt;
+  }
+}
+
 std::vector<double> analyseNodale(int noeuds, const std::vector<ElementNodal>& elements, int noeudSource, double tensionSource) {
   // Analyse nodale modifiée : n tensions de nœud et le courant de la source de tension
   const int n = noeuds + (noeudSource > 0 ? 1 : 0);

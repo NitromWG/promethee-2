@@ -478,13 +478,43 @@ std::vector<Trace> tracer(const Cablage& h, const BibliothequeCablage& b, const 
       texte(n.x + 3, n.y - 3, n.nom, 2.5, 0, -1);
       continue;
     }
-    Trace r;
-    r.genre = Trace::Genre::Rect;
-    r.x0 = n.x - 7, r.y0 = n.y - 5, r.x1 = n.x + 7, r.y1 = n.y + 5, r.couleur = "#111827", r.epaisseur = 0.35, r.classe = "connecteur";
-    v.push_back(r);
-    texte(n.x, n.y + 1.2, n.connecteur, 3.2, 0, 0, true);
-    // Tableau des cavités : à gauche d'un nœud de gauche, à droite sinon
     const ConnecteurCablage* k = h.connecteur(n.connecteur);
+    if (k && k->dessin && !k->dessin->vus.empty()) {
+      // Projection du modèle 3D, tournée et répétée, numéros de cavités compris
+      const DessinConnecteur& d = *k->dessin;
+      const double a = d.rotation * PI / 180, ca = std::cos(a), sa = std::sin(a);
+      const double pas = std::max(d.largeur, 1.0) + 3;
+      for (int rep = 0; rep < std::max(1, d.repetitions); ++rep) {
+        const double dx = (rep - (std::max(1, d.repetitions) - 1) / 2.0) * pas;
+        auto P = [&](const std::pair<double, double>& p) {
+          // Dessin en y vers le haut (celui de la projection), tourné dans le sens direct ; la planche a y vers le bas
+          const double x = p.first + dx, y = p.second;
+          return std::make_pair(n.x + x * ca - y * sa, n.y - (x * sa + y * ca));
+        };
+        for (const bool cache : {true, false})
+          for (const auto& l : cache ? d.caches : d.vus)
+            for (std::size_t i = 1; i < l.size(); ++i) {
+              const auto p0 = P(l[i - 1]), p1 = P(l[i]);
+              Trace t;
+              t.x0 = p0.first, t.y0 = p0.second, t.x1 = p1.first, t.y1 = p1.second, t.epaisseur = cache ? 0.18 : 0.35, t.couleur = cache ? "#6B7280" : "#111827";
+              t.tirets = cache;
+              t.classe = "dessinConnecteur";
+              v.push_back(t);
+            }
+        for (const auto& [numero, p] : d.cavites) {
+          const auto q = P(p);
+          texte(q.first, q.second + 0.8, numero, 1.8, 0, 0, false, "#1D4ED8");
+        }
+      }
+      texte(n.x, n.y - std::max(d.hauteur, 6.0) / 2 - 2.5, n.connecteur, 3.2, 0, 0, true);
+    } else {
+      Trace r;
+      r.genre = Trace::Genre::Rect;
+      r.x0 = n.x - 7, r.y0 = n.y - 5, r.x1 = n.x + 7, r.y1 = n.y + 5, r.couleur = "#111827", r.epaisseur = 0.35, r.classe = "connecteur";
+      v.push_back(r);
+      texte(n.x, n.y + 1.2, n.connecteur, 3.2, 0, 0, true);
+    }
+    // Tableau des cavités : à gauche d'un nœud de gauche, à droite sinon
     if (!k) continue;
     std::vector<std::vector<std::string>> lignes;
     for (const auto& c : k->cavites) {
@@ -521,7 +551,7 @@ std::string svgTraces(const std::vector<Trace>& v) {
       case Trace::Genre::Ligne:
         o << "<line" << (t.classe.empty() ? "" : " class=\"" + t.classe + "\"") << (t.donnees.empty() ? "" : " data-longueur=\"" + t.donnees + "\"") << " x1=\"" << n3(t.x0) << "\" y1=\"" << n3(t.y0)
           << "\" x2=\"" << n3(t.x1) << "\" y2=\"" << n3(t.y1) << "\" stroke=\"" << t.couleur << "\" stroke-width=\"" << n3(t.epaisseur) << "\" stroke-linecap=\"" << (t.classe == "troncon" ? "round" : "butt")
-          << "\"" << (t.opacite < 1 ? " stroke-opacity=\"" + n3(t.opacite) + "\"" : std::string()) << "/>\n";
+          << "\"" << (t.opacite < 1 ? " stroke-opacity=\"" + n3(t.opacite) + "\"" : std::string()) << (t.tirets ? " stroke-dasharray=\"1.5 0.6\"" : "") << "/>\n";
         break;
       case Trace::Genre::Cercle:
         o << "<circle cx=\"" << n3(t.x0) << "\" cy=\"" << n3(t.y0) << "\" r=\"" << n3(t.r) << "\" fill=\"" << (t.remplir ? t.couleur : std::string("none")) << "\" stroke=\"" << t.couleur
@@ -545,7 +575,11 @@ void pdfTraces(pdfv::Document& p, const std::vector<Trace>& v) {
     p.couleurHex(t.couleur);
     p.epaisseur(t.epaisseur);
     switch (t.genre) {
-      case Trace::Genre::Ligne: p.ligne(t.x0, t.y0, t.x1, t.y1); break;
+      case Trace::Genre::Ligne:
+        if (t.tirets) p.tirets(true);
+        p.ligne(t.x0, t.y0, t.x1, t.y1);
+        if (t.tirets) p.tirets(false);
+        break;
       case Trace::Genre::Cercle: p.cercle(t.x0, t.y0, t.r, t.remplir); break;
       case Trace::Genre::Rect: p.rectangle(t.x0, t.y0, t.x1 - t.x0, t.y1 - t.y0, false); break;
       case Trace::Genre::Texte: p.texte(t.x0, t.y0, t.texte, t.taille, t.gras, -t.angle, t.alignement); break;

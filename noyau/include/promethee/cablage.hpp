@@ -128,6 +128,18 @@ struct CaviteCablage {
   double denudage = 0, recul = 0;     // mm (0 : ceux du contact)
   friend bool operator==(const CaviteCablage&, const CaviteCablage&) = default;
 };
+// Dessin d'un connecteur sur la planche (19.11) : projection en lignes cachées de son modèle 3D (celle de la mise en
+// plan, de face ou de côté), en mm, y vers le haut, centrée sur son point d'attache ; tournée et répétée à volonté,
+// numéros de cavités compris. Calculée par l'interface (module de géométrie) et gardée avec le connecteur.
+struct DessinConnecteur {
+  std::string vue = "face";  // « face », « côté »
+  std::vector<std::vector<std::pair<double, double>>> vus, caches;
+  std::vector<std::pair<std::string, std::pair<double, double>>> cavites;  // numéro → position
+  double rotation = 0;       // degrés, sens direct
+  int repetitions = 1;       // copies côte à côte (rangée de boîtiers identiques)
+  double largeur = 0, hauteur = 0;
+  friend bool operator==(const DessinConnecteur&, const DessinConnecteur&) = default;
+};
 struct ConnecteurCablage {
   std::string uuid, repere;           // « J3 », « X1 »
   std::string reference;              // entrée de la bibliothèque (vide : générique)
@@ -137,6 +149,7 @@ struct ConnecteurCablage {
   bool etanche = false;
   std::vector<CaviteCablage> cavites;
   ecad::Pt position;                  // sur le folio de câblage (nm)
+  std::optional<DessinConnecteur> dessin;  // sur la planche, à la place de la boîte
   const CaviteCablage* cavite(const std::string& numero) const;
   CaviteCablage* cavite(const std::string& numero);
   friend bool operator==(const ConnecteurCablage&, const ConnecteurCablage&) = default;
@@ -363,6 +376,17 @@ struct Route3D {
 Route3D routerEn3D(const std::vector<std::array<double, 3>>& attaches, double rayon);
 // Longueur venue de la 3D sur un câble du faisceau (m) : ses fils la prennent, provenance « 3D »
 int longueurDepuis3D(Cablage& h, const std::string& cable, double longueurMm);
+// Faisceau tracé en 3D dans l'assemblage : une branche par tronçon, entre deux nœuds nommés (repère du connecteur ou
+// dérivation), par ses points d'attache. Mis à plat en planche : la topologie et les longueurs (courbes raccordées
+// au rayon) sont gardées, les fils prennent leur longueur de ces tronçons, provenance « 3D ». Rend le nombre de
+// tronçons ; les alertes de coudes trop serrés vont dans « alertes ».
+struct Branche3D {
+  std::string a, b;
+  std::vector<std::array<double, 3>> points;  // mm, de a vers b, extrémités comprises
+  double rayon = 0;
+};
+int mettreAPlat(Cablage& h, const std::vector<Branche3D>& branches, std::vector<std::string>* alertes = nullptr);
+std::optional<std::vector<Branche3D>> lireBranches3D(const std::string& json, std::string* erreur = nullptr);  // {"branches":[{"a","b","rayon","points":[[x,y,z]…]}]}
 // Circuit continu sur les longueurs des fils : source (V), charges à courant, résistance ou puissance constants
 struct ChargeContinue {
   std::string nom;

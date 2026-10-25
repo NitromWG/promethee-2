@@ -20,6 +20,7 @@
 #include "promethee/modele.hpp"
 #include "promethee/pdf_documents.hpp"
 #include "promethee/plm.hpp"
+#include "promethee/projet_partage.hpp"
 
 using namespace prom;
 using namespace prom::elec;
@@ -489,4 +490,87 @@ TEST_CASE("19.14 · Dépôt « Vers le PLM » : nomenclature commune, structure 
   const std::vector<EtatPlm> etats = {{d.numero, "B", "restitué", "", "2026-10-25", "révision B"}};
   REQUIRE(ecrireEtatsPlm(utf8(equipe), etats));
   CHECK(lireEtatsPlm(utf8(equipe)) == etats);
+}
+
+TEST_CASE("19.11 · Dessin d'un connecteur tiré de son modèle 3D, tourné et répété, numéros de cavités compris", "[L19][planche]") {
+  const auto& b = bibliothequeCablageIntegree();
+  Cablage h;
+  h.connecteurs = {generique("A", 2), generique("B", 2)};
+  poserFil(h, 0.5, "BU", "A", "1", "B", "1");
+  poserFil(h, 0.5, "RD", "A", "2", "B", "2");
+  DessinConnecteur d;
+  d.vus = {{{-5, -2}, {5, -2}, {5, 2}, {-5, 2}, {-5, -2}}};
+  d.caches = {{{-3, 0}, {3, 0}}};
+  d.cavites = {{"1", {-2.5, 0}}, {"2", {2.5, 0}}};
+  d.largeur = 10;
+  d.hauteur = 4;
+  d.rotation = 90;
+  d.repetitions = 2;
+  h.connecteur("A")->dessin = d;
+  const PlancheDessinee p = dessinerPlanche(h, b);
+  const std::string svg = svgPlanche(h, b, p);
+  std::size_t traits = 0;
+  for (std::size_t i = svg.find("class=\"dessinConnecteur\""); i != std::string::npos; i = svg.find("class=\"dessinConnecteur\"", i + 1)) ++traits;
+  CHECK(traits == (4 + 1) * 2);  // quatre côtés vus et un trait caché, deux fois
+  CHECK(svg.find("stroke-dasharray") != std::string::npos);
+  // Tourné d'un quart de tour : le rectangle de 10 × 4 mm se dresse (4 de large, 10 de haut)
+  const auto& na = *std::find_if(p.noeuds.begin(), p.noeuds.end(), [](const PlancheDessinee::Noeud& n) { return n.connecteur == "A"; });
+  double xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
+  const std::regex r("class=\"dessinConnecteur\" x1=\"([-0-9.]+)\" y1=\"([-0-9.]+)\" x2=\"([-0-9.]+)\" y2=\"([-0-9.]+)\"");
+  for (auto it = std::sregex_iterator(svg.begin(), svg.end(), r); it != std::sregex_iterator(); ++it)
+    for (int k : {1, 3}) {
+      xmin = std::min(xmin, std::stod((*it)[k]) - na.x), xmax = std::max(xmax, std::stod((*it)[k]) - na.x);
+      ymin = std::min(ymin, std::stod((*it)[k + 1]) - na.y), ymax = std::max(ymax, std::stod((*it)[k + 1]) - na.y);
+    }
+  CHECK(xmax - xmin == Approx(4));
+  CHECK(ymax - ymin == Approx(13 + 10).margin(1e-6));  // deux copies de 10 mm au pas de 13 mm
+  CHECK(svg.find(">1</text>") != std::string::npos);
+  // Gardé dans le fichier
+  CHECK(cablageDepuisJson(cablageVersJson(h)) == h);
+}
+
+TEST_CASE("19.12 · Faisceau tracé en 3D mis à plat : topologie et longueurs gardées", "[L19][continu]") {
+  const auto& b = bibliothequeCablageIntegree();
+  Cablage h;
+  h.connecteurs = {generique("A", 2), generique("B", 2), generique("C", 1)};
+  poserFil(h, 0.5, "BU", "A", "1", "B", "1");
+  poserFil(h, 0.5, "RD", "A", "2", "C", "1");
+  const auto br = lireBranches3D(R"({"branches":[{"a":"A","b":"N1","points":[[0,0,0],[300,0,0]]},
+      {"a":"N1","b":"B","rayon":20,"points":[[300,0,0],[300,200,0],[300,200,150]]},{"a":"N1","b":"C","points":[[300,0,0],[300,-100,0]]}]})");
+  REQUIRE(br);
+  std::vector<std::string> alertes;
+  CHECK(mettreAPlat(h, *br, &alertes) == 3);
+  CHECK(alertes.empty());
+  REQUIRE(h.troncons.size() == 3);
+  CHECK(h.troncons[0].longueur == Approx(300));
+  CHECK(h.troncons[1].longueur == Approx(350 - 40 + 20 * 3.14159265358979 / 2));
+  CHECK(h.noeuds.size() == 4);
+  CHECK(h.fil("1")->longueur == Approx((300 + h.troncons[1].longueur + 100) / 1000));
+  CHECK(h.fil("1")->provenance == ProvenanceLongueur::Trace3D);
+  CHECK(h.fil("2")->longueur == Approx(0.5));
+  const PlancheDessinee p = dessinerPlanche(h, b);
+  CHECK(p.troncons.size() == 3);
+  CHECK(p.tronc.size() == 3);  // A — N1 — B, le plus long
+}
+
+TEST_CASE("19.14 · Tickets : constats ouverts des revues en tickets, clos chez le gestionnaire, clos dans la revue", "[L19][plm]") {
+  ecad::ConceptionElec c = ecad::exempleElectronique();
+  const RevueFormelle rv = ouvrirRevue(c, "Revue A", "2026-10-25");
+  const std::string k1 = ajouterConstat(c, rv.numero, "R3", "valeur à confirmer", "Evan", "2026-10-25");
+  const std::string k2 = ajouterConstat(c, rv.numero, "U1", "découplage manquant", "Evan", "2026-10-25");
+  auto t = ticketsDepuisRevues(c);
+  REQUIRE(t.size() == 2);
+  CHECK(t[0].id == "revue-" + std::to_string(rv.numero) + "-" + k1);
+  CHECK(t[0].titre.find("R3 : valeur") == 0);
+  const fs::path d = dossierEssai("tickets");
+  t[0].distant = "T-1";
+  REQUIRE(ecrireTickets(utf8(d), false, t));
+  CHECK(lireTickets(utf8(d), false) == t);
+  CHECK(ticketsDepuisRevues(c, lireTickets(utf8(d), false))[0].distant == "T-1");  // numéro chez le gestionnaire gardé
+  std::vector<TicketPlm> depuis = {{t[1].id, "T-2", t[1].titre, {}, "clos", {}, {}, {}}, {t[0].id, "T-1", t[0].titre, {}, "ouvert", {}, {}, {}}};
+  CHECK(appliquerTickets(c, depuis, "Marc", "2026-10-26") == 1);
+  for (const auto& r : revuesDe(c))
+    for (const auto& k : r.constats) CHECK(k.etat == (k.id == k2 ? "clos" : "ouvert"));
+  CHECK(appliquerTickets(c, depuis, "Marc", "2026-10-26") == 0);  // déjà clos
+  CHECK(ticketsDepuisRevues(c).size() == 1);
 }

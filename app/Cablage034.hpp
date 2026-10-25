@@ -59,9 +59,14 @@ class FenetreCablage : public QWidget {
   bool exporterPlanche(const QString& chemin, double echelle = 1);
   int exporterPages(const QString& chemin, const QString& format = QStringLiteral("A4"));
   bool exporterCoupe(int troncon, const QString& chemin);
+  // Le symbole du connecteur remplacé par la projection en lignes cachées de son modèle 3D (STEP), de face ou de côté,
+  // tourné et répété, numéros de cavités compris
+  bool dessinerConnecteur(const QString& repere, const QString& modele, const QString& vue = QStringLiteral("face"), double rotation = 0, int repetitions = 1);
   // ----- Longueurs et circuits (19.12) -----
   double routerEn3D(const QString& cable, const std::vector<std::array<double, 3>>& attaches, double rayon, QStringList* alertes = nullptr);
   bool routerTopologie(const QString& fichier, const QString& cable, const QString& de, const QString& vers, const QStringList& imposes, double* longueur = nullptr);
+  // Faisceau tracé en 3D (fichier de branches) mis à plat en planche, topologie et longueurs gardées
+  int mettreAPlat(const QString& fichierBranches, QStringList* alertes = nullptr);
   prom::elec::BilanContinu circuit(const prom::elec::CircuitContinu& c);
   // ----- Fabrication (19.13) -----
   std::vector<prom::elec::DefautFaisceau> verifier();
@@ -93,6 +98,7 @@ class FenetreCablage : public QWidget {
   QTableWidget* m_troncons = nullptr;
   QComboBox *m_protection = nullptr, *m_tronconProtection = nullptr;
   // Longueurs
+  class VueTopologieCablage* m_vueTopologie = nullptr;
   QComboBox* m_cable3D = nullptr;
   QLineEdit* m_points3D = nullptr;
   QLabel* m_resultat = nullptr;

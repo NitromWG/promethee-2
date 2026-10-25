@@ -25,6 +25,8 @@
 #include <QTimer>
 #include <QUndoStack>
 
+#include <BRepPrimAPI_MakeBox.hxx>
+
 #include "AtelierElectrique.hpp"
 #include "AtelierElectronique.hpp"
 #include "Bibliotheque034.hpp"
@@ -39,10 +41,12 @@
 #include "promethee/electrique.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/fichiers.hpp"
+#include "promethee/geometrie.hpp"
 #include "promethee/gestion_bibliotheque.hpp"
 #include "promethee/modele.hpp"
 #include "promethee/pdf_documents.hpp"
 #include "promethee/plm.hpp"
+#include "promethee/projet_partage.hpp"
 #include "promethee/sante_bibliotheque.hpp"
 
 using namespace prom::ecad;
@@ -163,8 +167,11 @@ struct ServeurPlm {
 void reglagesAcces(const QString& fichier, const QString& adresse, bool actif) {
   const QJsonObject plm{{QStringLiteral("actif"), actif}, {QStringLiteral("adaptateur"), QStringLiteral("simule")}, {QStringLiteral("adresse"), adresse},
                         {QStringLiteral("utilisateur"), QStringLiteral("evan")}, {QStringLiteral("jeton"), QStringLiteral("secret")}};
+  const QJsonObject tickets{{QStringLiteral("actif"), actif}, {QStringLiteral("adaptateur"), QStringLiteral("tickets-simule")}, {QStringLiteral("adresse"), adresse},
+                            {QStringLiteral("jeton"), QStringLiteral("secret")}};
   const QJsonObject o{{QStringLiteral("format"), QStringLiteral("promethee-acces-en-ligne")}, {QStringLiteral("version"), 1}, {QStringLiteral("actif"), actif},
-                      {QStringLiteral("journal"), QStringLiteral("journal-connexions.csv")}, {QStringLiteral("fonctions"), QJsonObject{{QStringLiteral("plm"), plm}}}};
+                      {QStringLiteral("journal"), QStringLiteral("journal-connexions.csv")},
+                      {QStringLiteral("fonctions"), QJsonObject{{QStringLiteral("plm"), plm}, {QStringLiteral("tickets"), tickets}}}};
   QFile f(fichier);
   if (f.open(QIODevice::WriteOnly)) f.write(QJsonDocument(o).toJson());
 }
@@ -470,6 +477,20 @@ void essaisElectronique034L19(FenetrePrincipale& f, const Verifier& verifier0) {
                  planche && repris >= 1,
              "034 L19 · 19.11 : sept fils de 1,6 mm, foisonnement à 1 : tronçon de 4,8 mm ; planche à l'échelle 1 : la cote de 500 mm mesure 500 mm ; pages assemblées ; nœud rangé à la souris repris",
              "Ø " + std::to_string(occ.empty() ? 0 : occ[0].diametre) + " mm, cote " + std::to_string(cote) + " mm, " + std::to_string(pages) + " page(s)");
+    // Le connecteur A dessiné d'après son modèle 3D : projection en lignes cachées, tournée et répétée
+    {
+      const QString step = QDir(racine).filePath(QStringLiteral("connecteur.step"));
+      prom::exporterStep({prom::PieceNommee{"connecteur", BRepPrimAPI_MakeBox(20, 10, 8).Shape()}}, step.toStdString());
+      const bool dessine = w->dessinerConnecteur(QStringLiteral("A"), step, QStringLiteral("face"), 90, 2);
+      const auto hd = w->courant();
+      const prom::elec::ConnecteurCablage* ka = hd ? hd->connecteur("A") : nullptr;
+      w->exporterPlanche(svg, 1);
+      const std::string avecDessin = lire(svg);
+      verifier(dessine && ka && ka->dessin && ka->dessin->vus.size() >= 4 && std::abs(ka->dessin->largeur - 20) < 1e-6 && ka->dessin->cavites.size() == 7 && ka->dessin->repetitions == 2 &&
+                   avecDessin.find("class=\"dessinConnecteur\"") != std::string::npos,
+               "034 L19 · 19.11 : le symbole du connecteur remplacé par la projection en lignes cachées de son modèle 3D, tournée et répétée, numéros de cavités compris",
+               ka && ka->dessin ? std::to_string(ka->dessin->vus.size()) + " trait(s) vus, " + std::to_string(ka->dessin->largeur) + " mm de large" : std::string("aucun dessin"));
+    }
     // ----- 19.12 : câble de deux fils de 0,75 mm² routé en 3D sur 4 m, 6 A sous 12 V -----
     w->nouveauFaisceau(QStringLiteral("Alimentation"));
     w->ajouterConnecteurVolant(QStringLiteral("S"), {}, 2);
@@ -489,6 +510,18 @@ void essaisElectronique034L19(FenetrePrincipale& f, const Verifier& verifier0) {
     verifier(std::abs(route - 4000) < 1e-6 && quatre && std::abs(b.chute - 1.2) < 1e-9 && std::abs(b.pourcent - 10) < 1e-9 && b.depasse && !b.alertes.empty(),
              "034 L19 · 19.12 : câble à deux fils de 0,75 mm² (25 mΩ/m) routé en 3D sur 4 m, charge de 6 A sous 12 V : 4 m dans la liste de fils, chute de 1,2 V (10 %) signalée au-delà de 5 %",
              b.alertes.empty() ? std::string() : b.alertes[0]);
+    // Faisceau tracé en 3D, mis à plat en planche : topologie et longueurs gardées
+    {
+      const QString fichier = QDir(racine).filePath(QStringLiteral("branches.json"));
+      prom::ecrireFichierAtomique(prom::cheminFichier(fichier.toStdString()),
+                                  R"({"branches":[{"a":"S","b":"N1","points":[[0,0,0],[1000,0,0]]},{"a":"N1","b":"L","rayon":30,"points":[[1000,0,0],[1000,1500,0],[1000,1500,1500]]}]})");
+      const int n = w->mettreAPlat(fichier);
+      const auto hp = w->courant();
+      const auto lp = hp ? prom::elec::listeFils(*hp, w->bibliotheque()) : std::vector<prom::elec::LigneFil>{};
+      const double attendu = (1000 + 3000 - 60 + 30 * 3.14159265358979 / 2 + 2 * 50) / 1000;
+      verifier(n == 2 && hp && hp->troncons.size() == 2 && lp.size() == 2 && std::abs(lp[0].longueur - attendu) < 1e-9 && lp[0].provenance == "3D" && pe && !e->projetCourant()->faisceaux.empty(),
+               "034 L19 · 19.12 : faisceau tracé en 3D mis à plat en planche, topologie et longueurs gardées", std::to_string(lp.empty() ? 0 : lp[0].longueur) + " m");
+    }
     // ----- 19.13 : faisceau d'essai de 24 fils et 48 sertissages -----
     w->nouveauFaisceau(QStringLiteral("Essai 24 fils"));
     for (const char* x : {"A1", "A2", "A3", "B1", "B2", "B3"}) w->ajouterConnecteurVolant(QString::fromLatin1(x), QStringLiteral("43025-0800"), 8);
@@ -580,6 +613,27 @@ void essaisElectronique034L19(FenetrePrincipale& f, const Verifier& verifier0) {
       const bool b = !etats.empty() && etats.back().revision == "B" && etats.back().etat == "restitué";
       verifier(depose == 0 && reserve == 0 && !suivante.isEmpty() && restitue == 0 && b && serveur.connexions() == 3,
                "034 L19 · 19.14 : serveur PLM simulé : dossier déposé, réservé puis restitué en révision B quand l'accès est activé", sortie.toStdString());
+      // Tickets dans les deux sens : un constat de revue devient un ticket ; clos chez le gestionnaire, il se clôt ici
+      std::string constat;
+      doc->modifierConception(0, [&](ConceptionElec& x) {
+        const prom::RevueFormelle rv = prom::ouvrirRevue(x, "Revue de la révision B", "2026-10-25");
+        constat = prom::ajouterConstat(x, rv.numero, "R3", "valeur à confirmer par la mesure", "Evan", "2026-10-25");
+      });
+      const int avant = o->synchroniserTickets();
+      const auto locaux = prom::lireTickets(equipe.toStdString(), false);
+      const QString distant = locaux.empty() ? QString() : QString::fromStdString(locaux.front().distant);
+      QProcess clore;
+      clore.start(QStandardPaths::findExecutable(QStringLiteral("python3")),
+                  {QStringLiteral("-c"), QStringLiteral("import sys,urllib.request as u; u.urlopen(u.Request(sys.argv[1], data=b'{}', method='POST', headers={'Authorization': 'Bearer secret'})).read()"),
+                   serveur.adresse + QStringLiteral("/api/tickets/") + distant + QStringLiteral("/clore")});
+      clore.waitForFinished(20000);
+      const int pas = doc->positionHistorique();
+      const int clos = o->synchroniserTickets();
+      bool closIci = false;
+      for (const auto& rv : prom::revuesDe(doc->projet().electronique[0]))
+        for (const auto& k : rv.constats) closIci = closIci || (k.id == constat && k.etat == "clos");
+      verifier(avant == 0 && !distant.isEmpty() && clos == 1 && closIci && doc->positionHistorique() == pas + 1,
+               "034 L19 · 19.14 : tickets dans les deux sens : le constat ouvert part au gestionnaire, clos là-bas il se clôt dans la revue, en un pas", distant.toStdString());
       reglagesAcces(reglages, serveur.adresse, false);
     }
     o->close();

@@ -152,21 +152,16 @@ QString FenetreOutilsConception::deposerPlm(const QString& equipe, const QString
   return m_dernierDepot;
 }
 
-int FenetreOutilsConception::synchroniserPlm(const QString& operation, QString* sortie) {
+int FenetreOutilsConception::lancerEnLigne(const QStringList& commande, QString* sortie) {
   const QString programme = programmeEnLigne();
   if (programme.isEmpty()) {
-    m_sortiePlm = QStringLiteral("Le programme d’accès en ligne (promethee-en-ligne) n’est pas installé à côté de Prométhée : le dépôt reste dans le dossier d’équipe.");
+    m_sortiePlm = QStringLiteral("Le programme d’accès en ligne (promethee-en-ligne) n’est pas installé à côté de Prométhée : les fichiers restent dans le dossier d’équipe.");
     if (sortie) *sortie = m_sortiePlm;
     return -1;
   }
   QStringList args = {QStringLiteral("--reglages"), fichierAccesEnLigne()};
   if (!m_dossierEquipePlm.isEmpty()) args << QStringLiteral("--equipe") << m_dossierEquipePlm;
-  args << QStringLiteral("--utilisateur") << Document::personne() << QStringLiteral("plm") << operation;
-  if (operation == QStringLiteral("deposer") || operation == QStringLiteral("restituer")) args << m_dernierDepot;
-  else {
-    const prom::LectureDepotPlm l = prom::lireDepotPlm(m_dernierDepot.toStdString());
-    args << q(l.numero);
-  }
+  args << QStringLiteral("--utilisateur") << Document::personne() << commande;
   QProcess p;
   p.start(programme, args);
   const bool fini = p.waitForFinished(90000);
@@ -176,6 +171,30 @@ int FenetreOutilsConception::synchroniserPlm(const QString& operation, QString* 
   m_atelier.afficherMessage(h(m_sortiePlm.toStdString()), code == 0 ? NiveauMessage::Succes : code == 3 ? NiveauMessage::Information : NiveauMessage::Avertissement);
   if (m_textes.count(QStringLiteral("plm"))) m_textes[QStringLiteral("plm")]->setHtml(QString::fromLatin1(STYLE19) + m_rapports[QStringLiteral("plm")]());
   return code;
+}
+
+int FenetreOutilsConception::synchroniserPlm(const QString& operation, QString* sortie) {
+  QStringList commande = {QStringLiteral("plm"), operation};
+  if (operation == QStringLiteral("deposer") || operation == QStringLiteral("restituer")) commande << m_dernierDepot;
+  else commande << q(prom::lireDepotPlm(m_dernierDepot.toStdString()).numero);
+  return lancerEnLigne(commande, sortie);
+}
+
+int FenetreOutilsConception::synchroniserTickets(QString* sortie) {
+  const ConceptionElec* c = m_atelier.conceptionCourante();
+  if (m_dossierEquipePlm.isEmpty()) m_dossierEquipePlm = dossierEquipe(this);
+  if (!c || m_dossierEquipePlm.isEmpty()) return -1;
+  const std::string equipe = m_dossierEquipePlm.toStdString();
+  prom::ecrireTickets(equipe, false, prom::ticketsDepuisRevues(*c, prom::lireTickets(equipe, false)));
+  if (const int code = lancerEnLigne({QStringLiteral("tickets"), QStringLiteral("synchroniser")}, sortie); code != 0) return code == 3 ? 0 : -1;
+  const auto depuis = prom::lireTickets(equipe, true);
+  ConceptionElec essai = *c;
+  const std::string date = QDate::currentDate().toString(Qt::ISODate).toStdString(), par = Document::personne().toStdString();
+  int clos = prom::appliquerTickets(essai, depuis, par, date);
+  if (clos > 0)
+    m_atelier.document()->modifierConception(m_atelier.conception(), [&](ConceptionElec& x) { clos = prom::appliquerTickets(x, depuis, par, date); }, QStringLiteral("Constats clos par le gestionnaire de tickets"));
+  m_atelier.afficherMessage(QStringLiteral("Tickets : %1 constat(s) clos d’après le gestionnaire").arg(clos), NiveauMessage::Information);
+  return clos;
 }
 
 void FenetreOutilsConception::ajouterOnglets034L19() {
@@ -289,6 +308,12 @@ void FenetreOutilsConception::ajouterOnglets034L19() {
         r += QStringLiteral("<tr><td>%1</td><td>%2</td><td>%3</td><td>%4</td><td>%5</td><td>%6</td></tr>").arg(h(e.numero), h(e.revision), h(e.etat), h(e.reservePar), h(e.date), h(e.message));
       r += QStringLiteral("</table>");
     }
+    const auto tickets = equipe.isEmpty() ? std::vector<prom::TicketPlm>{} : prom::lireTickets(equipe.toStdString(), true);
+    if (!tickets.empty()) {
+      r += QStringLiteral("<h3>Tickets</h3><table><tr><th>Constat</th><th>Ticket</th><th>Titre</th><th>État</th></tr>");
+      for (const auto& t : tickets) r += QStringLiteral("<tr><td>%1</td><td>%2</td><td>%3</td><td>%4</td></tr>").arg(h(t.id), h(t.distant), h(t.titre), h(t.etat));
+      r += QStringLiteral("</table>");
+    }
     if (!m_sortiePlm.isEmpty()) r += QStringLiteral("<p><i>%1</i></p>").arg(m_sortiePlm.toHtmlEscaped());
     return r;
   },
@@ -354,5 +379,6 @@ void FenetreOutilsConception::ajouterOnglets034L19() {
             const QString suivante = q(prom::revisionSuivante(l.revision, prom::SchemaRevision::Lettres));
             if (!deposerPlm(m_dossierEquipePlm, suivante).isEmpty()) synchroniserPlm(QStringLiteral("restituer"));
           }},
-          {QStringLiteral("Consulter"), [this] { synchroniserPlm(QStringLiteral("consulter")); }}});
+          {QStringLiteral("Consulter"), [this] { synchroniserPlm(QStringLiteral("consulter")); }},
+          {QStringLiteral("Tickets des revues"), [this] { synchroniserTickets(); }}});
 }

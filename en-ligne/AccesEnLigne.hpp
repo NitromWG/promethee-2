@@ -9,7 +9,9 @@
 #include <optional>
 
 #include <QByteArray>
+#include <QJsonArray>
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QString>
 #include <QStringList>
 
@@ -40,7 +42,14 @@ struct Operation {
   QString methode = QStringLiteral("GET"), chemin, corps;
   QString champRevision = QStringLiteral("revision"), champEtat = QStringLiteral("etat");
   std::map<QString, QString> entetes;
+  // Réponse en liste (tickets) : chemin du tableau, champs de chaque élément (« id », « reference », « titre »,
+  // « etat ») et états qui valent « clos » chez le serveur
+  QString liste;
+  std::map<QString, QString> champs;
+  QStringList clos;
 };
+// Valeur d'un chemin pointé (« fields.status.name », « value.0.Version ») dans une réponse
+QString valeurJson(const QJsonValue& racine, const QString& chemin);
 struct Gabarit {
   QString nom, description, authentification = QStringLiteral("bearer");  // « bearer », « basic », « aucune »
   std::map<QString, Operation> operations;                                // « deposer », « reserver », « restituer », « consulter »
@@ -58,6 +67,7 @@ struct ReponsePlm {
   int statut = 0;
   QString erreur, revision, etat, reservePar;
   QJsonObject corps;
+  QJsonArray tableau;  // réponse qui est un tableau (liste de tickets de GitLab)
 };
 // Exécute une opération du gabarit ; « valeurs » remplit les champs entre accolades du chemin et du corps
 ReponsePlm executer(const Reglages& r, const QString& fonction, const Gabarit& g, const QString& operation, const std::map<QString, QString>& valeurs);

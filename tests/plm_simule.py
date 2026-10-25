@@ -13,6 +13,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 REVISIONS = "ABCDEFGHJKLMNPRTUVWY"
 articles = {}
+tickets = []
 verrou = threading.Lock()
 
 
@@ -54,6 +55,9 @@ class Gestionnaire(BaseHTTPRequestHandler):
         self.noter()
         if not self.autorise():
             return self.repondre(401, {"erreur": "jeton refusé"})
+        if self.path == "/api/tickets":
+            with verrou:
+                return self.repondre(200, {"tickets": tickets})
         o = re.fullmatch(r"/api/offres/([^/]+)", self.path)
         if o:  # distributeur simulé : deux offres par référence, l'une en fin de vie
             return self.repondre(200, {"mpn": o.group(1), "offres": [
@@ -74,6 +78,17 @@ class Gestionnaire(BaseHTTPRequestHandler):
         if c is None:
             return self.repondre(400, {"erreur": "corps illisible"})
         with verrou:
+            if self.path == "/api/tickets":
+                t = {"id": "T-%d" % (len(tickets) + 1), "reference": c.get("reference", ""), "titre": c.get("titre", ""), "etat": "ouvert"}
+                tickets.append(t)
+                return self.repondre(201, t)
+            m = re.fullmatch(r"/api/tickets/([^/]+)/clore", self.path)
+            if m:
+                for t in tickets:
+                    if t["id"] == m.group(1):
+                        t["etat"] = "clos"
+                        return self.repondre(200, t)
+                return self.repondre(404, {"erreur": "ticket inconnu"})
             if self.path == "/api/articles":
                 n = c.get("numero", "")
                 if not n:

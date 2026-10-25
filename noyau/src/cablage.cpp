@@ -433,6 +433,13 @@ Json cablageVersJson(const Cablage& h) {
   for (const auto& k : h.connecteurs) {
     Json x = {{"uuid", k.uuid}, {"repere", k.repere}, {"reference", k.reference}, {"carte", k.carte}, {"conception", k.conception}, {"composant", k.composant}, {"etanche", k.etanche},
               {"x", k.position.x}, {"y", k.position.y}};
+    if (k.dessin) {
+      const DessinConnecteur& d = *k.dessin;
+      Json dj = {{"vue", d.vue}, {"rotation", d.rotation}, {"repetitions", d.repetitions}, {"largeur", d.largeur}, {"hauteur", d.hauteur}, {"vus", d.vus}, {"caches", d.caches},
+                 {"cavites", Json::array()}};
+      for (const auto& [n, p] : d.cavites) dj["cavites"].push_back({{"numero", n}, {"x", p.first}, {"y", p.second}});
+      x["dessin"] = dj;
+    }
     Json& cs = x["cavites"] = Json::array();
     for (const auto& c : k.cavites) {
       Json y = {{"numero", c.numero}};
@@ -494,6 +501,22 @@ Cablage cablageDepuisJson(const Json& j) {
     k.position = {x.value("x", ecad::Nm{0}), x.value("y", ecad::Nm{0})};
     for (const auto& c : x.value("cavites", Json::array()))
       k.cavites.push_back({texte(c, "numero"), texte(c, "reseau"), texte(c, "contact"), texte(c, "joint"), texte(c, "bouchon"), c.value("denudage", 0.0), c.value("recul", 0.0)});
+    if (x.contains("dessin") && x["dessin"].is_object()) {
+      const Json& dj = x["dessin"];
+      DessinConnecteur d;
+      d.vue = dj.value("vue", std::string("face"));
+      d.rotation = dj.value("rotation", 0.0);
+      d.repetitions = dj.value("repetitions", 1);
+      d.largeur = dj.value("largeur", 0.0);
+      d.hauteur = dj.value("hauteur", 0.0);
+      try {
+        d.vus = dj.value("vus", std::vector<std::vector<std::pair<double, double>>>{});
+        d.caches = dj.value("caches", std::vector<std::vector<std::pair<double, double>>>{});
+      } catch (...) {
+      }
+      for (const auto& c : dj.value("cavites", Json::array())) d.cavites.push_back({texte(c, "numero"), {c.value("x", 0.0), c.value("y", 0.0)}});
+      k.dessin = d;
+    }
     h.connecteurs.push_back(std::move(k));
   }
   for (const auto& x : j.value("cables", Json::array()))

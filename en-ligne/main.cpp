@@ -8,6 +8,7 @@
 //     plm consulter <numéro>
 //     distributeurs offres <mpn>…        stock, prix et fin de vie chez les distributeurs (gabarit)
 //     erp lire                           base de l'ERP lue par Qt SQL
+//     tickets synchroniser               tickets des revues créés chez le gestionnaire, leurs états relus
 //     journal                            connexions faites, une par ligne
 //
 // Rien ne part si l'accès en ligne n'est pas activé, en général et pour la fonction : le programme le dit et rend 3.
@@ -143,6 +144,64 @@ int offresDistributeurs(const Reglages& r, const QString& cheminReglages, const 
   dire(QStringLiteral("%1 offre(s) écrite(s) sous « Depuis le PLM »").arg(lignes.size()));
   return 0;
 }
+// Tickets dans les deux sens : ceux de « Vers le PLM/tickets.json » qui n'ont pas de numéro chez le gestionnaire y
+// sont créés ; la liste du gestionnaire revient dans « Depuis le PLM/tickets.json », états « clos » reconnus
+int synchroniserTickets(const Reglages& r, const QString& cheminReglages, const QString& equipe) {
+  if (const QString non = refus(r, QStringLiteral("tickets")); !non.isEmpty()) {
+    erreur(QStringLiteral("Rien n'est parti : ") + non);
+    return 3;
+  }
+  if (equipe.isEmpty()) {
+    erreur(QStringLiteral("dossier d'équipe manquant (--equipe)"));
+    return 2;
+  }
+  QString probleme;
+  const ReglageFonction& rf = r.fonctions.at(QStringLiteral("tickets"));
+  const auto g = gabarit(rf.adaptateur.isEmpty() ? QStringLiteral("tickets-simule") : rf.adaptateur, QFileInfo(cheminReglages).absolutePath(), &probleme);
+  if (!g) {
+    erreur(probleme);
+    return 2;
+  }
+  std::vector<prom::TicketPlm> locaux = prom::lireTickets(equipe.toStdString(), false);
+  int crees = 0;
+  const QString projet = QString::fromUtf8(qgetenv("PROMETHEE_TICKETS_PROJET"));
+  for (auto& t : locaux) {
+    if (!t.distant.empty()) continue;
+    const ReponsePlm rep = executer(r, QStringLiteral("tickets"), *g, QStringLiteral("creer"),
+                                    {{QStringLiteral("id"), QString::fromStdString(t.id)}, {QStringLiteral("titre"), QString::fromStdString(t.titre)}, {QStringLiteral("texte"), QString::fromStdString(t.texte)},
+                                     {QStringLiteral("objet"), QString::fromStdString(t.objet)}, {QStringLiteral("auteur"), QString::fromStdString(t.auteur)}, {QStringLiteral("projet"), projet},
+                                     {QStringLiteral("jeton"), rf.jeton}});
+    if (!rep.ok) {
+      erreur(QStringLiteral("ticket ") + QString::fromStdString(t.id) + QStringLiteral(" : ") + rep.erreur);
+      continue;
+    }
+    const auto& op = g->operations.at(QStringLiteral("creer"));
+    t.distant = valeurJson(rep.corps, op.champs.count(QStringLiteral("id")) ? op.champs.at(QStringLiteral("id")) : QStringLiteral("id")).toStdString();
+    ++crees;
+  }
+  prom::ecrireTickets(equipe.toStdString(), false, locaux);
+  const ReponsePlm rep = executer(r, QStringLiteral("tickets"), *g, QStringLiteral("lister"), {{QStringLiteral("projet"), projet}, {QStringLiteral("jeton"), rf.jeton}});
+  if (!rep.ok) {
+    erreur(QStringLiteral("tickets : ") + rep.erreur);
+    return 4;
+  }
+  const auto& op = g->operations.at(QStringLiteral("lister"));
+  auto champ = [&](const QJsonValue& x, const char* k) { return valeurJson(x, op.champs.count(QString::fromLatin1(k)) ? op.champs.at(QString::fromLatin1(k)) : QString::fromLatin1(k)); };
+  const QJsonArray liste = op.liste.isEmpty() ? rep.tableau : rep.corps.value(op.liste).toArray();
+  std::vector<prom::TicketPlm> depuis;
+  for (const QJsonValue& x : liste) {
+    prom::TicketPlm t;
+    t.distant = champ(x, "id").toStdString();
+    t.id = champ(x, "reference").toStdString();
+    t.titre = champ(x, "titre").toStdString();
+    const QString etat = champ(x, "etat");
+    t.etat = op.clos.contains(etat) ? "clos" : etat.isEmpty() ? "ouvert" : etat.toStdString();
+    depuis.push_back(t);
+  }
+  prom::ecrireTickets(equipe.toStdString(), true, depuis);
+  dire(QStringLiteral("%1 ticket(s) créé(s), %2 relu(s) du gestionnaire").arg(crees).arg(depuis.size()));
+  return 0;
+}
 // Base de l'ERP lue par Qt SQL (fonction « erp » : pilote, base, requête rendant mpn, distributeur, stock, délai,
 // agréé, risque, prix)
 int lireErp(const Reglages& r, const QString& equipe) {
@@ -240,6 +299,7 @@ int main(int argc, char** argv) {
   }
   if (args[0] == QStringLiteral("distributeurs") && args.size() >= 3 && args[1] == QStringLiteral("offres")) return offresDistributeurs(r, cheminReglages, equipe, args.mid(2));
   if (args[0] == QStringLiteral("erp") && args.size() >= 2 && args[1] == QStringLiteral("lire")) return lireErp(r, equipe);
+  if (args[0] == QStringLiteral("tickets") && args.size() >= 2 && args[1] == QStringLiteral("synchroniser")) return synchroniserTickets(r, cheminReglages, equipe);
   if (args[0] != QStringLiteral("plm") || args.size() < 3) {
     erreur(QStringLiteral("commande inconnue ; --aide pour la liste"));
     return 2;
