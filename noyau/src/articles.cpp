@@ -71,6 +71,7 @@ J articleVersJson(const Article& a) {
   mettre("exigences", a.exigences);
   mettre("etatCycle", a.etatCycle);
   mettre("numeroInterne", a.numeroInterne);
+  mettre("licence", a.licence);
   if (!a.modeleSpice.vide()) {
     const ModeleSpice& m = a.modeleSpice;
     J x = {{"texte", m.texte}, {"nom", m.nom}};
@@ -133,6 +134,7 @@ Article articleDepuisJson(const J& o) {
   a.exigences = txt(o, "exigences");
   a.etatCycle = txt(o, "etatCycle");
   a.numeroInterne = txt(o, "numeroInterne");
+  a.licence = txt(o, "licence");
   if (o.contains("modeleSpice") && o["modeleSpice"].is_object()) {
     const J& x = o["modeleSpice"];
     ModeleSpice& m = a.modeleSpice;
@@ -333,6 +335,7 @@ Article resoudreArticle(const Article& a, const std::function<const Article*(con
     prendre("fiche", r.fiche, b->fiche);
     prendre("lcsc", r.lcsc, b->lcsc);
     prendre("modele3D", r.modele3D, b->modele3D);
+    prendre("licence", r.licence, b->licence);
     if (r.brochage.empty() && !a.nonHerites.count("brochage")) r.brochage = b->brochage;
     if (r.hauteur <= 0 && !a.nonHerites.count("hauteur")) r.hauteur = b->hauteur;
     if (r.modeleSpice.vide() && !a.nonHerites.count("modeleSpice")) r.modeleSpice = b->modeleSpice;

@@ -130,6 +130,7 @@ void essaisElectronique034L7(FenetrePrincipale& f, const Verifier& verifier);
 void essaisElectronique034L8(FenetrePrincipale& f, const Verifier& verifier);
 void essaisElectronique034L10(FenetrePrincipale& f, const Verifier& verifier);
 void essaisElectronique034L11(FenetrePrincipale& f, const Verifier& verifier);
+void essaisElectronique034L12(FenetrePrincipale& f, const Verifier& verifier);
 
 void essaisElectronique034L5(FenetrePrincipale& f, const Verifier& verifier);
 
@@ -142,6 +143,7 @@ void essaisElectronique034(FenetrePrincipale& f, const Verifier& verifier) {
   essaisElectronique034L8(f, verifier);
   essaisElectronique034L10(f, verifier);
   essaisElectronique034L11(f, verifier);
+  essaisElectronique034L12(f, verifier);
 }
 
 void essaisElectronique034L5(FenetrePrincipale& f, const Verifier& verifier) {

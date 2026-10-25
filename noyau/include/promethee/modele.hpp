@@ -201,6 +201,20 @@ struct Assemblage {
   std::vector<ContrainteAssemblage> contraintes;
 };
 
+// Lien entre disciplines (12.20 ; projet_partage.hpp) : ce que l'une a vérifié de l'autre (contour de la carte pour
+// le boîtier, encombrement pour l'armoire…), avec son empreinte ; un changement fait passer le lien « à revoir »
+struct LienDisciplines {
+  std::string id;
+  std::string de, vers;           // « carte:<uuid> », « boitier », « armoire:<uuid> », « piece:<id> »
+  std::string quoi = "contour";   // « contour », « connecteurs », « trous », « encombrement »
+  std::string empreinte;          // SHA-256 du relevé, à l'accusé de lecture
+  std::string releve;             // le relevé lui-même (JSON), pour dire ce qui a changé
+  std::string etat = "à jour";    // « à jour », « à revoir »
+  std::vector<std::string> changements;
+  std::string accusePar, accuseLe;
+  friend bool operator==(const LienDisciplines&, const LienDisciplines&) = default;
+};
+
 struct Projet {
   std::string nom = "Projet sans nom";
   Carte carte;
@@ -230,6 +244,9 @@ struct Projet {
   std::vector<OrdreModification> ordresModification;
   // Schéma de système (lot L12, 12.19) : cartes du projet reliées par des câbles, connecteur à connecteur
   std::vector<LiaisonSysteme> liaisons;
+  // 0.34 : licence du projet (identifiant SPDX, 12.11) et liens entre disciplines (12.20)
+  std::string licence;
+  std::vector<LienDisciplines> liensDisciplines;
   // Champs de premier niveau inconnus de cette version (fichier écrit par une version voisine) : gardés tels
   // quels et réécrits à l'enregistrement, pour ne rien perdre en silence.
   Json inconnus = Json::object();

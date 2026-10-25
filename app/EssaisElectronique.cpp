@@ -358,6 +358,7 @@ void essaisElectronique034L7(FenetrePrincipale& f, const std::function<void(bool
 void essaisElectronique034L8(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectronique034L10(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectronique034L11(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
+void essaisElectronique034L12(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL6(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL7(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
 void essaisElectroniqueL8(FenetrePrincipale& f, const std::function<void(bool, const std::string&, const std::string&)>& verifier);
@@ -674,6 +675,7 @@ void lancerEssaisElectronique(FenetrePrincipale& f) {
     if (lots.contains(QStringLiteral("034L8"))) essaisElectronique034L8(f, v);
     if (lots.contains(QStringLiteral("034L10"))) essaisElectronique034L10(f, v);
     if (lots.contains(QStringLiteral("034L11"))) essaisElectronique034L11(f, v);
+    if (lots.contains(QStringLiteral("034L12"))) essaisElectronique034L12(f, v);
     if (lots.contains(QStringLiteral("L6"))) essaisElectroniqueL6(f, v);
     if (lots.contains(QStringLiteral("L7"))) essaisElectroniqueL7(f, v);
     if (lots.contains(QStringLiteral("L8"))) essaisElectroniqueL8(f, v);

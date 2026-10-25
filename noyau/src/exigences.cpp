@@ -91,6 +91,8 @@ J liaisonVersJson(const LiaisonSysteme& l) {
     for (const auto& [x, y] : l.broches) b.push_back({x, y});
     o["broches"] = b;
   }
+  if (l.longueur > 0) o["longueur"] = l.longueur;
+  if (!l.fil.empty()) o["fil"] = l.fil;
   return o;
 }
 
@@ -106,6 +108,8 @@ LiaisonSysteme liaisonDepuisJson(const J& o) {
   if (o.is_object() && o.contains("broches") && o["broches"].is_array())
     for (const auto& x : o["broches"])
       if (x.is_array() && x.size() == 2 && x[0].is_string() && x[1].is_string()) l.broches.emplace_back(x[0].get<std::string>(), x[1].get<std::string>());
+  if (o.is_object() && o.contains("longueur") && o["longueur"].is_number()) l.longueur = std::max(0.0, o["longueur"].get<double>());
+  l.fil = txt(o, "fil");
   return l;
 }
 

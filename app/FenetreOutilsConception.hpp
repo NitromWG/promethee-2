@@ -11,6 +11,8 @@
 #include <QString>
 #include <QWidget>
 
+#include "promethee/projet_partage.hpp"
+
 class AtelierElectronique;
 class QComboBox;
 class QSpinBox;
@@ -39,4 +41,8 @@ class FenetreOutilsConception : public QWidget {
   std::map<QString, std::function<QString()>> m_rapports;
   std::map<QString, int> m_indices;
   QString m_comparaison;  // dernier rapport de comparaison
+  // 0.34 (OutilsConception034.cpp)
+  void ajouterOnglets034();
+  QString m_bilanReversement;                   // dernier reversement de la copie locale (12.15)
+  std::vector<prom::DonneeAchat> m_donneesAchat;  // données d'achat lues (12.18)
 };

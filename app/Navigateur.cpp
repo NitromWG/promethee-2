@@ -19,6 +19,7 @@
 #include "Icones.hpp"
 #include "Theme.hpp"
 #include "Qet.hpp"
+#include "promethee/projet_partage.hpp"
 #include "promethee/structure.hpp"
 #include "promethee/piece.hpp"
 
@@ -449,7 +450,23 @@ void Navigateur::maj(const Projet& p, const QString& nomProjet, int pieceActive,
   // Mécanique : le boîtier dérivé de la carte, puis chaque pièce, qui se déplie jusqu'à ses fonctions.
   if (carte || !p.pieces.empty() || !p.assemblages.empty()) {
     QTreeWidgetItem* s = section(racine, QStringLiteral("Mécanique"), QStringLiteral("metier-meca"), QStringLiteral("section:meca"), MECA);
-    if (carte) element(s, QStringLiteral("Boîtier de la carte"), QStringLiteral("piece"), QStringLiteral("boitier"), MECA, QStringLiteral("lié à la carte"));
+    if (carte) {
+      // Lien vérifié par la mécanique (12.20) : un contour changé depuis l'accusé de lecture marque le boîtier
+      const auto revoir = prom::liensARevoir(p, "boitier");
+      QTreeWidgetItem* b = element(s, QStringLiteral("Boîtier de la carte"), QStringLiteral("piece"), QStringLiteral("boitier"), MECA, revoir.empty() ? QStringLiteral("lié à la carte") : QStringLiteral("à revoir"));
+      if (!revoir.empty()) {
+        QString changements;
+        for (const auto* l : revoir) {
+          prom::Projet copie = p;
+          prom::verifierLiens(copie);
+          for (const auto& x : copie.liensDisciplines)
+            if (x.id == l->id)
+              for (const auto& c : x.changements) changements += QStringLiteral("\n") + QString::fromStdString(c);
+        }
+        b->setForeground(0, QColor(0xC5, 0x30, 0x30));
+        b->setToolTip(0, QStringLiteral("Boîtier de la carte — à revoir jusqu’à l’accusé de lecture :") + changements);
+      }
+    }
     // Une pièce utilisée dans un assemblage ne s'affiche que là, comme composant ; un assemblage utilisé comme
     // sous-assemblage ne s'affiche que dans son parent. Au premier niveau : pièces libres et assemblages racines.
     std::vector<bool> pieceUtilisee(p.pieces.size(), false), assemblageUtilise(p.assemblages.size(), false);

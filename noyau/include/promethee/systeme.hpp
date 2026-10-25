@@ -18,6 +18,9 @@ struct LiaisonSysteme {
   std::string carteB, connecteurB;
   // Broche de A → broche de B ; vide : broche à broche, du même numéro
   std::vector<std::pair<std::string, std::string>> broches;
+  // 0.34 (12.18, 12.20) : longueur des fils (mm, 0 : à mesurer) et leur désignation (« Fil 0,25 mm² »)
+  double longueur = 0;
+  std::string fil;
   friend bool operator==(const LiaisonSysteme&, const LiaisonSysteme&) = default;
 };
 

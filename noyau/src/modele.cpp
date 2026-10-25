@@ -566,10 +566,24 @@ Projet normaliser(const Json& s, std::vector<std::string>* avertissements) {
     for (const auto& x : s["liaisons"])
       if (x.is_object())
         if (LiaisonSysteme l = liaisonDepuisJson(x); !l.carteA.empty() && !l.carteB.empty()) p.liaisons.push_back(l);
+  if (s.is_object() && s.contains("licence") && s["licence"].is_string()) p.licence = s["licence"].get<std::string>();
+  if (s.is_object() && s.contains("liensDisciplines") && s["liensDisciplines"].is_array())
+    for (const auto& x : s["liensDisciplines"])
+      if (x.is_object()) {
+        LienDisciplines l;
+        auto t = [&](const char* k) { return x.contains(k) && x[k].is_string() ? x[k].get<std::string>() : std::string(); };
+        l.id = t("id"), l.de = t("de"), l.vers = t("vers"), l.empreinte = t("empreinte"), l.releve = t("releve"), l.accusePar = t("accusePar"), l.accuseLe = t("accuseLe");
+        if (const std::string q = t("quoi"); !q.empty()) l.quoi = q;
+        if (const std::string e = t("etat"); !e.empty()) l.etat = e;
+        if (x.contains("changements") && x["changements"].is_array())
+          for (const auto& c : x["changements"])
+            if (c.is_string()) l.changements.push_back(c.get<std::string>());
+        if (!l.id.empty()) p.liensDisciplines.push_back(l);
+      }
   // Champs inconnus : conservés pour la réécriture, et signalés.
   static const std::set<std::string> connus = {"format", "version", "nom", "sansCarte", "schemasElectriques", "assemblages", "electronique", "electrique",
                                                 "carte", "boitier", "kicad", "trous", "composants", "pieces", "geometries", "dispositions", "exigences",
-                                                "ordresModification", "liaisons"};
+                                                "ordresModification", "liaisons", "licence", "liensDisciplines"};
   if (s.is_object())
     for (auto it = s.begin(); it != s.end(); ++it)
       if (!connus.count(it.key())) {
@@ -730,6 +744,18 @@ Json versJson(const Projet& p, bool avecGeometries) {
     Json l = Json::array();
     for (const auto& x : p.liaisons) l.push_back(liaisonVersJson(x));
     j["liaisons"] = l;
+  }
+  if (!p.licence.empty()) j["licence"] = p.licence;
+  if (!p.liensDisciplines.empty()) {
+    Json l = Json::array();
+    for (const auto& x : p.liensDisciplines) {
+      Json o = {{"id", x.id}, {"de", x.de}, {"vers", x.vers}, {"quoi", x.quoi}, {"empreinte", x.empreinte}, {"releve", x.releve}, {"etat", x.etat}};
+      if (!x.changements.empty()) o["changements"] = x.changements;
+      if (!x.accusePar.empty()) o["accusePar"] = x.accusePar;
+      if (!x.accuseLe.empty()) o["accuseLe"] = x.accuseLe;
+      l.push_back(o);
+    }
+    j["liensDisciplines"] = l;
   }
   if (p.inconnus.is_object())
     for (auto it = p.inconnus.begin(); it != p.inconnus.end(); ++it)

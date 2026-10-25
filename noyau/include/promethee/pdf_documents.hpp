@@ -77,4 +77,23 @@ struct OptionsPdfCircuit {
 };
 std::string pdfCircuit(const ConceptionElec& c, const OptionsPdfCircuit& o = {});
 
+// ---------- Documents de texte (0.34, 12.13 ; DOC-10, PRJ-25, PRJ-26) ----------
+// Rapports de la vie du projet sur un même générateur : page A4, Helvetica, titres, paragraphes coupés à la largeur,
+// tableaux à colonnes proportionnelles, pied de page numéroté ; métadonnées dans le dictionnaire Info et en XMP
+struct BlocPdf {
+  enum class Genre : std::uint8_t { Titre, SousTitre, Paragraphe, Tableau, Espace, SautDePage } genre = Genre::Paragraphe;
+  std::string texte;
+  std::vector<std::vector<std::string>> lignes;  // tableau : la première ligne est l'en-tête
+  std::vector<double> largeurs;                  // parts des colonnes (vide : égales)
+  bool gras = false;
+};
+struct DocumentPdf {
+  MetaPdf meta;
+  std::vector<BlocPdf> blocs;
+  std::string pied;  // texte du pied de page, suivi de « page n / N »
+};
+std::string pdfDocument(const DocumentPdf& d);
+// Texte des chaînes affichées d'un PDF écrit par pdfDocument (flux non compressés) : pour les essais et la recherche
+std::string textePdfSimple(const std::string& pdf);
+
 }  // namespace prom::ecad

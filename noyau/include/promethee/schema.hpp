@@ -168,6 +168,7 @@ struct Article {
   // série », « obsolète ») et numéro d'article de l'entreprise, relié aux références fabricant validées
   std::string etatCycle, numeroInterne;
   ModeleSpice modeleSpice;  // 11.5
+  std::string licence;      // 12.11 : licence du modèle ou du dessin de l'article (identifiant SPDX), vide : inconnue
   friend bool operator==(const Article&, const Article&) = default;
 };
 

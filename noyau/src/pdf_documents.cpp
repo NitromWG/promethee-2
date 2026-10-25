@@ -773,4 +773,191 @@ std::string pdfCircuit(const ConceptionElec& c, const OptionsPdfCircuit& o) {
   return w.terminer(catalogue, info);
 }
 
+// ---------- Documents de texte ----------
+namespace {
+// Chasses de l'Helvetica (millièmes du corps), de l'espace (32) au tilde (126)
+constexpr short CHASSE_HELVETICA[95] = {278, 278, 355, 556, 556, 889, 667, 191, 333, 333, 389, 584, 278, 333, 278, 278, 556, 556, 556, 556, 556, 556, 556, 556,
+                                        556, 556, 278, 278, 584, 584, 584, 556, 1015, 667, 667, 722, 722, 667, 611, 778, 722, 278, 500, 667, 556, 833, 722, 778,
+                                        667, 778, 722, 667, 611, 722, 667, 944, 667, 667, 611, 278, 278, 278, 469, 556, 333, 556, 556, 500, 556, 556, 278, 556,
+                                        556, 222, 222, 500, 222, 833, 556, 556, 556, 556, 333, 500, 278, 556, 500, 722, 500, 500, 500, 334, 260, 334, 584};
+double largeurTexte(const std::string& t, double corps, bool gras) {
+  double l = 0;
+  for (const char32_t cp : utf32(t)) {
+    if (cp >= 32 && cp <= 126) l += CHASSE_HELVETICA[cp - 32];
+    else if (cp >= 0xC0 && cp <= 0xDE) l += 667;
+    else l += 556;
+  }
+  return l * corps / 1000 * (gras ? 1.07 : 1.0);
+}
+// Lignes d'un texte coupé à « largeur » points (mots entiers ; un mot trop long est coupé)
+std::vector<std::string> couper(const std::string& texte, double largeur, double corps, bool gras) {
+  std::vector<std::string> lignes;
+  std::size_t debut = 0;
+  while (debut <= texte.size()) {
+    const std::size_t fin = texte.find('\n', debut);
+    const std::string para = texte.substr(debut, fin == std::string::npos ? std::string::npos : fin - debut);
+    std::string ligne;
+    std::size_t i = 0;
+    bool vide = true;
+    while (i < para.size()) {
+      std::size_t j = para.find(' ', i);
+      if (j == std::string::npos) j = para.size();
+      std::string mot = para.substr(i, j - i);
+      i = j + 1;
+      const std::string essai = ligne.empty() ? mot : ligne + " " + mot;
+      if (largeurTexte(essai, corps, gras) <= largeur || ligne.empty()) {
+        ligne = essai;
+        // Mot seul plus large que la ligne : coupé à la largeur
+        while (largeurTexte(ligne, corps, gras) > largeur && ligne.size() > 1) {
+          std::size_t k = ligne.size();
+          while (k > 1 && largeurTexte(ligne.substr(0, k), corps, gras) > largeur) {
+            --k;
+            while (k > 0 && (static_cast<unsigned char>(ligne[k]) & 0xC0) == 0x80) --k;
+          }
+          if (k == 0) break;
+          lignes.push_back(ligne.substr(0, k));
+          ligne = ligne.substr(k);
+        }
+      } else {
+        lignes.push_back(ligne);
+        ligne = mot;
+      }
+      vide = false;
+    }
+    if (!ligne.empty() || vide) lignes.push_back(ligne);
+    if (fin == std::string::npos) break;
+    debut = fin + 1;
+  }
+  return lignes;
+}
+}  // namespace
+
+std::string pdfDocument(const DocumentPdf& d) {
+  const double W = 595.28, H = 841.89, marge = 56, bas = 60, largeur = W - 2 * marge;
+  std::vector<std::string> pages(1);
+  double y = H - marge;
+  auto nouvellePage = [&] {
+    pages.emplace_back();
+    y = H - marge;
+  };
+  auto texte = [&](double x, double yy, const std::string& t, double corps, bool gras) {
+    pages.back() += "BT /" + std::string(gras ? "F2 " : "F1 ") + nb(corps) + " Tf " + nb(x) + " " + nb(yy) + " Td " + litteral(t) + " Tj ET\n";
+  };
+  for (const BlocPdf& b : d.blocs) {
+    switch (b.genre) {
+      case BlocPdf::Genre::SautDePage: nouvellePage(); break;
+      case BlocPdf::Genre::Espace: y -= 8; break;
+      case BlocPdf::Genre::Titre:
+      case BlocPdf::Genre::SousTitre:
+      case BlocPdf::Genre::Paragraphe: {
+        const double corps = b.genre == BlocPdf::Genre::Titre ? 17 : b.genre == BlocPdf::Genre::SousTitre ? 12.5 : 10;
+        const bool gras = b.gras || b.genre != BlocPdf::Genre::Paragraphe;
+        const double pas = corps * 1.32;
+        if (b.genre != BlocPdf::Genre::Paragraphe) y -= corps * 0.5;
+        for (const auto& l : couper(b.texte, largeur, corps, gras)) {
+          if (y - pas < bas) nouvellePage();
+          y -= pas;
+          texte(marge, y, l, corps, gras);
+        }
+        y -= b.genre == BlocPdf::Genre::Titre ? 6 : 4;
+        break;
+      }
+      case BlocPdf::Genre::Tableau: {
+        if (b.lignes.empty()) break;
+        const std::size_t n = b.lignes.front().size();
+        if (n == 0) break;
+        std::vector<double> parts = b.largeurs;
+        parts.resize(n, parts.empty() ? 1.0 : 0.0);
+        double somme = 0;
+        for (double& x : parts) somme += x = x > 0 ? x : 1.0;
+        std::vector<double> col(n);
+        for (std::size_t c = 0; c < n; ++c) col[c] = largeur * parts[c] / somme;
+        const double corps = 8.5, pas = corps * 1.3, marge4 = 3;
+        auto rangee = [&](const std::vector<std::string>& cellules, bool entete) {
+          std::vector<std::vector<std::string>> lignes(n);
+          std::size_t haut = 1;
+          for (std::size_t c = 0; c < n; ++c) {
+            lignes[c] = couper(c < cellules.size() ? cellules[c] : std::string(), col[c] - 2 * marge4, corps, entete);
+            haut = std::max(haut, lignes[c].size());
+          }
+          const double h = static_cast<double>(haut) * pas + 2 * marge4;
+          if (y - h < bas) {
+            nouvellePage();
+            return false;
+          }
+          if (entete) pages.back() += "0.92 g " + nb(marge) + " " + nb(y - h) + " " + nb(largeur) + " " + nb(h) + " re f 0 g\n";
+          pages.back() += "0.6 G 0.4 w " + nb(marge) + " " + nb(y - h) + " " + nb(largeur) + " " + nb(h) + " re S 0 G\n";
+          double x = marge;
+          for (std::size_t c = 0; c < n; ++c) {
+            for (std::size_t k = 0; k < lignes[c].size(); ++k) texte(x + marge4, y - marge4 - static_cast<double>(k + 1) * pas + 2, lignes[c][k], corps, entete);
+            x += col[c];
+          }
+          y -= h;
+          return true;
+        };
+        y -= 4;
+        if (!rangee(b.lignes.front(), true)) rangee(b.lignes.front(), true);
+        for (std::size_t r = 1; r < b.lignes.size(); ++r)
+          if (!rangee(b.lignes[r], false)) {
+            rangee(b.lignes.front(), true);  // en-tête répété en haut de la page suivante
+            rangee(b.lignes[r], false);
+          }
+        y -= 8;
+        break;
+      }
+    }
+  }
+  EcrivainPdf w;
+  const int catalogue = w.reserver(), arbre = w.reserver(), f1 = w.reserver(), f2 = w.reserver(), info = w.reserver(), meta = w.reserver();
+  w.objet(f1, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  w.objet(f2, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>");
+  std::vector<int> objetsPages;
+  for (std::size_t i = 0; i < pages.size(); ++i) {
+    std::string flux = pages[i];
+    const std::string pied = (d.pied.empty() ? std::string() : d.pied + " — ") + "page " + std::to_string(i + 1) + " / " + std::to_string(pages.size());
+    flux += "BT /F1 7.5 Tf " + nb(marge) + " 30 Td " + litteral(pied) + " Tj ET\n";
+    const int contenu = w.reserver(), page = w.reserver();
+    w.flux(contenu, "", flux);
+    w.objet(page, "<< /Type /Page /Parent " + std::to_string(arbre) + " 0 R /MediaBox [0 0 " + nb(W) + " " + nb(H) + "] /Resources << /Font << /F1 " + std::to_string(f1) +
+                      " 0 R /F2 " + std::to_string(f2) + " 0 R >> >> /Contents " + std::to_string(contenu) + " 0 R >>");
+    objetsPages.push_back(page);
+  }
+  std::string kids;
+  for (int p : objetsPages) kids += std::to_string(p) + " 0 R ";
+  w.objet(arbre, "<< /Type /Pages /Kids [" + kids + "] /Count " + std::to_string(objetsPages.size()) + " >>");
+  w.flux(meta, "/Type /Metadata /Subtype /XML", xmpPdf(d.meta));
+  w.objet(catalogue, "<< /Type /Catalog /Pages " + std::to_string(arbre) + " 0 R /Metadata " + std::to_string(meta) + " 0 R >>");
+  w.objet(info, "<< /Title " + texteUnicode(d.meta.titre) + " /Author " + texteUnicode(d.meta.auteur) + " /Subject " + texteUnicode(d.meta.sujet) + " /Keywords " +
+                    texteUnicode(d.meta.motsCles) + " /Creator " + texteUnicode("Prométhée") + " /Producer " + texteUnicode("Prométhée") + " >>");
+  return w.terminer(catalogue, info);
+}
+
+std::string textePdfSimple(const std::string& pdf) {
+  std::string r;
+  for (std::size_t i = pdf.find(" Td ("); i != std::string::npos; i = pdf.find(" Td (", i + 1)) {
+    std::size_t j = i + 5;
+    std::string t;
+    for (; j < pdf.size() && pdf[j] != ')'; ++j) {
+      if (pdf[j] == '\\' && j + 1 < pdf.size()) {
+        ++j;
+        t += pdf[j] == 'n' ? '\n' : pdf[j];
+        continue;
+      }
+      t += pdf[j];
+    }
+    if (pdf.compare(j, 4, ") Tj") != 0) continue;
+    // Latin-1 → UTF-8
+    for (const char ch : t) {
+      const auto c = static_cast<unsigned char>(ch);
+      if (c < 0x80) r += static_cast<char>(c);
+      else {
+        r += static_cast<char>(0xC0 | (c >> 6));
+        r += static_cast<char>(0x80 | (c & 0x3F));
+      }
+    }
+    r += '\n';
+  }
+  return r;
+}
+
 }  // namespace prom::ecad
