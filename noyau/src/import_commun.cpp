@@ -117,9 +117,13 @@ std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichie
       if (projet)
         r.conception = conceptionDepuisProjetAltium(*projet, base, lecteur, &ra);
       else if (ext.find("sch") != std::string::npos)
-        r.conception = conceptionDepuisAltium({{nomFichier, contenu}}, std::nullopt, base, &ra);
-      else
-        r.conception = conceptionDepuisAltium({}, contenu, base, &ra);
+        // Schéma et carte de même nom, sans projet : reliés comme dans un projet
+        r.conception = conceptionDepuisAltium({{nomFichier, contenu}}, voisin("PcbDoc"), base, &ra);
+      else {
+        std::vector<std::pair<std::string, std::string>> schemas;
+        if (const auto s = voisin("SchDoc")) schemas.push_back({base + ".SchDoc", *s});
+        r.conception = conceptionDepuisAltium(schemas, contenu, base, &ra);
+      }
       r.fichiers = ra.fichiers.empty() ? std::vector<std::string>{nomFichier} : ra.fichiers;
       r.alertes = ra.alertes;
     } else if (ext == "sch" && estSchemaKicad5(contenu)) {

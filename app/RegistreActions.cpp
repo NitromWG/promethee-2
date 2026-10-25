@@ -281,6 +281,9 @@ RegistreActions::RegistreActions() {
   ajouter("bibliotheque.importerAutres", QStringLiteral("Importer des bibliothèques d'autres logiciels (KiCad, EAGLE)"), P::Atelier, {});
   ajouter("composants.nomenclatureEntree", QStringLiteral("Nomenclature en entrée (CSV, XLSX)"), P::Atelier, {});
   ajouter("carte.importerDansCarte", QStringLiteral("Ajouter à la carte une carte d'un autre logiciel"), P::Atelier, {});
+  ajouter("bibliotheque.convertirDossier", QStringLiteral("Convertir en série un dossier de projets d'autres logiciels"), P::Atelier, {});
+  ajouter("bibliotheque.conceptionReference", QStringLiteral("Importer une conception de référence de fabricant avec ses articles"), P::Atelier, {});
+  ajouter("aide.guideAncienOutil", QStringLiteral("Guide des termes et des gestes de l'ancien outil"), P::Atelier, {});
   ajouter("fabrication.netlistTierce", QStringLiteral("Netlist pour un autre logiciel (OrCAD, PADS, Allegro, CADSTAR, EDIF, SPICE, gEDA, TinyCAD, gabarit)"), P::Atelier, {});
   ajouter("fabrication.exporterPads", QStringLiteral("Exporter la carte en PADS ASCII"), P::Atelier, {});
   ajouter("fabrication.exporterPadsLogic", QStringLiteral("Exporter le schéma en PADS Logic"), P::Atelier, {});
@@ -546,6 +549,9 @@ RegistreActions::RegistreActions() {
       {"bibliotheque.importerAutres", "Bibliothèques tierces…", "importer-cao", "KiCad (.kicad_sym, .pretty) et EAGLE (.lbr) vers la bibliothèque personnelle ou d’équipe, avec un rapport par objet"},
       {"composants.nomenclatureEntree", "Nomenclature en entrée…", "composants", "valeurs, fabricants, MPN et codes LCSC d’une nomenclature CSV ou XLSX, la liste des changements d’abord"},
       {"carte.importerDansCarte", "Ajouter une carte tierce…", "importer-cao", "carte KiCad ou EAGLE ajoutée à la carte ouverte : couches associées, repères renumérotés, un seul Ctrl+Z"},
+      {"bibliotheque.convertirDossier", "Convertir un dossier…", "importer-cao", "tous les projets d’un dossier, sans s’arrêter au premier échec : un rapport par projet, articles communs rangés une fois"},
+      {"bibliotheque.conceptionReference", "Conception de référence…", "importer-cao", "carte d’évaluation d’un fabricant avec ses articles, fiches IPC/DAC-2552 et boîtiers JEP30 posés à côté"},
+      {"aide.guideAncienOutil", "Guide de l’ancien outil", "aide", "termes et gestes de KiCad, EAGLE, Altium, PADS, OrCAD… et leur équivalent dans Prométhée"},
       {"fabrication.netlistTierce", "Netlist tierce…", "fil", "OrCAD PCB II, PADS, Allegro, CADSTAR, EDIF, SPICE, gEDA, TinyCAD ou gabarit maison"},
       {"fabrication.exporterPads", "PADS ASCII…", "exporter", "carte pour PADS Layout et KiCad 10 ; ce qui ne passe pas est listé"},
       {"fabrication.exporterPadsLogic", "PADS Logic…", "exporter", "pièces et signaux du schéma"},

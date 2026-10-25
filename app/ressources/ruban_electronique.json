@@ -7,7 +7,7 @@
       "titre": "Schéma",
       "groupes": [
         {"titre": "Composant", "forme": "grand", "actions": ["schema.choisirComposant", "bibliotheque.articles", "composant.creer"]},
-        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats", "bibliotheque.importerAutres", "composants.nomenclatureEntree"]},
+        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats", "bibliotheque.importerAutres", "composants.nomenclatureEntree", "bibliotheque.convertirDossier", "bibliotheque.conceptionReference", "aide.guideAncienOutil"]},
         {"titre": "Fil", "forme": "grand", "actions": ["schema.fil"]},
         {"titre": "Étiquette", "forme": "grand", "actions": ["schema.etiquette", "schema.etiquetteGlobale"]},
         {"titre": "Alimentation", "forme": "grand", "actions": ["schema.alimentation.gnd", "schema.alimentation.5v", "schema.alimentation.3v3", "schema.alimentation.12v", "schema.alimentation.vcc", "schema.drapeauAlimentation"]},

@@ -12,12 +12,16 @@
 #include <QDir>
 #include <QFileDialog>
 #include <QFileInfo>
+#include <QDirIterator>
+#include <QGridLayout>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QHeaderView>
 #include <QInputDialog>
 #include <QLabel>
+#include <QLineEdit>
 #include <QMessageBox>
+#include <QProgressBar>
 #include <QPushButton>
 #include <QProcess>
 #include <QRadioButton>
@@ -25,6 +29,8 @@
 #include <QStandardPaths>
 #include <QStackedWidget>
 #include <QTableWidget>
+#include <QTextBrowser>
+#include <QThread>
 #include <QVBoxLayout>
 
 #include <nlohmann/json.hpp>
@@ -41,6 +47,7 @@
 #include "promethee/fichiers.hpp"
 #include "promethee/formats_cao.hpp"
 #include "promethee/netlists_tierces.hpp"
+#include "promethee/reprise_existant.hpp"
 
 using namespace prom::ecad;
 using prom::Projet;
@@ -575,8 +582,357 @@ DialogueNomenclatureEntree* AtelierElectronique::nomenclatureEntree() {
   return m_nomenclatureEntree;
 }
 
+// ======================================================================================================================
+// Reprise de l'existant (10.19) : conversion d'un dossier en série, conception de référence, guide de l'ancien outil
+// ======================================================================================================================
+namespace {
+// Nom de fichier tiré du nom d'un projet (« E1/ampli » → « E1_ampli »)
+QString nomFichierProjet(const std::string& nom) {
+  QString n = q(nom);
+  for (QChar& c : n)
+    if (c == QLatin1Char('/') || c == QLatin1Char('\\') || c == QLatin1Char(':')) c = QLatin1Char('_');
+  return n;
+}
+}  // namespace
+
+DialogueConversionSerie::DialogueConversionSerie(AtelierElectronique& a, QWidget* parent) : QDialog(parent), m_atelier(a) {
+  setWindowTitle(QStringLiteral("Convertir un dossier de projets"));
+  setObjectName(QStringLiteral("dialogueConversionSerie"));
+  auto* l = new QVBoxLayout(this);
+  auto* aide = new QLabel(QStringLiteral("Projets KiCad, EAGLE, Altium, PADS, gEDA, Sprint-Layout… du dossier et de ses sous-dossiers : chacun devient un projet "
+                                         "Prométhée avec son rapport, ses composants rattachés aux articles par la référence du fabricant. La série continue "
+                                         "après un échec ; les articles communs sont rangés une seule fois."));
+  aide->setWordWrap(true);
+  l->addWidget(aide);
+  auto* g = new QGridLayout;
+  auto* source = new QPushButton(QStringLiteral("Dossier des projets…"));
+  m_source = new QLabel(QStringLiteral("aucun dossier choisi"));
+  auto* dest = new QPushButton(QStringLiteral("Destination…"));
+  m_dest = new QLineEdit;
+  m_dest->setObjectName(QStringLiteral("destinationConversion"));
+  auto* biblio = new QPushButton(QStringLiteral("Bibliothèque d’équipe…"));
+  m_biblio = new QLineEdit;
+  m_biblio->setObjectName(QStringLiteral("bibliothequeConversion"));
+  m_biblio->setPlaceholderText(QStringLiteral("vide : la bibliothèque personnelle"));
+  g->addWidget(source, 0, 0);
+  g->addWidget(m_source, 0, 1);
+  g->addWidget(dest, 1, 0);
+  g->addWidget(m_dest, 1, 1);
+  g->addWidget(biblio, 2, 0);
+  g->addWidget(m_biblio, 2, 1);
+  g->setColumnStretch(1, 1);
+  l->addLayout(g);
+  m_table = new QTableWidget(0, 5);
+  m_table->setObjectName(QStringLiteral("projetsConversion"));
+  m_table->setHorizontalHeaderLabels({QStringLiteral("Projet"), QStringLiteral("Fichier"), QStringLiteral("Logiciel"), QStringLiteral("Résultat"), QStringLiteral("Articles rattachés / créés")});
+  m_table->horizontalHeader()->setStretchLastSection(true);
+  m_table->verticalHeader()->hide();
+  m_table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+  l->addWidget(m_table, 1);
+  m_barre = new QProgressBar;
+  m_barre->setValue(0);
+  l->addWidget(m_barre);
+  m_etat = new QLabel;
+  m_etat->setWordWrap(true);
+  l->addWidget(m_etat);
+  auto* boutons = new QHBoxLayout;
+  m_lancer = new QPushButton(QStringLiteral("Convertir"));
+  m_stop = new QPushButton(QStringLiteral("Arrêter après le projet en cours"));
+  m_guide = new QPushButton(QStringLiteral("Guide de l’ancien outil…"));
+  auto* fermer = new QPushButton(QStringLiteral("Fermer"));
+  m_stop->setEnabled(false);
+  for (QPushButton* b : {m_lancer, m_stop, m_guide}) boutons->addWidget(b);
+  boutons->addStretch();
+  boutons->addWidget(fermer);
+  l->addLayout(boutons);
+  connect(source, &QPushButton::clicked, this, [this] {
+    const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Dossier des projets à convertir"));
+    if (!d.isEmpty()) choisirDossier(d);
+  });
+  connect(dest, &QPushButton::clicked, this, [this] {
+    const QString d = QFileDialog::getExistingDirectory(this, QStringLiteral("Dossier des projets convertis"), m_dest->text());
+    if (!d.isEmpty()) reglerDestination(d);
+  });
+  connect(biblio, &QPushButton::clicked, this, [this] {
+    const QString f = QFileDialog::getSaveFileName(this, QStringLiteral("Bibliothèque d’équipe"), QStringLiteral("bibliotheque-equipe.json"), QStringLiteral("Bibliothèque Prométhée (*.json)"), nullptr,
+                                                   QFileDialog::DontConfirmOverwrite);
+    if (!f.isEmpty()) reglerBibliotheque(f);
+  });
+  connect(m_lancer, &QPushButton::clicked, this, [this] { lancer(); });
+  connect(m_stop, &QPushButton::clicked, this, [this] { arreter(); });
+  connect(m_guide, &QPushButton::clicked, this, [this] { montrerGuide(); });
+  connect(fermer, &QPushButton::clicked, this, &QDialog::close);
+  resize(1000, 620);
+}
+
+DialogueConversionSerie::~DialogueConversionSerie() {
+  if (m_fil) {
+    m_arret = true;
+    m_fil->wait();
+  }
+}
+
+int DialogueConversionSerie::choisirDossier(const QString& dossier) {
+  if (enCours()) return -1;
+  m_dossier = dossier;
+  std::vector<std::string> fichiers;
+  const QDir racine(dossier);
+  QDirIterator it(dossier, QDir::Files, QDirIterator::Subdirectories);
+  while (it.hasNext()) fichiers.push_back(racine.relativeFilePath(it.next()).toStdString());
+  // Les schémas sont lus pour reconnaître les feuilles filles qu'ils appellent
+  m_projets = prom::ecad::projetsDuDossier(fichiers, [&racine](const std::string& f) -> std::optional<std::string> {
+    try {
+      return prom::lireFichier(prom::cheminFichier(racine.filePath(q(f)).toStdString()));
+    } catch (const std::exception&) {
+      return std::nullopt;
+    }
+  });
+  m_source->setText(QStringLiteral("%1 — %2 projet(s)").arg(QDir::toNativeSeparators(dossier).toHtmlEscaped()).arg(m_projets.size()));
+  if (m_dest->text().isEmpty()) m_dest->setText(racine.filePath(QStringLiteral("convertis")));
+  m_table->setRowCount(0);
+  for (const auto& p : m_projets) {
+    const int r = m_table->rowCount();
+    m_table->insertRow(r);
+    m_table->setItem(r, 0, new QTableWidgetItem(q(p.nom)));
+    m_table->setItem(r, 1, new QTableWidgetItem(q(p.fichier)));
+    m_table->setItem(r, 2, new QTableWidgetItem);
+    m_table->setItem(r, 3, new QTableWidgetItem(QStringLiteral("à convertir")));
+    m_table->setItem(r, 4, new QTableWidgetItem);
+  }
+  m_table->resizeColumnsToContents();
+  m_barre->setMaximum(std::max<int>(1, static_cast<int>(m_projets.size())));
+  m_barre->setValue(0);
+  m_etat->setText(m_projets.empty() ? QStringLiteral("Aucun projet reconnu dans ce dossier.") : QString());
+  return static_cast<int>(m_projets.size());
+}
+
+void DialogueConversionSerie::reglerDestination(const QString& dossier) { m_dest->setText(dossier); }
+void DialogueConversionSerie::reglerBibliotheque(const QString& fichier) { m_biblio->setText(fichier); }
+bool DialogueConversionSerie::enCours() const { return m_fil != nullptr; }
+void DialogueConversionSerie::arreter() {
+  m_arret = true;
+  m_etat->setText(QStringLiteral("Arrêt demandé : la série s’arrête après le projet en cours."));
+}
+
+bool DialogueConversionSerie::lancer(bool attendre) {
+  if (enCours() || m_projets.empty()) return false;
+  m_destination = m_dest->text().isEmpty() ? QDir(m_dossier).filePath(QStringLiteral("convertis")) : m_dest->text();
+  m_bibliotheque = m_biblio->text();
+  if (!QDir().mkpath(m_destination)) {
+    m_etat->setText(rouge(QStringLiteral("Dossier de destination impossible à créer : %1").arg(m_destination.toHtmlEscaped())));
+    return false;
+  }
+  m_equipe = {};
+  if (m_bibliotheque.isEmpty()) {
+    m_equipe.nom = "personnelle";
+    m_equipe.articles = AtelierElectronique::articlesPerso();
+    m_equipe.symboles = AtelierElectronique::bibliothequePerso();
+    m_equipe.empreintes = AtelierElectronique::empreintesPerso();
+  } else if (QFileInfo::exists(m_bibliotheque)) {
+    std::string erreur;
+    try {
+      m_equipe = lireContenuBibliotheque(prom::lireFichier(prom::cheminFichier(m_bibliotheque.toStdString())), &erreur);
+    } catch (const std::exception& e) {
+      erreur = e.what();
+    }
+    if (!erreur.empty()) {
+      m_etat->setText(rouge(QStringLiteral("« %1 » n’est pas une bibliothèque lisible : %2").arg(m_bibliotheque.toHtmlEscaped(), q(erreur).toHtmlEscaped())));
+      return false;
+    }
+  } else
+    m_equipe.nom = QFileInfo(m_bibliotheque).completeBaseName().toStdString();
+  m_arret = false;
+  m_fini = false;
+  m_bilan = {};
+  m_lancer->setEnabled(false);
+  m_stop->setEnabled(true);
+  m_barre->setMaximum(static_cast<int>(m_projets.size()));
+  m_barre->setValue(0);
+  m_etat->setText(QStringLiteral("Conversion en cours…"));
+  const std::string dossier = m_dossier.toStdString(), dest = m_destination.toStdString();
+  m_fil = QThread::create([this, dossier, dest, projets = m_projets] {
+    auto lire = [dossier](const std::string& f) -> std::optional<std::string> {
+      try {
+        const auto chemin = prom::cheminFichier(dossier + "/" + f);
+        std::error_code ec;
+        if (!std::filesystem::is_regular_file(chemin, ec)) return std::nullopt;
+        return prom::lireFichier(chemin);
+      } catch (const std::exception&) {
+        return std::nullopt;
+      }
+    };
+    auto ecrire = [dest](const RapportProjet& r, const ConceptionElec& c) {
+      Projet p = prom::projetVide();
+      p.sansCarte = true;
+      p.nom = c.nom;
+      p.electronique.push_back(c);
+      const std::string base = dest + "/" + nomFichierProjet(r.projet).toStdString();
+      prom::ecrireProjet(p, base + ".promethee");
+      prom::ecrireFichierAtomique(prom::cheminFichier(base + ".rapport.md"), r.texte());
+    };
+    m_bilan = convertirEnSerie(projets, m_equipe, lire, ecrire, [this](std::size_t fait, std::size_t total) {
+      QMetaObject::invokeMethod(this, [this, fait, total] {
+        m_barre->setMaximum(static_cast<int>(total));
+        m_barre->setValue(static_cast<int>(fait));
+      }, Qt::QueuedConnection);
+    }, &m_arret);
+  });
+  connect(m_fil, &QThread::finished, this, &DialogueConversionSerie::finir);
+  m_fil->start();
+  if (attendre) {
+    m_fil->wait();
+    finir();
+  }
+  return true;
+}
+
+void DialogueConversionSerie::finir() {
+  if (m_fini) return;
+  m_fini = true;
+  if (m_fil) {
+    m_fil->wait();
+    m_fil->deleteLater();
+    m_fil = nullptr;
+  }
+  QStringList erreurs;
+  try {
+    // Rapports des projets en échec (ceux des réussis sont écrits avec leur projet) et bilan de la série
+    for (const auto& r : m_bilan.projets)
+      if (!r.reussi) prom::ecrireFichierAtomique(prom::cheminFichier(m_destination.toStdString() + "/" + nomFichierProjet(r.projet).toStdString() + ".rapport.md"), r.texte());
+    prom::ecrireFichierAtomique(prom::cheminFichier(m_destination.toStdString() + "/bilan-conversion.md"), m_bilan.texte());
+    if (m_bibliotheque.isEmpty()) {
+      m_atelier.ajouterSymbolesPerso(m_equipe.symboles);
+      for (const auto& e : m_equipe.empreintes) m_atelier.ajouterEmpreintePerso(e);
+      m_atelier.rangerArticlesPerso(m_equipe.articles);
+    } else
+      prom::ecrireFichierAtomique(prom::cheminFichier(m_bibliotheque.toStdString()), texteContenuBibliotheque(m_equipe));
+  } catch (const std::exception& e) {
+    erreurs << QString::fromUtf8(e.what()).toHtmlEscaped();
+  }
+  for (const auto& r : m_bilan.projets)
+    for (int i = 0; i < m_table->rowCount(); ++i)
+      if (m_table->item(i, 1)->text() == q(r.fichier)) {
+        m_table->item(i, 2)->setText(q(r.logiciel));
+        auto* res = m_table->item(i, 3);
+        res->setText(r.reussi ? QStringLiteral("converti") : QStringLiteral("échec : ") + q(r.erreur));
+        res->setForeground(r.reussi ? QColor(0x1E, 0x84, 0x49) : QColor(0xC0, 0x39, 0x2B));
+        m_table->item(i, 4)->setText(r.reussi ? QStringLiteral("%1 / %2").arg(r.articles.rattaches).arg(r.articles.crees) : QString());
+      }
+  m_table->resizeColumnsToContents();
+  m_etat->setText(QStringLiteral("<b>%1 projet(s) converti(s)</b>, %2 en échec%3 ; %4 article(s) ajouté(s) à la bibliothèque %5, dont %6 commun(s) à plusieurs projets. Rapports dans %7.%8")
+                      .arg(m_bilan.reussis)
+                      .arg(m_bilan.echecs)
+                      .arg(m_bilan.interrompu ? QStringLiteral(" (série arrêtée)") : QString())
+                      .arg(m_bilan.articlesCrees)
+                      .arg(m_bibliotheque.isEmpty() ? QStringLiteral("personnelle") : QStringLiteral("d’équipe"))
+                      .arg(m_bilan.articlesCommuns)
+                      .arg(QDir::toNativeSeparators(m_destination).toHtmlEscaped())
+                      .arg(erreurs.isEmpty() ? QString() : QStringLiteral("<br>") + rouge(erreurs.join(QStringLiteral("<br>")))));
+  m_lancer->setEnabled(true);
+  m_stop->setEnabled(false);
+  emit termine();
+}
+
+QString DialogueConversionSerie::logicielPrincipal() const {
+  std::map<std::string, int> n;
+  for (const auto& r : m_bilan.projets)
+    if (!r.logiciel.empty()) ++n[r.logiciel];
+  std::string meilleur;
+  int max = 0;
+  for (const auto& [l, k] : n)
+    if (k > max) max = k, meilleur = l;
+  return q(meilleur);
+}
+
+void DialogueConversionSerie::montrerGuide() { montrerGuideAncienOutil(this, logicielPrincipal()); }
+
+void montrerGuideAncienOutil(QWidget* parent, const QString& logiciel) {
+  auto* d = new QDialog(parent);
+  d->setAttribute(Qt::WA_DeleteOnClose);
+  d->setObjectName(QStringLiteral("guideAncienOutil"));
+  d->setWindowTitle(QStringLiteral("Guide de l’ancien outil"));
+  auto* l = new QVBoxLayout(d);
+  auto* choix = new QComboBox;
+  choix->setObjectName(QStringLiteral("logicielGuide"));
+  const auto noms = logicielsDuGuide();
+  int courant = 0;
+  for (std::size_t i = 0; i < noms.size(); ++i) {
+    choix->addItem(q(noms[i]));
+    if (!logiciel.isEmpty() && guideAncienOutil(logiciel.toStdString()).front().ancien == guideAncienOutil(noms[i]).front().ancien) courant = static_cast<int>(i);
+  }
+  auto* page = new QTextBrowser;
+  page->setObjectName(QStringLiteral("pageGuide"));
+  l->addWidget(choix);
+  l->addWidget(page, 1);
+  auto montrer = [page, choix] { page->setHtml(q(guideHtml(choix->currentText().toStdString()))); };
+  QObject::connect(choix, &QComboBox::currentIndexChanged, d, montrer);
+  choix->setCurrentIndex(courant);
+  montrer();
+  d->resize(820, 640);
+  d->show();
+}
+
+bool AtelierElectronique::importerConceptionReference(const QString& chemin) {
+  std::string contenu, erreur;
+  try {
+    contenu = prom::lireFichier(prom::cheminFichier(chemin.toStdString()));
+  } catch (const std::exception& e) {
+    afficherMessage(QStringLiteral("Fichier illisible : %1").arg(QString::fromUtf8(e.what()).toHtmlEscaped()), NiveauMessage::Erreur);
+    return false;
+  }
+  // Fiches IPC/DAC-2552 et boîtiers JEP30 posés à côté du projet
+  const QDir dossier = QFileInfo(chemin).dir();
+  std::vector<std::string> fiches;
+  for (const QFileInfo& x : dossier.entryInfoList({QStringLiteral("*.xml"), QStringLiteral("*.XML")}, QDir::Files)) try {
+      fiches.push_back(prom::lireFichier(prom::cheminFichier(x.filePath().toStdString())));
+    } catch (const std::exception&) {
+    }
+  ContenuBibliotheque b;
+  b.nom = "personnelle";
+  b.articles = articlesPerso();
+  b.symboles = bibliothequePerso();
+  b.empreintes = empreintesPerso();
+  const auto r = prom::ecad::importerConceptionReference(QFileInfo(chemin).fileName().toStdString(), contenu, [&](const std::string& n) { return lireVoisin(dossier, n); }, b, fiches, &erreur);
+  if (!r) {
+    afficherMessage(QStringLiteral("Import impossible : %1").arg(q(erreur).toHtmlEscaped()), NiveauMessage::Erreur);
+    return false;
+  }
+  ajouterSymbolesPerso(b.symboles);
+  for (const auto& e : b.empreintes) ajouterEmpreintePerso(e);
+  rangerArticlesPerso(b.articles);
+  const ConceptionElec c = r->import.conception;
+  m_doc->modifier([&c](Projet& p) { p.electronique.push_back(c); }, QStringLiteral("Conception de référence de %1").arg(q(r->import.logiciel)));
+  ouvrir(static_cast<int>(m_doc->projet().electronique.size()) - 1, c.schemaSeul ? Schema : Circuit);
+  afficherMessage(QStringLiteral("<b>Conception de référence</b> (%1) : %2 article(s) rattaché(s), %3 créé(s), %4 composant(s) sans référence ; %5 fiche(s) IPC/DAC-2552, %6 boîtier(s) JEP30.%7")
+                      .arg(q(r->import.logiciel))
+                      .arg(r->articles.rattaches)
+                      .arg(r->articles.crees)
+                      .arg(r->articles.sansReference)
+                      .arg(r->fichesLues)
+                      .arg(r->boitiers)
+                      .arg(r->alertes.empty() && r->import.alertes.empty() ? QString() : QStringLiteral("<br>À vérifier : ") + liste(r->alertes.empty() ? r->import.alertes : r->alertes, 6)),
+                  r->alertes.empty() ? NiveauMessage::Succes : NiveauMessage::Avertissement);
+  return true;
+}
+
+DialogueConversionSerie* AtelierElectronique::conversionSerie() {
+  if (!m_conversionSerie) m_conversionSerie = new DialogueConversionSerie(*this, this);
+  return m_conversionSerie;
+}
+
 void AtelierElectronique::enregistrerCommandesL10() {
   auto& c = m_commandes;
+  // Reprise de l'existant (10.19)
+  c["bibliotheque.convertirDossier"] = [this] {
+    auto* d = conversionSerie();
+    d->show();
+    d->raise();
+  };
+  c["bibliotheque.conceptionReference"] = [this] {
+    const QString chemin = QFileDialog::getOpenFileName(this, QStringLiteral("Conception de référence d’un fabricant"), {}, QStringLiteral("Cartes et projets (%1)").arg(q(filtreConceptionsTierces())));
+    if (!chemin.isEmpty()) importerConceptionReference(chemin);
+  };
+  c["aide.guideAncienOutil"] = [this] { montrerGuideAncienOutil(this, {}); };
   c["bibliotheque.importerAutres"] = [this] {
     auto* d = importBibliotheques();
     d->show();

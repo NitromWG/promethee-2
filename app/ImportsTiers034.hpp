@@ -3,8 +3,10 @@
 // entières avec le rapport par objet (10.4, 10.18), nomenclature en entrée (10.6). Licence GPL-3.0-only.
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <string>
+#include <vector>
 
 #include <QDialog>
 
@@ -12,12 +14,17 @@
 #include "promethee/idx.hpp"
 #include "promethee/import_commun.hpp"
 #include "promethee/nomenclature_entree.hpp"
+#include "promethee/reprise_existant.hpp"
 
 class AtelierElectronique;
 class QCheckBox;
 class QLabel;
+class QLineEdit;
+class QProgressBar;
+class QPushButton;
 class QRadioButton;
 class QTableWidget;
+class QThread;
 
 // Import d'une conception : cible (nouveau projet, projet ouvert, carte ouverte), tableau des couches proposé d'après
 // leur nom et leur fonction et gardé par logiciel, aperçu des repères renumérotés et des réseaux homonymes
@@ -104,3 +111,46 @@ class DialogueIdx : public QDialog {
   QString m_fichier;
   QTableWidget* m_table = nullptr;
 };
+
+// Conversion en série d'un dossier de projets (10.19) : projets trouvés dans le dossier et ses sous-dossiers, convertis
+// sur un fil à part sans s'arrêter au premier échec ; chacun enregistré en projet Prométhée avec son rapport, les
+// articles communs rangés une seule fois dans la bibliothèque d'équipe (ou personnelle), puis le guide de l'ancien outil
+class DialogueConversionSerie : public QDialog {
+  Q_OBJECT
+ public:
+  explicit DialogueConversionSerie(AtelierElectronique& a, QWidget* parent = nullptr);
+  ~DialogueConversionSerie() override;
+  int choisirDossier(const QString& dossier);       // rend le nombre de projets trouvés
+  void reglerDestination(const QString& dossier);   // dossier des projets convertis et des rapports
+  void reglerBibliotheque(const QString& fichier);  // bibliothèque d'équipe ; vide : la bibliothèque personnelle
+  // Lance la série sur son fil ; « attendre » rend la main une fois la série finie (essais)
+  bool lancer(bool attendre = false);
+  void arreter();
+  bool enCours() const;
+  const prom::ecad::BilanSerie& bilan() const { return m_bilan; }
+  QTableWidget* table() const { return m_table; }
+  QString logicielPrincipal() const;  // logiciel le plus fréquent de la série
+  void montrerGuide();
+
+ signals:
+  void termine();
+
+ private:
+  void finir();
+  AtelierElectronique& m_atelier;
+  QString m_dossier, m_destination, m_bibliotheque;
+  std::vector<prom::ecad::ProjetAConvertir> m_projets;
+  prom::ecad::ContenuBibliotheque m_equipe;
+  prom::ecad::BilanSerie m_bilan;
+  std::atomic<bool> m_arret{false};
+  QThread* m_fil = nullptr;
+  bool m_fini = true;
+  QTableWidget* m_table = nullptr;
+  QProgressBar* m_barre = nullptr;
+  QLabel *m_etat = nullptr, *m_source = nullptr;
+  QLineEdit *m_dest = nullptr, *m_biblio = nullptr;
+  QPushButton *m_lancer = nullptr, *m_stop = nullptr, *m_guide = nullptr;
+};
+
+// Guide des termes et des gestes de l'ancien outil, en page HTML
+void montrerGuideAncienOutil(QWidget* parent, const QString& logiciel);

@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QTableWidget>
+#include <QTextBrowser>
 #include <QTimer>
 
 #include "AtelierElectronique.hpp"
@@ -31,6 +32,7 @@
 #include "promethee/idx.hpp"
 #include "promethee/fichiers.hpp"
 #include "promethee/modele.hpp"
+#include "promethee/reprise_existant.hpp"
 
 using namespace prom::ecad;
 using Verifier = std::function<void(bool, const std::string&, const std::string&)>;
@@ -415,5 +417,69 @@ void essaisElectronique034L10(FenetrePrincipale& f, const Verifier& verifier) {
       if (qEnvironmentVariableIsSet("PROMETHEE_ESSAIS_DEBUG")) std::printf("(dessins : %zu ; gerber : %zu octets, G36 à %zu)\n", c.circuit.dessins.size(), g.size(), g.find("G36"));
     }
     verifier(regions == 2 && std::abs(largeur - 20) < 0.005, "10.21 : logo SVG de 20 mm posé en sérigraphie : 20,00 mm dans le Gerber relu", std::to_string(largeur) + " mm, " + std::to_string(regions) + " région(s)");
+  }
+
+  // ---------- 10.19 · Dossier de projets converti en série, sur son fil, sans s'arrêter au premier échec ----------
+  {
+    const QString source = QDir(dossier).filePath(QStringLiteral("serie")), sortie = QDir(dossier).filePath(QStringLiteral("serie-convertis"));
+    auto copier = [&](const QString& de, const QString& vers) {
+      QDir().mkpath(QFileInfo(QDir(source).filePath(vers)).path());
+      QFile::copy(d + QLatin1Char('/') + de, QDir(source).filePath(vers));
+    };
+    copier(QStringLiteral("eagle/ampli.sch"), QStringLiteral("eagle/ampli.sch"));
+    copier(QStringLiteral("eagle/ampli.brd"), QStringLiteral("eagle/ampli.brd"));
+    copier(QStringLiteral("kicad5/filtre.sch"), QStringLiteral("kicad5/filtre.sch"));
+    copier(QStringLiteral("kicad5/filtre-cache.lib"), QStringLiteral("kicad5/filtre-cache.lib"));
+    copier(QStringLiteral("kicad5/etage.sch"), QStringLiteral("kicad5/etage.sch"));
+    copier(QStringLiteral("geda/goodfet50.sch"), QStringLiteral("geda/goodfet50.sch"));
+    copier(QStringLiteral("geda/goodfet50.pcb"), QStringLiteral("geda/goodfet50.pcb"));
+    copier(QStringLiteral("sprint/12F629_SM.lay6"), QStringLiteral("sprint/12F629_SM.lay6"));
+    {
+      QFile casse(QDir(source).filePath(QStringLiteral("casse/casse.kicad_pcb")));
+      QDir().mkpath(QFileInfo(casse).path());
+      if (casse.open(QIODevice::WriteOnly)) casse.write("ceci n'est pas une carte");
+    }
+    AtelierElectronique* a = f.atelierElectronique();
+    if (!a) {
+      f.montrerElectronique(0, AtelierElectronique::Circuit);
+      attendre(300);
+      a = f.atelierElectronique();
+    }
+    bool ok = false;
+    std::string detail;
+    if (a) {
+      DialogueConversionSerie* dlg = a->conversionSerie();
+      const int n = dlg->choisirDossier(source);
+      dlg->reglerDestination(sortie);
+      const QString equipe = QDir(dossier).filePath(QStringLiteral("equipe-serie.json"));
+      dlg->reglerBibliotheque(equipe);
+      const bool lance = dlg->lancer(true);
+      const auto& b = dlg->bilan();
+      const int convertis = static_cast<int>(QDir(sortie).entryList({QStringLiteral("*.promethee")}, QDir::Files).size());
+      const int rapports = static_cast<int>(QDir(sortie).entryList({QStringLiteral("*.rapport.md")}, QDir::Files).size());
+      std::string erreur;
+      ContenuBibliotheque relue;
+      try {
+        relue = lireContenuBibliotheque(prom::lireFichier(prom::cheminFichier(equipe.toStdString())), &erreur);
+      } catch (const std::exception& e) {
+        erreur = e.what();
+      }
+      bool tableJuste = dlg->table()->rowCount() == n;
+      for (int i = 0; i < dlg->table()->rowCount(); ++i) tableJuste = tableJuste && dlg->table()->item(i, 3)->text() != QStringLiteral("à convertir");
+      // Le guide de l'ancien outil s'ouvre sur le logiciel le plus fréquent de la série
+      dlg->montrerGuide();
+      attendre(200);
+      const auto* guide = dlg->findChild<QDialog*>(QStringLiteral("guideAncienOutil"));
+      const auto* page = guide ? guide->findChild<QTextBrowser*>(QStringLiteral("pageGuide")) : nullptr;
+      const bool guideOk = page && page->toPlainText().contains(QStringLiteral("Prométhée pour les habitués"));
+      if (guide) const_cast<QDialog*>(guide)->close();
+      ok = lance && n == 5 && static_cast<int>(b.projets.size()) == 5 && b.reussis == 4 && b.echecs == 1 && convertis == 4 && rapports == 5 && QFileInfo::exists(QDir(sortie).filePath(QStringLiteral("bilan-conversion.md"))) &&
+           erreur.empty() && relue.articles.size() == static_cast<std::size_t>(b.articlesCrees) && b.articlesCrees >= 1 && tableJuste && guideOk;
+      detail = std::to_string(n) + " projet(s), " + std::to_string(b.reussis) + " converti(s), " + std::to_string(b.echecs) + " échec(s), " + std::to_string(convertis) + " fichier(s) .promethee, " +
+               std::to_string(rapports) + " rapport(s), " + std::to_string(b.articlesCrees) + " article(s) d'équipe (" + std::to_string(relue.articles.size()) + " relu(s))" + (guideOk ? "" : ", guide absent") +
+               (tableJuste ? "" : ", tableau incomplet") + (erreur.empty() ? "" : ", " + erreur);
+      dlg->close();
+    }
+    verifier(ok, "10.19 : dossier de projets EAGLE, KiCad 5, gEDA et Sprint-Layout converti en série : un rapport par projet, l'échec n'arrête pas la série, articles rangés dans la bibliothèque d'équipe, guide ouvert", detail);
   }
 }

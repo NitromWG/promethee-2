@@ -148,6 +148,10 @@ class AtelierElectronique : public QWidget {
   // Imports des autres logiciels (0.34, lot L10) : bibliothèques avec le rapport par objet, nomenclature en entrée
   class DialogueImportBibliotheques* importBibliotheques();
   class DialogueNomenclatureEntree* nomenclatureEntree();
+  class DialogueConversionSerie* conversionSerie();  // 10.19
+  // Conception de référence d'un fabricant : importée avec ses articles (bibliothèque personnelle), les fiches
+  // IPC/DAC-2552 et les boîtiers JEP30 posés à côté du fichier (10.19)
+  bool importerConceptionReference(const QString& chemin);
   // Proposition IDX de la mécanique (10.24) : le dialogue des changements ; sans dialogue, tous acceptés
   bool recevoirIdx(const QString& chemin, bool dialogue = true);
   // Dessin DXF, SVG ou DWG (LibreDWG) posé sur une couche de la carte (10.21) ; sans dialogue, « options » ou le
@@ -378,6 +382,7 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandesL8();      // fabrication, signaux, impédance, routage par stratégies (0.34, OutilsFabrication034.cpp)
   void enregistrerCommandesL10();     // imports des autres logiciels (0.34, ImportsTiers034.cpp)
   QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
+  QPointer<class DialogueConversionSerie> m_conversionSerie;
   QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
   QWidget* controleCouches();
   QWidget* controleGrille();

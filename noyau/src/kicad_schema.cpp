@@ -622,9 +622,14 @@ std::map<std::string, std::string> schemaKicadDepuisConception(const ConceptionE
       o += "    (property \"Value\" " + chaine(val) + " (at " + pt(s.position + Pt{2'540'000, 2'540'000}) + " 0) " + effets() + ")\n";
       o += "    (property \"Footprint\" " + chaine(fp) + " (at " + pt(s.position) + " 0) " + effets(true) + ")\n";
       o += "    (property \"Datasheet\" " + chaine(x && !x->fiche.empty() ? x->fiche : "~") + " (at " + pt(s.position) + " 0) " + effets(true) + ")\n";
-      if (x)
+      if (x) {
+        // Référence et nom du fabricant (10.19) : relues par KiCad et par Prométhée sous ces noms
+        if (!x->mpn.empty() && !x->champs.count("MPN")) o += "    (property \"MPN\" " + chaine(x->mpn) + " (at " + pt(s.position) + " 0) " + effets(true) + ")\n";
+        if (!x->fabricant.empty() && !x->champs.count("Manufacturer"))
+          o += "    (property \"Manufacturer\" " + chaine(x->fabricant) + " (at " + pt(s.position) + " 0) " + effets(true) + ")\n";
         for (const auto& [k, v] : x->champs)
           if (k != "Footprint") o += "    (property " + chaine(k) + " " + chaine(v) + " (at " + pt(s.position) + " 0) " + effets(true) + ")\n";
+      }
       o += "    (instances (project " + chaine(nomProjet) + " (path " + chaine(chemins.count(f.uuid) ? chemins[f.uuid] : "/" + uuidRacine) + " (reference " + chaine(ref) + ") (unit " +
            std::to_string(std::max(1, s.unite)) + "))))\n  )\n";
     }

@@ -175,6 +175,12 @@ constexpr Mot MOTS[] = {
     {"jonction", "Point qui relie deux fils qui se croisent ou se rejoignent en T."},
     {"drapeau d’alimentation", "Marque qui déclare qu’un réseau est alimenté par l’extérieur, pour la vérification électrique."},
     {"unité", "Partie d’un composant posée à part : une porte d’un 74HC00, un ampli d’un LM358."},
+    {"article", "Composant réel, achetable : symbole, empreinte, brochage, valeur, fabricant et référence fabricant, fournisseurs."},
+    {"référence fabricant", "Numéro de la pièce chez son fabricant (MPN, « RC0603FR-0710KL ») : il relie un composant importé à l’article de la bibliothèque."},
+    {"IPC/DAC-2552", "Norme d’échange des propriétés d’un composant en XML (identification, boîtier, cotes, masse, environnement, fournisseurs)."},
+    {"JEP30", "Modèle de pièce de la JEDEC, en XML : ici, la section des boîtiers (corps, broches, pas)."},
+    {"netlist", "Liste des réseaux et des broches qu’ils relient : ce que s’échangent un schéma et une carte d’outils différents."},
+    {"IDX", "Format d’échange entre la carte et la CAO mécanique : ligne de base, puis propositions acceptées ou refusées une à une."},
 };
 }  // namespace
 

@@ -1092,7 +1092,9 @@ std::vector<DifferenceArticle> differencesArticle(const ConceptionElec& c, const
   };
   const DefSymbole* base = c.symbole(a.symbole);
   const std::string symbole = base ? symboleDeArticle(a, *base).id : a.symbole;
-  cmp("symbole", k.symbole, symbole);
+  // Composant posé avec le symbole même de l'article, sans brochage propre (article repris d'un import, 10.19) : mêmes
+  // broches, mêmes numéros, rien à mettre à jour
+  if (k.symbole != a.symbole || !a.brochage.empty()) cmp("symbole", k.symbole, symbole);
   cmp("empreinte", k.empreinte, a.empreinte);
   if (!a.valeur.empty()) cmp("valeur", k.valeur, a.valeur);
   cmp("fabricant", k.fabricant, a.fabricant);
