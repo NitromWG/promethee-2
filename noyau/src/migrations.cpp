@@ -3,6 +3,7 @@
 #include "promethee/migrations.hpp"
 
 #include <algorithm>
+#include <map>
 #include <sstream>
 #include <stdexcept>
 
@@ -13,7 +14,7 @@
 namespace prom {
 
 namespace {
-const std::string VERSION_COURANTE = "0.33";
+const std::string VERSION_COURANTE = "0.34";
 
 std::vector<int> morceaux(const std::string& v) {
   std::vector<int> r;
@@ -52,6 +53,174 @@ int retirerDesComposants(Json& o, const char* cle) {
   int n = 0;
   pourChaque(o, "composants", [&](Json& k) { n += static_cast<int>(k.erase(cle)); });
   return n;
+}
+int taille(const Json* t) { return t && t->is_array() ? static_cast<int>(t->size()) : t && t->is_object() ? static_cast<int>(t->size()) : 0; }
+bool texteEgal(const Json& o, const char* k, const char* v) { return o.contains(k) && o[k].is_string() && o[k].get<std::string>() == v; }
+int entier(const Json& o, const char* k, int defaut) { return o.contains(k) && o[k].is_number() ? o[k].get<int>() : defaut; }
+
+// Données des ateliers de la 0.34 rangées dans « extensions » : la 0.33 garde la clé sans la lire
+std::string nomExtension(const std::string& cle) {
+  static const std::map<std::string, std::string> noms = {
+      {"cablage", "faisceaux de câblage"},
+      {"colle", "points de colle"},
+      {"consignes", "consignes de l'enseignant"},
+      {"defautsCarte", "réglages par défaut de la carte"},
+      {"directivesSpice", "directives SPICE importées"},
+      {"enseignant", "couche de l'enseignant (parties verrouillées, actions masquées, pannes cachées)"},
+      {"historiqueIdx", "historique des échanges IDX"},
+      {"importCouches", "tableau des couches importées"},
+      {"isolementSurface", "réglages des lignes de fuite"},
+      {"jeuxDxf", "jeux de couches DXF"},
+      {"lignes", "schéma de lignes"},
+      {"longueursBoitier", "longueurs internes des boîtiers"},
+      {"numeroSerie", "numéro de série en sérigraphie"},
+      {"organigrammes", "organigrammes"},
+      {"panneau", "panneau de copies liées"},
+      {"pdfA", "réglages PDF/A"},
+      {"plans", "dossier de plans"},
+      {"platine", "platine d'essai"},
+      {"programmes", "programmes embarqués"},
+      {"provenanceRegles", "provenance des règles"},
+      {"retouches", "calque des retouches"},
+      {"retouchesRecues", "retouches reçues"},
+      {"revues", "revues formelles signées"},
+      {"series", "séries d'exercices"},
+      {"simulation", "classeur de simulation"},
+      {"strategiesRoutage", "stratégies du routeur"},
+  };
+  const auto it = noms.find(cle);
+  return it == noms.end() ? "« " + cle + " »" : it->second;
+}
+
+// Accord en nombre des participes des pertes (« ignoré », « ignorés »)
+const char* s_(int n) { return n > 1 ? "s" : ""; }
+
+void descendreConceptionVers033(Json& o, std::vector<std::string>& pertes) {
+  o["format"] = 5;
+  o["formatElectronique"] = 5;
+  // ----- Schéma -----
+  int blocs = 0, hierarchiques = 0, directives = 0, dessins = 0, reglesSchema = 0;
+  pourChaque(o, "feuilles", [&](Json& f) {
+    blocs += taille(membre(f, "blocs"));
+    directives += taille(membre(f, "directives"));
+    dessins += taille(membre(f, "formes")) + taille(membre(f, "tableaux")) + taille(membre(f, "images"));
+    reglesSchema += taille(membre(f, "zonesRegles")) + taille(membre(f, "groupes"));
+    pourChaque(f, "etiquettes", [&](Json& x) { hierarchiques += x.contains("hierarchique"); });
+  });
+  if (blocs || hierarchiques)
+    pertes.push_back((blocs ? pluriel(blocs, "bloc hiérarchique", "blocs hiérarchiques") + " : la 0.33 ne relie pas " + (blocs > 1 ? "leurs" : "ses") + " ports aux feuilles filles" : std::string("hiérarchie")) +
+                     (hierarchiques ? std::string(blocs ? " et lit " : " : la 0.33 lit ") + pluriel(hierarchiques, "étiquette hiérarchique en locale", "étiquettes hiérarchiques en locales") : "") +
+                     " ; mettre à jour le circuit depuis ce schéma dans la 0.33 couperait les réseaux qui traversent les feuilles.");
+  if (directives) pertes.push_back(pluriel(directives, "directive posée sur les fils", "directives posées sur les fils") + " (classes, règles) : gardée" + s_(directives) + " sans être lue" + s_(directives) + " par la 0.33.");
+  if (dessins) pertes.push_back(pluriel(dessins, "forme, tableau ou image", "formes, tableaux et images") + " du schéma : absent" + s_(dessins) + " des vues et du PDF de la 0.33 (gardé" + s_(dessins) + ").");
+  if (reglesSchema) pertes.push_back(pluriel(reglesSchema, "zone de règles ou groupe du schéma", "zones de règles et groupes du schéma") + " : ignoré" + s_(reglesSchema) + " par la 0.33 (gardé" + s_(reglesSchema) + ").");
+  int alternatives = 0, derives = 0, cachees = 0, vuesPosees = 0;
+  pourChaque(o, "symboles", [&](Json& d) {
+    derives += d.contains("parent");
+    pourChaque(d, "broches", [&](Json& b) { cachees += b.contains("cachee") && b["cachee"].is_boolean() && b["cachee"].get<bool>(); });
+    // Seconde vue (De Morgan) : la 0.33 dessinerait les deux corps l'un sur l'autre, et ses broches en double
+    if (entier(d, "vues", 1) > 1) {
+      ++alternatives;
+      for (const char* k : {"broches", "traces"})
+        if (Json* t = membre(d, k); t && t->is_array())
+          t->erase(std::remove_if(t->begin(), t->end(), [](const Json& x) { return x.is_object() && entier(x, "vue", 0) > 1; }), t->end());
+      d.erase("vues");
+    }
+  });
+  pourChaque(o, "feuilles", [&](Json& f) { pourChaque(f, "symboles", [&](Json& s) { vuesPosees += entier(s, "vue", 1) > 1; }); });
+  if (alternatives)
+    pertes.push_back("seconde vue (De Morgan) de " + pluriel(alternatives, "symbole retirée", "symboles retirée") + " : la 0.33 dessine la première" +
+                     (vuesPosees ? ", y compris pour " + pluriel(vuesPosees, "composant posé", "composants posés") + " dans la seconde." : "."));
+  if (derives) pertes.push_back(pluriel(derives, "symbole dérivé", "symboles dérivés") + (derives > 1 ? " de leur parent : la 0.33 les garde comme des symboles ordinaires" : " de son parent : la 0.33 le garde comme un symbole ordinaire") + ", sans l'héritage.");
+  if (cachees) pertes.push_back(pluriel(cachees, "broche cachée reliée", "broches cachées reliées") + " par " + (cachees > 1 ? "leur" : "son") + " nom : la 0.33 " + (cachees > 1 ? "les montre sans les relier" : "la montre sans la relier") + " ; une mise à jour du circuit depuis la 0.33 couperait " + (cachees > 1 ? "ces liaisons." : "cette liaison."));
+  // ----- Bibliothèque du projet -----
+  int articles = 0;
+  pourChaque(o, "articles", [&](Json& a) { articles += a.contains("modeleSpice") || a.contains("licence"); });
+  if (articles) pertes.push_back("modèle SPICE ou licence de " + pluriel(articles, "article", "articles") + " : oubliés par la 0.33 à son prochain enregistrement.");
+  int formes = 0, percages = 0;
+  pourChaque(o, "bibliothequeEmpreintes", [&](Json& d) {
+    pourChaque(d, "pastilles", [&](Json& p) {
+      formes += p.contains("forme034");
+      percages += p.contains("trous") || p.contains("fenteL") || p.contains("lamageDessus") || p.contains("lamageDessous") || p.contains("decPercage");
+    });
+  });
+  if (formes) pertes.push_back(pluriel(formes, "pastille chanfreinée, trapézoïdale ou libre dessinée", "pastilles chanfreinées, trapézoïdales ou libres dessinées") + " en rectangle par la 0.33.");
+  if (percages) pertes.push_back("perçages de " + pluriel(percages, "pastille", "pastilles") + " (fentes, trous multiples, décalés, lamés) : la 0.33 perce un trou rond centré.");
+  // ----- Circuit -----
+  if (Json* ci = membre(o, "circuit"); ci && ci->is_object()) {
+    Json& k = *ci;
+    if (Json* em = membre(k, "empilage"); em && em->is_object()) {
+      const int n = entier(*em, "couches", 2);
+      if (n != 1 && n != 2 && n != 4)
+        pertes.push_back(pluriel(n, "couche de cuivre", "couches de cuivre") + " : la 0.33 n'en lit que 1, 2 ou 4 ; la carte y passe à " + (n > 4 ? "4" : "2") +
+                         " couches et perd le cuivre des autres.");
+      else if (em->contains("pile")) pertes.push_back("empilage détaillé (diélectriques, préimprégnés, usages des cuivres) : la 0.33 garde le nombre de couches et l'épaisseur.");
+    }
+    int typees = 0, contre = 0;
+    pourChaque(k, "vias", [&](Json& v) {
+      typees += v.contains("typeVia");
+      contre += v.contains("contrePercage");
+    });
+    if (typees) pertes.push_back(pluriel(typees, "via borgne, enterrée ou micro percée", "vias borgnes, enterrées ou micro percées") + " de part en part par la 0.33 : à revoir avant fabrication.");
+    if (contre) pertes.push_back("contre-perçage de " + pluriel(contre, "via ignoré", "vias ignoré") + " par la 0.33.");
+    int arcs = 0, effilees = 0;
+    pourChaque(k, "pistes", [&](Json& p) {
+      arcs += p.contains("milieu");
+      effilees += p.contains("largeurFin");
+    });
+    if (arcs) pertes.push_back(pluriel(arcs, "piste en arc tracée", "pistes en arc tracées") + " en droite par la 0.33.");
+    if (effilees) pertes.push_back(pluriel(effilees, "piste effilée tracée", "pistes effilées tracées") + " à largeur constante par la 0.33.");
+    int hachurees = 0, figees = 0;
+    pourChaque(k, "zones", [&](Json& z) {
+      hachurees += z.contains("hachure");
+      figees += z.contains("fige");
+    });
+    if (hachurees) pertes.push_back(pluriel(hachurees, "zone hachurée remplie", "zones hachurées remplies") + " pleine par la 0.33.");
+    if (figees) pertes.push_back("remplissage figé de " + pluriel(figees, "zone recalculé", "zones recalculé") + " par la 0.33.");
+    if (const int n = taille(membre(k, "regions"))) pertes.push_back(pluriel(n, "région de cuivre plein", "régions de cuivre plein") + " (gouttes, cuivre propre, logos) : absente" + s_(n) + " du cuivre de la 0.33 (gardée" + s_(n) + ").");
+    if (const int n = taille(membre(k, "zonesRegles"))) pertes.push_back(pluriel(n, "zone de règles ou d'interdiction", "zones de règles et d'interdiction") + " : la DRC de la 0.33 ne " + (n > 1 ? "les" : "la") + " contrôle pas (gardée" + s_(n) + ").");
+    if (const int n = taille(membre(k, "motifs"))) pertes.push_back(pluriel(n, "motif d'accord de longueur gardé", "motifs d'accord de longueur gardés") + " en pistes ordinaires par la 0.33.");
+    if (const int n = taille(membre(k, "cotes"))) pertes.push_back(pluriel(n, "cote", "cotes") + " de la carte : absente" + s_(n) + " des plans de la 0.33 (gardée" + s_(n) + ").");
+    if (Json* r = membre(k, "regles"); r && r->is_object() && r->contains("avancees"))
+      pertes.push_back("contraintes avancées (paires, longueurs, impédances, règles par classe) : la 0.33 vérifie ses règles simples.");
+  }
+  // ----- Mécanique et vues -----
+  if (const int n = taille(membre(o, "piecesMontees"))) pertes.push_back(pluriel(n, "pièce montée", "pièces montées") + " sur la carte : la 0.33 ne " + (n > 1 ? "les montre pas et ne les compte" : "la montre pas et ne la compte") + " pas (gardée" + s_(n) + ").");
+  if (o.contains("boitierImporte")) pertes.push_back("boîtier du commerce importé en STEP : la 0.33 dessine et contrôle le boîtier généré.");
+  if (const int n = taille(membre(o, "pointsDeVue"))) pertes.push_back(pluriel(n, "point de vue 3D nommé", "points de vue 3D nommés") + " : ignoré" + s_(n) + " par la 0.33 (gardé" + s_(n) + ").");
+  if (o.contains("reglagesSchema")) pertes.push_back("réglages du schéma (styles des fils, textes, grille) : la 0.33 garde les siens.");
+  if (const int n = taille(membre(o, "aliasBus"))) pertes.push_back(pluriel(n, "alias de bus", "alias de bus") + " : la 0.33 ne les développe pas.");
+  if (Json* x = membre(o, "extensions"); x && x->is_object() && !x->empty()) {
+    std::string liste;
+    for (auto it = x->begin(); it != x->end(); ++it) liste += (liste.empty() ? "" : ", ") + nomExtension(it.key());
+    pertes.push_back("données des ateliers de la 0.34 gardées sans être lues par la 0.33 : " + liste + ".");
+  }
+}
+
+void descendreProjetVers033(Json& o, std::vector<std::string>& pertes) {
+  if (o.contains("licence")) pertes.push_back("licence du projet : ignorée par la 0.33 (gardée).");
+  if (const int n = taille(membre(o, "liensDisciplines")))
+    pertes.push_back(pluriel(n, "lien entre disciplines", "liens entre disciplines") + " (« à revoir » jusqu'à l'accusé de lecture) : ignoré" + s_(n) + " par la 0.33 (gardé" + s_(n) + ").");
+  // Projets électriques : leur schéma est une conception, qui redescend au format 5 ; un folio de câblage de faisceau
+  // y devient un folio libre, sans son faisceau
+  int folios = 0, faisceaux = 0;
+  pourChaque(o, "electrique", [&](Json& pe) {
+    if (Json* s = membre(pe, "schema"); s && s->is_object()) {
+      if (s->contains("format")) (*s)["format"] = 5;
+      if (s->contains("formatElectronique")) (*s)["formatElectronique"] = 5;
+      if (Json* x = membre(*s, "extensions"); x && x->is_object())
+        if (const Json* c = membre(*x, "cablage")) faisceaux += taille(c);
+    }
+    if (Json* f = membre(pe, "folios"); f && f->is_object())
+      for (auto it = f->begin(); it != f->end(); ++it)
+        if (it->is_object() && texteEgal(*it, "type", "cablage")) {
+          ++folios;
+          (*it)["type"] = "libre";
+          it->erase("faisceau");
+        }
+  });
+  if (folios) pertes.push_back(pluriel(folios, "folio de câblage de faisceau devenu", "folios de câblage de faisceau devenus") + " libre" + (folios > 1 ? "s" : "") + " : la 0.33 ne les dessine pas.");
+  if (faisceaux) pertes.push_back(pluriel(faisceaux, "faisceau", "faisceaux") + " (connecteurs, câbles, fils, planche, topologie) : gardé" + s_(faisceaux) + " dans le fichier sans être lu" + s_(faisceaux) + " par la 0.33.");
 }
 
 std::vector<EtapeMigration> construire() {
@@ -318,6 +487,20 @@ std::vector<EtapeMigration> construire() {
                  if (Json* b = membre(o, "boitier"); b && b->is_object() && b->erase("impression"))
                    pertes.push_back("réglages d'impression 3D du boîtier (matière, coques, prix) retirés : la 0.32 ne les connaît pas.");
                }});
+  // ---------- 0.33 → 0.34 (fin des lots L4 à L19) ----------
+  // La 0.33 garde ce qu'elle ne connaît pas dans les objets du schéma, des bibliothèques et du circuit, et le réécrit :
+  // la descente n'en retire que ce qui la tromperait (seconde vue des symboles), et dit ce qu'elle ignorera ou oubliera
+  e.push_back({"0.33", "0.34", "conception",
+               "format 6 ; hiérarchie par blocs, directives, formes, tableaux et images du schéma ; symboles dérivés, à deux vues, broches cachées ; "
+               "pastilles et vias complètes, pistes en arc, zones hachurées ou figées, cuivre plein, zones de règles, cotes, empilage jusqu'à 32 cuivres, "
+               "contraintes avancées ; pièces montées, boîtier importé, points de vue ; réglages du schéma, alias de bus ; données des ateliers",
+               [](Json& o, std::vector<std::string>&) {
+                 o["format"] = ecad::FORMAT_ELECTRONIQUE;
+                 o["formatElectronique"] = ecad::FORMAT_ELECTRONIQUE;
+               },
+               descendreConceptionVers033});
+  e.push_back({"0.33", "0.34", "projet", "licence du projet, liens entre disciplines, folios de câblage de faisceau et faisceaux des projets électriques",
+               [](Json&, std::vector<std::string>&) {}, descendreProjetVers033});
   return e;
 }
 }  // namespace
@@ -346,11 +529,11 @@ int comparerVersions(const std::string& a, const std::string& b) {
 }
 
 std::string versionConception(const Json& o) {
-  // Format 2 : la 0.30 ; 3 : la 0.31 ; 4 : la 0.32 ; 5 : la 0.33 ; au-delà, une version plus récente, lue comme la
-  // courante (ce qu'elle ne connaît pas est gardé)
+  // Format 2 : la 0.30 ; 3 : la 0.31 ; 4 : la 0.32 ; 5 : la 0.33 ; 6 : la 0.34 ; au-delà, une version plus récente,
+  // lue comme la courante (ce qu'elle ne connaît pas est gardé)
   if (o.is_object() && o.contains("format") && o["format"].is_number()) {
     const double f = o["format"].get<double>();
-    return f < 3 ? "0.30" : f < 4 ? "0.31" : f < 5 ? "0.32" : VERSION_COURANTE;
+    return f < 3 ? "0.30" : f < 4 ? "0.31" : f < 5 ? "0.32" : f < 6 ? "0.33" : VERSION_COURANTE;
   }
   if (o.is_object() && o.contains("formatElectronique")) return "0.29";
   return "0.28";

@@ -1227,18 +1227,25 @@ void FenetrePrincipale::paletteCommandes() {
   };
   auto remplir = [&](const QString& filtre) {
     liste->clear();
-    QStringList mots = simple(filtre).split(QRegularExpression(QStringLiteral("[\\s']+")), Qt::SkipEmptyParts);
+    const QString phrase = simple(filtre).trimmed();
+    QStringList mots = phrase.split(QRegularExpression(QStringLiteral("[\\s']+")), Qt::SkipEmptyParts);
     mots.removeIf([](const QString& m) { return m.size() < 2; });  // « d' », « l' » ne départagent rien
+    // Rang : la phrase tapée dans le nom, puis tous ses mots dans le nom, puis dans les mots-clés seulement ; l'ordre
+    // des commandes départage le reste
+    std::vector<std::pair<int, QListWidgetItem*>> trouvees;
     for (QAction* a : actions) {
       QString t = a->text().section(QLatin1Char('\t'), 0, 0);
       const QString touche = a->shortcut().isEmpty() ? a->text().section(QLatin1Char('\t'), 1) : a->shortcut().toString(QKeySequence::NativeText);
       t.remove(QLatin1Char('&'));
-      const QString n = simple(t + QLatin1Char(' ') + a->property("motsCles").toString());
+      const QString nom = simple(t), n = simple(t + QLatin1Char(' ') + a->property("motsCles").toString());
       if (!std::all_of(mots.begin(), mots.end(), [&](const QString& m) { return n.contains(m); })) continue;
+      const int rang = !phrase.isEmpty() && nom.contains(phrase) ? 0 : std::all_of(mots.begin(), mots.end(), [&](const QString& m) { return nom.contains(m); }) ? 1 : 2;
       auto* it = new QListWidgetItem(a->icon(), t + (touche.isEmpty() ? QString() : QStringLiteral("   (%1)").arg(touche)));
       it->setData(Qt::UserRole, QVariant::fromValue(static_cast<void*>(a)));
-      liste->addItem(it);
+      trouvees.emplace_back(rang, it);
     }
+    std::stable_sort(trouvees.begin(), trouvees.end(), [](const auto& x, const auto& y) { return x.first < y.first; });
+    for (const auto& x : trouvees) liste->addItem(x.second);
     liste->setCurrentRow(0);
   };
   remplir(QString());

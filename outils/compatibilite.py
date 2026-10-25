@@ -20,8 +20,8 @@ import pathlib
 import subprocess
 import sys
 
-VERSIONS = ["0.32", "0.31", "0.30", "0.29", "0.28"]
-COURANTE = "0.33"
+VERSIONS = ["0.33", "0.32", "0.31", "0.30", "0.29", "0.28"]
+COURANTE = "0.34"
 ECHECS = []
 
 
@@ -103,7 +103,7 @@ def projets(outil, donnees, travail):
             echec(f"import de {k.name} : {texte}")
             continue
         l.append((sortie, True, {}))
-    # Le projet riche : ce que la 0.33, la 0.32 et la 0.31 ajoutent (réglages de l'ERC, champ bloqué, connecteur hors feuille), ce que la
+    # Le projet riche : ce que la 0.34, la 0.33, la 0.32 et la 0.31 ajoutent (réglages de l'ERC, champ bloqué, connecteur hors feuille), ce que la
     # 0.30 ajoutait (dispositions), ce que la 0.29 ajoutait (profil de fabricant personnalisé, brochage vérifié,
     # exclusion de la nomenclature), un texte de carte tourné
     j = json.loads((travail / "clignotant.prom").read_text(encoding="utf-8"))
@@ -140,13 +140,34 @@ def projets(outil, donnees, travail):
     c["circuit"]["dessins"] = [{"uuid": "dessin-essai", "forme": "trait", "couche": "F.SilkS", "points": [[0, 0], [5000000, 0]], "epaisseur": 150000}]
     j["exigences"] = [{"id": "EX-1", "texte": "coût pour 100 cartes", "grandeur": "cout", "seuil": "40"}]
     j.setdefault("boitier", {})["impression"] = {"matiere": "PLA"}
+    # Ce que la 0.34 ajoute : bloc hiérarchique, symbole à deux vues, cuivre plein, point de vue 3D, données d'atelier,
+    # licence d'un article ; au projet, licence et liens entre disciplines
+    f0 = c["feuilles"][0]
+    f0["blocs"] = [{"uuid": "bloc-essai", "nom": "Alim", "feuille": "feuille-fille-essai", "p": [50800000, 50800000], "largeur": 10160000, "hauteur": 5080000,
+                    "ports": [{"uuid": "port-essai", "nom": "VCC", "p": [50800000, 53340000], "cote": 0}]}]
+    s0 = c["symboles"][0]
+    s0["vues"] = 2
+    if s0.get("broches"):
+        b2 = dict(s0["broches"][0])
+        b2["vue"] = 2
+        s0["broches"].append(b2)
+    s0.setdefault("traces", []).append({"forme": 0, "points": [[0, 0], [2540000, 0]], "vue": 2})
+    # Cuivre plein de la masse dans le plan de masse du dessous, loin des pastilles : aucun réseau ne change
+    c["circuit"]["regions"] = [{"uuid": "region-essai", "reseau": "GND", "couche": "B.Cu", "forme": [[1000000, 1000000], [1500000, 1000000], [1500000, 1500000], [1000000, 1500000]]}]
+    c["pointsDeVue"] = [{"nom": "Face", "cible": [0, 0, 0], "azimut": 0, "elevation": 30, "distance": 100, "orthographique": False, "champ": 45}]
+    c["extensions"] = {"platine": {"rangees": 30}}
+    c.setdefault("articles", []).append({"id": "ART-LIBRE-ESSAI", "nom": "Carte libre", "licence": "CERN-OHL-S-2.0"})
+    j["licence"] = "CERN-OHL-S-2.0"
+    j["liensDisciplines"] = [{"id": "L1", "de": "carte", "vers": "boitier", "quoi": "contour", "empreinte": "a1", "releve": "a1", "etat": "à jour"}]
     riche = travail / "riche.prom"
     riche.write_text(json.dumps(j, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     l32 = ["valeur calculée", "paramètre typé", "genre de", "de la simulation", "variable", "synchronisation sur confirmation", "corps d'empreinte",
            "propriété de fabrication", "volumes libres"]
     l31 = l32 + ["gravités réglées", "alerte exclue", "champ de symbole", "connecteur hors feuille"]
     l33 = ["variante de montage", "note attachée", "jeu de sorties", "dessin de carte", "exigence", "impression 3D"]
-    attendues = {"0.32": l33, "0.31": l32, "0.30": l31, "0.29": l31 + ["disposition des panneaux"],
+    l34 = ["bloc hiérarchique", "seconde vue (De Morgan)", "région de cuivre plein", "point de vue 3D", "platine d'essai", "licence de 1 article", "licence du projet",
+           "lien entre disciplines"]
+    attendues = {"0.33": l34, "0.32": l33, "0.31": l32, "0.30": l31, "0.29": l31 + ["disposition des panneaux"],
                  "0.28": l31 + ["disposition des panneaux", "profil de fabricant personnalisé", "brochage vérifié", "nomenclature"]}
     l.append((riche, True, attendues))
     return l

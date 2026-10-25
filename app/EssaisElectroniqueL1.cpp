@@ -838,7 +838,11 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
         dessous = e.dessous;
       }
     vc->setFocus(Qt::OtherFocusReason);
+    // Un clic sur une bulle de message ne fait que l'effacer : les bulles, en bas à gauche du canevas, partent avant le
+    // clic (R1 peut se trouver dessous quand la vue est petite)
+    a->pileMessages()->effacer();
     reel::cliquer(vc, ecran(vc, pos));
+    const std::size_t choisis = vc->selection().size();
     reel::touche(vc, Qt::Key_F);
     attendre(100);
     bool retourne = false;
@@ -846,9 +850,10 @@ void essaisElectroniqueL1(FenetrePrincipale& f, const Verifier& verifier) {
       if (e.composant == compR1) retourne = e.dessous != dessous;
     reel::touche(vc, Qt::Key_Z, Qt::ControlModifier);
     attendre(150);
-    verifier(retourne, "C13, PLA-09 : F change l'empreinte de face au circuit", {});
+    verifier(retourne, "C13, PLA-09 : F change l'empreinte de face au circuit", std::to_string(choisis) + " objet(s) choisi(s) par le clic sur R1");
 
     // C18 : trois flèches espacées de 120 ms font un seul pas d'annulation et un seul calcul, 300 ms après la dernière
+    a->pileMessages()->effacer();
     reel::cliquer(vc, ecran(vc, pos));
     attendre(600);
     const std::uint64_t calculs = a->generationCalcul();

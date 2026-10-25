@@ -135,6 +135,16 @@ void PileMessages::montrer(const MessageAtelier& m) {
   placer();
 }
 
+void PileMessages::effacer() {
+  for (const QPointer<BulleMessage>& b : m_bulles)
+    if (b) {
+      b->hide();
+      b->deleteLater();
+    }
+  m_bulles.clear();
+  hide();
+}
+
 void PileMessages::placer() {
   m_bulles.erase(std::remove(m_bulles.begin(), m_bulles.end(), QPointer<BulleMessage>()), m_bulles.end());
   if (m_bulles.empty()) {

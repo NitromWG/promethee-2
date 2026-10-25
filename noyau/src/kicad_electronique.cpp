@@ -96,7 +96,7 @@ struct BrocheReseau {
 
 // Définition d'une empreinte KiCad (pastilles, sérigraphie, encombrement, corps), dans le repère local de
 // Prométhée pour son placement « em » ; « broches » reçoit les numéros de pastilles et leur réseau
-DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, const std::string& nomKicad, std::map<std::string, int>& ignores,
+DefEmpreinte definitionDepuisKicad(const Expr& e, const EmpreintePlacee& em, const std::string& nomKicad, std::map<std::string, int>& /*ignores*/,
                                    const std::function<std::string(const Expr&)>& reseau, std::vector<BrocheReseau>& broches, int nc = 4) {
   // Points de l'empreinte : position du fichier (repère de l'empreinte, déjà retournée sur la face arrière)
   // tournée et placée, puis ramenée dans le repère local de Prométhée

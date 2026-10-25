@@ -621,7 +621,9 @@ static void profilerAtelier300(FenetrePrincipale& f) {
   for (const auto& sp : c.feuilles[0].symboles)
     if (sp.symbole == "R" && r.size() < 2)
       if (const DefSymbole* d = c.symbole(sp.symbole)) r.push_back(ecran(vs, boiteSymbole(sp, *d).centre()));
-  std::printf("PROFIL clics\n");
+  // Horloge monotone (celle de « perf record -k mono ») : la fenêtre de chaque phase se retrouve dans le profil
+  auto horloge = [] { return std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count(); };
+  std::printf("PROFIL clics %.6f\n", horloge());
   std::fflush(stdout);
   for (int i = 0; i < 60 && r.size() == 2; ++i) {
     const auto t0 = H::now();
@@ -641,7 +643,7 @@ static void profilerAtelier300(FenetrePrincipale& f) {
     }
     std::fflush(stdout);
   }
-  std::printf("PROFIL F8\n");
+  std::printf("PROFIL F8 %.6f\n", horloge());
   std::fflush(stdout);
   for (int i = 0; i < 15; ++i) {
     a->setMode(AtelierElectronique::Schema);
@@ -654,7 +656,7 @@ static void profilerAtelier300(FenetrePrincipale& f) {
     std::printf("F8 %d : %.1f ms\n", i, depuis(t0));
     std::fflush(stdout);
   }
-  std::printf("PROFIL fin\n");
+  std::printf("PROFIL fin %.6f\n", horloge());
   std::fflush(stdout);
 }
 

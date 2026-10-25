@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nitromwg.github.io/promethee/schemas/schema_projet.json",
-  "title": "Fichier de projet Prométhée (.prom), écrit par la 0.33",
-  "description": "Le projet entier : carte et boîtier mécaniques, pièces, assemblages, conceptions électroniques (schema_conception.json), projets électriques, dispositions des panneaux. Les clés inconnues de premier niveau sont gardées et réécrites (ECH-11). La racine décrit le fichier de la 0.32 ; $defs/projet décrit la structure commune aux versions 0.28 à 0.32, que les schémas de docs/schemas restreignent.",
+  "title": "Fichier de projet Prométhée (.prom), écrit par la 0.34",
+  "description": "Le projet entier : carte et boîtier mécaniques, pièces, assemblages, conceptions électroniques (schema_conception.json), projets électriques, dispositions des panneaux. Les clés inconnues de premier niveau sont gardées et réécrites (ECH-11). La racine décrit le fichier de la 0.34 ; $defs/projet décrit la structure commune aux versions 0.28 à 0.34, que les schémas de docs/schemas restreignent.",
   "allOf": [{ "$ref": "#/$defs/projet" }],
   "properties": {
     "version": { "const": 3 },
@@ -102,6 +102,8 @@
         "exigences": { "type": "array", "items": { "type": "object", "required": ["id"] }, "description": "Exigences du projet (0.33) : texte, source, méthode, valeur chiffrée vérifiée à chaque enregistrement, liens vers les objets." },
         "ordresModification": { "type": "array", "items": { "type": "object" }, "description": "Ordres de modification (0.33) : relecteur, responsable, votes, révision visée." },
         "liaisons": { "type": "array", "items": { "type": "object" }, "description": "Liaisons du schéma de système entre cartes (0.33) : connecteurs, câble, signaux." },
+        "licence": { "type": "string", "description": "Licence du matériel (0.34), identifiant SPDX (« CERN-OHL-S-2.0 »)." },
+        "liensDisciplines": { "type": "array", "items": { "type": "object", "required": ["id", "de", "vers"] }, "description": "Liens entre disciplines (0.34) : objet relevé d'une discipline pour une autre, « à revoir » jusqu'à l'accusé de lecture." },
         "geometries": { "type": "object", "additionalProperties": { "type": "string" } }
       }
     }

@@ -268,8 +268,8 @@ void essaisElectroniqueL9(FenetrePrincipale& f, const Verifier& verifier0) {
     const bool rapidePiste = vc->glissementRapide();
     reel::relacher(vc, d1);
     attendreCalcul(a);
-    std::snprintf(t, sizeof t, "travail %.1f ms par image (pire %.1f), avec la pose %.1f ms ; %d zone(s) suivie(s), à jour %d/30 images, cuivre revenu derrière la piste : %s",
-                  travail / 30, pireTravail, total / 30, suivies, aJour, revenu ? "oui" : "non");
+    std::snprintf(t, sizeof t, "travail %.1f ms par image (pire %.1f), avec la pose %.1f ms ; %d zone(s) suivie(s), à jour %d/30 images, piste glissée de %.1f mm, cuivre revenu derrière la piste : %s",
+                  travail / 30, pireTravail, total / 30, suivies, aJour, bougePiste, revenu ? "oui" : "non");
     verifier(rapidePiste && suivies == 1 && aJour == 30 && revenu && travail / 30 <= 16.7, "9.9 : une piste glissée près de la zone GND la garde à jour à chaque image, à 60 images par seconde", t);
   }
 

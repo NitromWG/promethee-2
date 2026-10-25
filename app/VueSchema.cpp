@@ -66,6 +66,7 @@
 #include "promethee/commandes.hpp"
 #include "promethee/electrique_grafcet.hpp"
 #include "promethee/modele.hpp"
+#include "promethee/variantes.hpp"
 
 using namespace prom::ecad;
 using namespace dessin_schema;
@@ -1287,14 +1288,16 @@ void VueSchema::textesDe(const Feuille& f, const SymbolePlace& s, const DefSymbo
   const ConceptionElec* c = conception();
   const ComposantElec* x = c ? c->composant(s.composant) : nullptr;
   ref = x ? QString::fromStdString(x->reference + (d.unites > 1 ? lettreUnite(s.unite) : std::string())) : QString();
-  val = d.alimentation ? QString::fromStdString(s.nomAlim.empty() ? d.nom : s.nomAlim) : d.drapeau ? QString() : x ? QString::fromStdString(x->valeur) : QString();
+  // Valeur de la variante active (12.1) : celle que la carte montée portera
+  const std::string valeur = x && c ? resoudre(*x, c->varianteActive).valeur : std::string();
+  val = d.alimentation ? QString::fromStdString(s.nomAlim.empty() ? d.nom : s.nomAlim) : d.drapeau ? QString() : x ? QString::fromStdString(valeur) : QString();
   // Mode d'affichage des valeurs (3.2) : comme tapées, en CEI 60062 compacte (4k7) ou en SI (4,7 kΩ) ; une valeur non
   // comprise reste comme tapée
   if (x && c && !d.alimentation && !d.drapeau) {
     const int mode = RegistreReglages::instance().valeur(QStringLiteral("schema/affichageValeurs")).toInt();
     if (mode > 0) {
-      const ValeurComprise v = lireValeurComposant(x->valeur, familleDe(*c, *x));
-      val = QString::fromStdString(ecrireValeurComposant(v, mode == 1 ? AffichageValeur::Compact : AffichageValeur::SystemeInternational, x->valeur));
+      const ValeurComprise v = lireValeurComposant(valeur, familleDe(*c, *x));
+      val = QString::fromStdString(ecrireValeurComposant(v, mode == 1 ? AffichageValeur::Compact : AffichageValeur::SystemeInternational, valeur));
     }
   }
   textesSymbole(f, s, d, x, ref, val);
@@ -1796,10 +1799,11 @@ void VueSchema::peindre(QPainter& g) {
     if (!d) continue;
     QString ref, val;
     textesDe(*f, s, *d, ref, val);
-    // Non monté désaturé et barré d'une croix rouge ; exclu de la simulation grisé, avec son signe (3.17, STR-08)
+    // Non monté (dans la variante active, 12.1) désaturé et barré d'une croix rouge ; exclu de la simulation grisé,
+    // avec son signe (3.17, STR-08)
     const ComposantElec* x = s.composant.empty() ? nullptr : c->composant(s.composant);
     const RegistreReglages& reg = RegistreReglages::instance();
-    const bool barre = x && x->nePasMonter && reg.valeur(QStringLiteral("schema/marquerNonMontes")).toBool();
+    const bool barre = x && !resoudre(*x, c->varianteActive).monte && reg.valeur(QStringLiteral("schema/marquerNonMontes")).toBool();
     const bool grise = x && x->horsSimulation && reg.valeur(QStringLiteral("schema/marquerHorsSimulation")).toBool();
     g.setOpacity(opaciteObjet(s.uuid) * (barre || grise ? 0.45 : 1.0));  // estompage de ce qui n'est pas choisi (2.26)
     dessinerSymbole(g, {m_origine, m_echelle}, *d, s, ref, val);

@@ -7,6 +7,7 @@
 // Licence GPL-3.0-only.
 #pragma once
 
+#include <atomic>
 #include <cstdint>
 #include <functional>
 #include <map>
@@ -318,7 +319,9 @@ class AtelierElectronique : public QWidget {
   void importerSymbolesKicad();
   void creerComposant(const prom::ecad::DefSymbole* base = nullptr, bool remplacer = false);
   // Validation globale et publication pour la fabrication (révision verrouillée)
-  prom::ecad::Validation validation() const;
+  // Validation complète ; « complete » : contrôles de fabrication refaits ici s'ils ne sont pas à jour (publication),
+  // sinon les derniers que le fil à part a rendus (inspecteur, sans rien de lourd sur le fil de l'interface)
+  prom::ecad::Validation validation(bool complete = false) const;
   bool publier(const QString& dossierParent, const QString& auteur, const QString& derogation, QString* erreur = nullptr);
   void nouvelleRevision();
   void routerAutomatiquement(bool complet = false);  // complet : routeur par recherche de chemin (8.9)
@@ -451,6 +454,8 @@ class AtelierElectronique : public QWidget {
   void recalculerSchema();  // connectivité et ERC seules, sur-le-champ ; le circuit attend
   static bool estGrandeCarte(const prom::ecad::ConceptionElec& c);  // au-delà, le calcul complet part en fond
   void lancerCalcul(int niveau = 2);  // niveau 1 : pendant un geste (chevelu et pastilles), sans zones ni DRC
+  void lancerControlesFabrication();  // après un calcul complet, sur un fil à part (8.17)
+  void arreterControlesFabrication();  // les fils en route s'arrêtent d'eux-mêmes ; ceux qui ont fini sont repris
   void majEtatCalcul();
 
   Document* m_doc;
@@ -458,6 +463,13 @@ class AtelierElectronique : public QWidget {
   std::uint64_t m_generation = 0;
   bool m_calculEnCours = false, m_circuitPerime = true;
   std::thread m_fil;
+  // Contrôles de fabrication en fond : un fil arrêté n'est jamais attendu par l'interface (il finit à sa prochaine
+  // vérification de l'arrêt, à la priorité minimale) ; il est joint une fois fini, ou à la fermeture
+  struct FilFabrication {
+    std::thread fil;
+    std::shared_ptr<std::atomic<bool>> arret, fini;
+  };
+  std::vector<FilFabrication> m_filsFabrication;
   QTabWidget* m_ruban = nullptr;
   class MosaiqueVues* m_vues = nullptr;
   class TableauObjets* m_tableauObjets = nullptr;

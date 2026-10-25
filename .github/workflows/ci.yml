@@ -28,6 +28,11 @@ jobs:
           sudo python3 -m pip install --break-system-packages --quiet gerbonara || echo "gerbonara indisponible : troisième lecteur sauté"
           # Lecteur JSON Schema indépendant des formats de fichier (1.22, ECH-10)
           sudo python3 -m pip install --break-system-packages --quiet jsonschema
+          # Outils que les essais de la 0.34 emploient quand ils sont là (microcontrôleur et simavr, HDL, PDF, pilote
+          # SQLite du programme d'accès en ligne, page de classe) ; chacun absent est dit et ses essais sont sautés
+          for p in gcc-avr avr-libc libsimavr-dev libelf-dev gdb-avr ghdl iverilog yosys verilator poppler-utils libqt6sql6-sqlite nodejs git; do
+            sudo apt-get install -y --no-install-recommends "$p" > /dev/null 2>&1 || echo "::notice::$p indisponible : ses essais sont sautés"
+          done
       - name: Configuration
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
       - name: Compilation
@@ -42,13 +47,14 @@ jobs:
           "$exe" -r compact > resultats.txt 2>&1 || true
           grep -E "failed|FAILED|error" resultats.txt | head -40 | while IFS= read -r l; do echo "::error::$l"; done
           { echo '### Tests en échec'; echo '```'; grep -E -B2 -A8 "failed|FAILED" resultats.txt | head -200; echo '```'; } >> "$GITHUB_STEP_SUMMARY"
-      - name: Compatibilité avec la 0.32 (projet écrit pour elle et relu par elle - mêmes réseaux, pertes dites, schémas JSON)
+      - name: Compatibilité avec la 0.33 (projet écrit pour elle et relu par elle - mêmes réseaux, pertes dites, schémas JSON)
         run: |
-          git fetch --no-tags --depth 1 origin 6c0cbd8dcd785dd711a3b08ceb543be527d58f73
-          git worktree add --detach ../promethee-0.32 FETCH_HEAD
-          cmake -S ../promethee-0.32 -B ../promethee-0.32/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPROMETHEE_TESTS=OFF -DPROMETHEE_APP=OFF
-          cmake --build ../promethee-0.32/build --target promethee
-          python3 outils/compatibilite.py version build/outils/promethee ../promethee-0.32/build/outils/promethee 0.32 docs tests/donnees compatibilite
+          # La 0.33 publiée (étiquette v0.33.0)
+          git fetch --no-tags --depth 1 origin d095d210978a01069da1e6cf999ae0c61d713203
+          git worktree add --detach ../promethee-0.33 FETCH_HEAD
+          cmake -S ../promethee-0.33 -B ../promethee-0.33/build -G Ninja -DCMAKE_BUILD_TYPE=Release -DPROMETHEE_TESTS=OFF -DPROMETHEE_APP=OFF
+          cmake --build ../promethee-0.33/build --target promethee
+          python3 outils/compatibilite.py version build/outils/promethee ../promethee-0.33/build/outils/promethee 0.33 docs tests/donnees compatibilite
       - name: Essais de l'interface (clics réels dans la vue 3D, sous un écran virtuel)
         run: |
           sudo apt-get install -y --no-install-recommends xvfb
@@ -197,7 +203,8 @@ jobs:
           foreach ($mode in "--essais-interface", "--essais-onglets", "--essais-electronique", "--essais-electrique") {
             $p = Start-Process -FilePath "$essai\Promethee.exe" -ArgumentList $mode -PassThru -NoNewWindow -RedirectStandardOutput "sortie$mode.txt" -RedirectStandardError "erreurs$mode.txt"
             $null = $p.Handle
-            if (-not $p.WaitForExit(900000)) { $p.Kill(); Write-Host "::error::$mode : délai dépassé"; $echecs += $mode; continue }
+            # Une heure par parcours : celui de l'électronique enchaîne tous les lots de la 0.29 à la 0.34 sous rendu logiciel
+            if (-not $p.WaitForExit(3600000)) { $p.Kill(); Write-Host "::error::$mode : délai dépassé"; $echecs += $mode; continue }
             Get-Content "sortie$mode.txt"
             if ($p.ExitCode -ne 0) {
               Select-String -Path "sortie$mode.txt" -Pattern "^(ÉCHEC|BOÎTE)" -Encoding utf8 | Select-Object -First 2 | ForEach-Object { $l = $_.Line; Write-Host "::error::$mode : $($l.Substring(0, [Math]::Min(600, $l.Length)))" }

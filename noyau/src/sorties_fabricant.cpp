@@ -28,12 +28,6 @@ std::string nombre(double v, int decimales) {
   }
   return s;
 }
-std::string champ(const std::string& t, const std::string& sep) {
-  if (t.find_first_of(sep + "\"\n") == std::string::npos) return t;
-  std::string r = "\"";
-  for (char ch : t) r += ch == '"' ? std::string("\"\"") : std::string(1, ch);
-  return r + "\"";
-}
 // Motif à jokers « * » et « ? », sans casse
 bool joker(const std::string& motif, const std::string& texte) {
   std::size_t m = 0, t = 0, etoile = std::string::npos, reprise = 0;

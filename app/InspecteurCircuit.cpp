@@ -977,7 +977,7 @@ class PageCarte : public PageCircuit {
       const int erreurs = static_cast<int>(std::count_if(calc.drc.begin(), calc.drc.end(), [](const Violation& v) { return v.gravite == Gravite::Erreur; }));
       // « Prêt pour la fabrication » vient de la validation complète, pas de la seule DRC (P28) : l'ERC, les
       // bibliothèques, la nomenclature ou les capacités du fabricant peuvent encore bloquer la publication
-      const prom::ecad::Validation validation = prom::ecad::valider(*c, calc.k, calc.etat, m_atelier.erc(), calc.drc);
+      const prom::ecad::Validation validation = m_atelier.validation();  // contrôles de fabrication du fil à part
       QString etat;
       if (erreurs) etat = QStringLiteral("<b>%1 erreur(s), %2 avertissement(s)</b> — clique pour y aller").arg(erreurs).arg(calc.drc.size() - static_cast<std::size_t>(erreurs));
       else if (validation.publiable()) etat = QStringLiteral("<span style='color:%1'><b>✓ Prêt pour la fabrication</b></span>").arg(teintes::succes());

@@ -138,6 +138,10 @@ void essaisElectronique034L13(FenetrePrincipale& f, const Verifier& verifier0) {
   {
     LigneCommandes* l = a->ligneCommandes();
     const bool sous = l->isVisible() && l->mapTo(a->window(), QPoint(0, 0)).y() > a->vueCircuit()->mapTo(a->window(), QPoint(0, 0)).y();
+    // Après les autres lots, une fenêtre de premier plan a pu garder l'activation : le focus et les raccourcis
+    // n'arrivent qu'à la fenêtre active
+    reel::activer(&f);
+    attendre(50);
     a->executerAction("automatisation.ligne");
     attendre(80);
     const bool focus = l->champ()->hasFocus();
@@ -207,6 +211,7 @@ void essaisElectronique034L13(FenetrePrincipale& f, const Verifier& verifier0) {
     l->champ()->clear();
     // Commande affectée à une touche
     l->affecter(QStringLiteral("Ctrl+Alt+1"), QStringLiteral("carte.regles isolement=0.25"));
+    reel::activer(&f);
     a->vueCircuit()->setFocus();
     reel::touche(a->vueCircuit(), Qt::Key_1, Qt::ControlModifier | Qt::AltModifier);
     attendre(100);

@@ -201,8 +201,10 @@ void FenetreOutilsConception::ajouterOnglets034L19() {
   AtelierElectronique& a = m_atelier;
   Document* doc = a.document();
   majTableauBord();
-  // Chaque commande : seules les lignes touchées de la nomenclature se recalculent
+  // Chaque commande : seules les lignes touchées de la nomenclature se recalculent, fenêtre ouverte seulement (fermée,
+  // elle ne coûte rien à chaque modification ; « refaire », à sa réouverture, remet le tableau à jour)
   const auto suivre = [this] {
+    if (!isVisible()) return;
     majTableauBord();
     if (isVisible() && m_textes.count(QStringLiteral("achats"))) m_textes[QStringLiteral("achats")]->setHtml(QString::fromLatin1(STYLE19) + m_rapports[QStringLiteral("achats")]());
   };

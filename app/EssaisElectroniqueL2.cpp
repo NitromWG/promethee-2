@@ -1353,7 +1353,7 @@ void essaisElectroniqueL2(FenetrePrincipale& f, const Verifier& verifier0) {
       montrer(e0);
       const int pas0 = doc->positionHistorique();
       bool champ = false;
-      if (QMenu* m = clicDroit(e0, QPoint(12, 0)))
+      if (QMenu* m = clicDroit(e0, QPoint(12, 0))) {
         if (QAction* x = ligne(m, QStringLiteral("Renommer le réseau sur toutes les feuilles")); x && cliquerLigne(m, x)) {
           attendre(80);
           if (QLineEdit* e = v4->saisieEnCours()) {
@@ -1363,8 +1363,9 @@ void essaisElectroniqueL2(FenetrePrincipale& f, const Verifier& verifier0) {
             reel::touche(e, Qt::Key_Return);
             attendre(120);
           }
-        } else if (m)
+        } else
           m->close();
+      }
       const int renommees = noms("I2C_SDA"), restantes = noms("SDA"), pas1 = doc->positionHistorique();
       reel::touche(v4, Qt::Key_Z, Qt::ControlModifier);
       attendre(120);
@@ -1720,10 +1721,11 @@ void essaisElectroniqueL2(FenetrePrincipale& f, const Verifier& verifier0) {
       Pt c1{};
       for (const auto& s : conc()->feuilles[0].symboles)
         if (s.uuid == x1) c1 = boiteSymbole(s, *conc()->symbole(s.symbole)).centre();
-      if (QMenu* m = clicDroit(c1))
+      if (QMenu* m = clicDroit(c1)) {
         if (QAction* x = ligne(m, QStringLiteral("Échanger")); x && cliquerLigne(m, x)) echange = true;
-        else if (m)
+        else
           m->close();
+      }
       attendre(80);
       Pt q1{}, q2{};
       for (const auto& s : conc()->feuilles[0].symboles) {
@@ -1792,10 +1794,11 @@ void essaisElectroniqueL2(FenetrePrincipale& f, const Verifier& verifier0) {
         if (auto* d = qobject_cast<QDialog*>(QApplication::activeModalWidget()); d && d->objectName() == QStringLiteral("dialogueSemblables")) d->accept();
       });
       bool menu = false;
-      if (QMenu* m = clicDroit(c0))
+      if (QMenu* m = clicDroit(c0)) {
         if (QAction* x = ligne(m, QStringLiteral("Choisir les semblables")); x && cliquerLigne(m, x)) menu = true;
-        else if (m)
+        else
           m->close();
+      }
       attendre(200);
       SelectionElectronique* sel = a4->selection();
       const std::size_t semblables = sel->composants().size();

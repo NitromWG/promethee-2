@@ -96,7 +96,9 @@ Ro o1 vo 0.1
 }  // namespace
 
 // Compteur binaire 4 bits (14.2) : quatre bascules T de XSPICE en cascade, horloge et remise à zéro par des ponts
-// analogique-numérique, sorties par des ponts numérique-analogique en logique 5 V
+// analogique-numérique, sorties par des ponts numérique-analogique en logique 5 V. Fronts de sortie de 1 µs (et non
+// 1 ns) : ngspice resserre dix fois moins ses pas à chaque changement d'état, et l'afficheur suit le bouton du
+// laboratoire en 30 ms au lieu de 50
 const char* const MODELE_COMPTEUR4 = R"(.subckt COMPTEUR4 clk raz q0 q1 q2 q3 vcc gnd
 a_in [clk raz] [d_clk d_raz] pont_entree_c4
 a_un d_un un_c4
@@ -107,7 +109,7 @@ a3 d_un d_nq2 null d_raz d_q3 d_nq3 bascule_t_c4
 a_out [d_q0 d_q1 d_q2 d_q3] [q0 q1 q2 q3] pont_sortie_c4
 r_vcc vcc gnd 1meg
 .model pont_entree_c4 adc_bridge(in_low=1.5 in_high=3.5)
-.model pont_sortie_c4 dac_bridge(out_low=0 out_high=5 out_undef=2.5 t_rise=1n t_fall=1n)
+.model pont_sortie_c4 dac_bridge(out_low=0 out_high=5 out_undef=2.5 t_rise=1u t_fall=1u)
 .model bascule_t_c4 d_tff(clk_delay=10n set_delay=10n reset_delay=10n)
 .model un_c4 d_pullup
 .ends COMPTEUR4

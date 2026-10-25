@@ -134,9 +134,10 @@ std::string couleurNormee(const std::string& c) {
 Polygone regionAvecCoupures(const Polygone& exterieur, const Polygones& trous) {
   // Élimination des trous : chaque trou, du plus à droite au plus à gauche, est relié au contour par le rayon
   // horizontal qui part de son sommet le plus à droite ; le contour parcourt alors le trou en sens inverse puis
-  // revient par la même coupure, d'épaisseur nulle
-  Polygone r = exterieur;
-  if (aireSignee(r) < 0) std::reverse(r.begin(), r.end());
+  // revient par la même coupure, d'épaisseur nulle. Sommets en liste chaînée et arêtes rangées par tranches
+  // horizontales : le rayon ne teste que les arêtes de sa tranche (une zone de milliers de trous en quelques ms)
+  Polygone ext = exterieur;
+  if (aireSignee(ext) < 0) std::reverse(ext.begin(), ext.end());
   std::vector<Polygone> liste;
   for (const auto& t : trous)
     if (t.size() >= 3) {
@@ -144,8 +145,43 @@ Polygone regionAvecCoupures(const Polygone& exterieur, const Polygones& trous) {
       if (aireSignee(h) > 0) std::reverse(h.begin(), h.end());
       liste.push_back(std::move(h));
     }
+  if (liste.empty() || ext.size() < 3) return ext;
   auto xmax = [](const Polygone& p) { return std::max_element(p.begin(), p.end(), [](const Pt& a, const Pt& b) { return a.x < b.x; }) - p.begin(); };
   std::sort(liste.begin(), liste.end(), [&](const Polygone& a, const Polygone& b) { return a[static_cast<std::size_t>(xmax(a))].x > b[static_cast<std::size_t>(xmax(b))].x; });
+  std::size_t total = ext.size();
+  Nm ymin = ext.front().y, ymax = ext.front().y;
+  for (const Pt& q : ext) ymin = std::min(ymin, q.y), ymax = std::max(ymax, q.y);
+  for (const auto& h : liste) {
+    total += h.size() + 3;
+    for (const Pt& q : h) ymin = std::min(ymin, q.y), ymax = std::max(ymax, q.y);
+  }
+  std::vector<Pt> pts;
+  std::vector<std::size_t> suiv;
+  std::vector<char> retire;
+  pts.reserve(total);
+  suiv.reserve(total);
+  retire.reserve(total);
+  for (std::size_t i = 0; i < ext.size(); ++i) {
+    pts.push_back(ext[i]);
+    suiv.push_back(i + 1 == ext.size() ? 0 : i + 1);
+    retire.push_back(0);
+  }
+  const std::size_t nb = std::clamp<std::size_t>(total / 8, 1, 4096);
+  const double hauteur = static_cast<double>(ymax - ymin) + 1;
+  auto tranche = [&](Nm y) { return std::min(nb - 1, static_cast<std::size_t>(static_cast<double>(y - ymin) / hauteur * static_cast<double>(nb))); };
+  std::vector<std::vector<std::size_t>> tranches(nb);
+  auto inscrire = [&](std::size_t i) {
+    const Pt a = pts[i], b = pts[suiv[i]];
+    if (a.y == b.y) return;  // horizontale (coupure comprise) : jamais touchée par le rayon
+    for (std::size_t k = tranche(std::min(a.y, b.y)); k <= tranche(std::max(a.y, b.y)); ++k) tranches[k].push_back(i);
+  };
+  for (std::size_t i = 0; i < ext.size(); ++i) inscrire(i);
+  auto nouveau = [&](Pt p) {
+    pts.push_back(p);
+    suiv.push_back(0);
+    retire.push_back(0);
+    return pts.size() - 1;
+  };
   for (const auto& h : liste) {
     const std::size_t ih = static_cast<std::size_t>(xmax(h));
     const Pt H = h[ih];
@@ -153,8 +189,9 @@ Polygone regionAvecCoupures(const Polygone& exterieur, const Polygones& trous) {
     double meilleur = 1e300;
     std::size_t arete = 0;
     Pt P = H;
-    for (std::size_t i = 0; i < r.size(); ++i) {
-      const Pt a = r[i], b = r[(i + 1) % r.size()];
+    for (const std::size_t i : tranches[tranche(H.y)]) {
+      if (retire[i]) continue;
+      const Pt a = pts[i], b = pts[suiv[i]];
       if (a.y == b.y || H.y < std::min(a.y, b.y) || H.y > std::max(a.y, b.y)) continue;
       const double x = static_cast<double>(a.x) + static_cast<double>(H.y - a.y) * static_cast<double>(b.x - a.x) / static_cast<double>(b.y - a.y);
       if (x >= static_cast<double>(H.x) && x - static_cast<double>(H.x) < meilleur) {
@@ -164,16 +201,37 @@ Polygone regionAvecCoupures(const Polygone& exterieur, const Polygones& trous) {
       }
     }
     if (meilleur >= 1e300) continue;  // trou hors du contour : ignoré
-    Polygone n;
-    n.reserve(r.size() + h.size() + 3);
-    for (std::size_t i = 0; i <= arete; ++i) n.push_back(r[i]);
-    if (n.back() != P) n.push_back(P);
-    for (std::size_t k = 0; k <= h.size(); ++k) n.push_back(h[(ih + k) % h.size()]);
-    n.push_back(P);
-    for (std::size_t i = arete + 1; i < r.size(); ++i)
-      if (!(i == arete + 1 && r[i] == P)) n.push_back(r[i]);
-    r = std::move(n);
+    std::size_t apres = suiv[arete];
+    std::size_t courant = arete;
+    if (pts[arete] != P) {
+      const std::size_t p1 = nouveau(P);
+      suiv[courant] = p1;  // l'arête raccourcie garde ses tranches (elles la couvrent toujours)
+      courant = p1;
+    }
+    for (std::size_t k = 0; k <= h.size(); ++k) {
+      const std::size_t n = nouveau(h[(ih + k) % h.size()]);
+      suiv[courant] = n;
+      if (courant != arete) inscrire(courant);
+      courant = n;
+    }
+    const std::size_t p2 = nouveau(P);
+    suiv[courant] = p2;
+    inscrire(courant);
+    // Le sommet suivant confondu avec la coupure est sauté (sauf le premier sommet, d'où part le parcours)
+    if (apres != 0 && pts[apres] == P) {
+      retire[apres] = 1;
+      apres = suiv[apres];
+    }
+    suiv[p2] = apres;
+    inscrire(p2);
   }
+  Polygone r;
+  r.reserve(pts.size());
+  std::size_t i = 0;
+  do {
+    r.push_back(pts[i]);
+    i = suiv[i];
+  } while (i != 0 && r.size() <= pts.size());
   return r;
 }
 
@@ -824,7 +882,6 @@ std::string csvPlacement(const ConceptionElec& c, bool anglais) {
   // placement (centre des pastilles), pas l'origine de l'empreinte, qui est la broche 1 d'un traversant de KiCad.
   // Rotation : degrés, sens anti-horaire vu de dessus, de 0 à 360, sans miroir pour le dessous (attribut .CRot du
   // Gerber X3, convention de JLCPCB) (F3).
-  const Boite carte = boite(c.circuit.contour.polygone());
   std::ostringstream s;
   s << (anglais ? "Designator,Val,Package,Mid X,Mid Y,Rotation,Layer\n" : "Ref,Valeur,Empreinte,PosX,PosY,Rot,Face\n");
   std::vector<const EmpreintePlacee*> v;
@@ -930,7 +987,6 @@ std::vector<std::string> ecrireDossierFabrication(const ConceptionElec& c, const
 }
 
 std::string ipcD356(const ConceptionElec& c, const Connectivite& k) {
-  const Boite carte = boite(c.circuit.contour.polygone());
   std::ostringstream s;
   auto champ = [](std::string t, std::size_t n) {
     for (char& ch : t)

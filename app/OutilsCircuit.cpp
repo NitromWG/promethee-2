@@ -611,6 +611,9 @@ class VueCircuit::OutilRoutage : public OutilBase {
       largeur.choix.push_back({QStringLiteral("De la classe (%1)").arg(mmTexte(static_cast<double>(classe))), [moi, classe] { moi->setLargeur(classe); }, m_largeur == classe});
       for (const Nm l : {150'000, 200'000, 250'000, 300'000, 400'000, 500'000, 800'000, 1'000'000, 1'500'000})
         if (l != classe) largeur.choix.push_back({mmTexte(static_cast<double>(l)), [moi, l] { moi->setLargeur(l); }, m_largeur == l});
+      // W et Maj+W à la souris (5.8, ERG-17)
+      largeur.choix.push_back({QStringLiteral("Largeur suivante"), [moi] { moi->agir("trace.largeur", true); }, false, true, {}, "trace.largeur"});
+      largeur.choix.push_back({QStringLiteral("Largeur précédente"), [moi] { moi->agir("trace.largeurPrecedente", true); }, false, true, {}, "trace.largeurPrecedente"});
       c.actions.push_back(largeur);
       c.actions.push_back(ActionBandeau::du("trace.retirerCoude", QStringLiteral("retirer-coude"), QStringLiteral("Retirer le coude"), [moi] { moi->retirerCoude(); }));
       c.actions.push_back(ActionBandeau::du("trace.annuler", QStringLiteral("retirer-trace"), QStringLiteral("Retirer le tracé"), [moi] { moi->annulerTrace(); }));

@@ -7,7 +7,7 @@
       "titre": "Schéma",
       "groupes": [
         {"titre": "Composant", "forme": "grand", "actions": ["schema.choisirComposant", "bibliotheque.articles", "composant.creer"]},
-        {"titre": "Bibliothèque", "forme": "grille", "actions": ["bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.gerer", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats", "bibliotheque.importerAutres", "composants.nomenclatureEntree", "bibliotheque.convertirDossier", "bibliotheque.conceptionReference", "bibliotheque.equipe", "aide.guideAncienOutil"]},
+        {"titre": "Bibliothèque", "forme": "grand", "actions": ["bibliotheque.gerer", "bibliotheque.standardiser", "bibliotheque.misesAJour", "bibliotheque.serieEmpreintes", "bibliotheque.affecter", "bibliotheque.achats", "bibliotheque.importerAutres", "composants.nomenclatureEntree", "bibliotheque.convertirDossier", "bibliotheque.conceptionReference", "bibliotheque.equipe", "aide.guideAncienOutil"]},
         {"titre": "Fil", "forme": "grand", "actions": ["schema.fil"]},
         {"titre": "Étiquette", "forme": "grand", "actions": ["schema.etiquette", "schema.etiquetteGlobale"]},
         {"titre": "Alimentation", "forme": "grand", "actions": ["schema.alimentation.gnd", "schema.alimentation.5v", "schema.alimentation.3v3", "schema.alimentation.12v", "schema.alimentation.vcc", "schema.drapeauAlimentation"]},
@@ -19,18 +19,13 @@
         {"forme": "separateur"},
         {"titre": "Annoter", "forme": "grand", "actions": ["schema.annoter", "schema.renumeroter"]},
         {"titre": "Vérifier", "forme": "grand", "actions": ["schema.erc", "regles.contraintes"]},
-        {"titre": "Simuler", "forme": "grand", "actions": ["simulation.ouvrir", "simulation.laboratoire", "simulation.modele", "simulation.calculateurs"]},
-        {"titre": "Laboratoire", "forme": "grille", "actions": ["simulation.logique", "simulation.symbolique", "simulation.reseau", "simulation.alimentation", "simulation.mesures"]},
-        {"titre": "Programme", "forme": "grille", "actions": ["programme.ouvrir", "programme.cosimuler", "programme.organigramme", "programme.hdl", "programme.machine", "programme.robot", "programme.logique"]},
-        {"titre": "Platine", "forme": "grille", "actions": ["platine.ouvrir", "platine.monter", "platine.etape", "platine.verifier", "platine.3d", "platine.documents", "platine.guitare"]},
-        {"titre": "Enseignement", "forme": "grille", "actions": ["enseignement.consignes", "enseignement.couche", "enseignement.evaluer", "enseignement.classe", "enseignement.page"]},
-        {"titre": "Outils", "forme": "grand", "actions": ["outils.conception"]},
-        {"titre": "Automatiser", "forme": "grille", "actions": ["automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]},
+        {"titre": "Simuler", "forme": "grand", "actions": ["simulation.ouvrir", "simulation.laboratoire", "simulation.modele", "simulation.calculateurs", "simulation.logique", "simulation.symbolique", "simulation.reseau", "simulation.alimentation", "simulation.mesures"]},
+        {"titre": "Prototype", "forme": "grand", "actions": ["programme.ouvrir", "programme.cosimuler", "programme.organigramme", "programme.hdl", "programme.machine", "programme.robot", "programme.logique", "platine.ouvrir", "platine.monter", "platine.etape", "platine.verifier", "platine.3d", "platine.documents", "platine.guitare", "enseignement.consignes", "enseignement.couche", "enseignement.evaluer", "enseignement.classe", "enseignement.page"]},
+        {"titre": "Outils", "forme": "grand", "actions": ["outils.conception", "automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]},
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
         {"titre": "Circuit", "forme": "grand", "actions": ["schema.creerCircuit"]},
         {"titre": "Feuille", "forme": "grand", "actions": ["schema.feuilleNouvelle", "schema.feuilleSuivante", "schema.feuillePrecedente", "schema.feuilleSupprimer"]},
-        {"titre": "Structure", "forme": "grille", "actions": ["schema.repeterFeuille", "schema.deplacerVersFeuille", "schema.migrerHierarchie", "schema.synchroniserPorts", "schema.feuilleMere"]},
-        {"titre": "Avancé", "forme": "grille", "actions": ["schema.echangerPortes", "schema.directives", "schema.grapheReseaux", "schema.importerFormes", "schema.enregistrerExtrait", "schema.poserExtrait", "schema.jeuxStyles", "schema.assistantSymbole", "schema.depuisCircuit"]}
+        {"titre": "Structure", "forme": "grand", "actions": ["schema.repeterFeuille", "schema.deplacerVersFeuille", "schema.migrerHierarchie", "schema.synchroniserPorts", "schema.feuilleMere", "schema.echangerPortes", "schema.directives", "schema.grapheReseaux", "schema.importerFormes", "schema.enregistrerExtrait", "schema.poserExtrait", "schema.jeuxStyles", "schema.assistantSymbole", "schema.depuisCircuit"]}
       ]
     },
     {
@@ -38,26 +33,18 @@
       "titre": "Circuit imprimé",
       "groupes": [
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
-        {"titre": "Placer", "forme": "grand", "actions": ["circuit.aPlacer", "circuit.disposerCercle", "circuit.reproduireCanal", "circuit.poserEmpreinte", "circuit.importerPlacement"]},
-        {"titre": "Placement", "forme": "grille", "actions": ["circuit.renumeroter", "circuit.placerReperes", "circuit.decouplages", "circuit.serrer", "circuit.echangerEmpreintes", "circuit.echangerEmpreintesMasse", "circuit.gabaritsPastilles", "circuit.ecarterVoisines", "circuit.recopierDisposition"]},
-        {"titre": "Cuivre propre", "forme": "grille", "actions": ["circuit.copieLocale", "circuit.revenirBibliotheque", "circuit.eclaterEmpreinte", "circuit.generateurs", "bibliotheque.pastilles", "schema.enregistrerExtrait", "schema.poserExtrait"]},
-        {"titre": "Router", "forme": "grand", "actions": ["circuit.router", "circuit.via", "circuit.routerAuto", "circuit.routerComplet", "circuit.routerChoisies", "circuit.routerPaire", "circuit.routerStrategies", "circuit.echangesBroches"]},
-        {"titre": "Accorder", "forme": "grand", "actions": ["circuit.accorder", "circuit.accorderGroupe", "circuit.regenererMotifs", "circuit.gouttes", "circuit.retirerGouttes"]},
-        {"titre": "Pistes", "forme": "grille", "actions": ["circuit.nettoyer", "circuit.lisser", "circuit.derouter", "circuit.pinceauReseau", "circuit.couperPiste"]},
-        {"titre": "Zone", "forme": "grand", "actions": ["circuit.zone", "circuit.contour", "circuit.decoupe", "circuit.texte", "circuit.zoneCarte", "circuit.planReseau"]},
-        {"titre": "Zones", "forme": "grille", "actions": ["circuit.coudre", "circuit.relierIlots", "circuit.dupliquerZone", "circuit.fusionnerZones", "circuit.soustraireZone", "circuit.couperZone", "circuit.zoneDepuisPistes", "circuit.arrondirZone", "circuit.figerZones", "circuit.mettreDeCote", "circuit.zonesNormales"]},
-        {"titre": "Dessin", "forme": "grand", "actions": ["circuit.codeQR", "circuit.code128", "circuit.logo", "circuit.gabarit", "circuit.contourPoints", "circuit.origineTravail", "circuit.origineFichiers"]},
-        {"titre": "Réglages", "forme": "grille", "actions": ["circuit.reprendreReglages", "circuit.echangerCouches", "circuit.textesMasse"]},
+        {"titre": "Placer", "forme": "grand", "actions": ["circuit.aPlacer", "circuit.disposerCercle", "circuit.reproduireCanal", "circuit.poserEmpreinte", "circuit.importerPlacement", "circuit.renumeroter", "circuit.placerReperes", "circuit.decouplages", "circuit.serrer", "circuit.echangerEmpreintes", "circuit.echangerEmpreintesMasse", "circuit.gabaritsPastilles", "circuit.ecarterVoisines", "circuit.recopierDisposition"]},
+        {"titre": "Empreinte", "forme": "grand", "actions": ["circuit.copieLocale", "circuit.revenirBibliotheque", "circuit.eclaterEmpreinte", "circuit.generateurs", "bibliotheque.pastilles", "schema.enregistrerExtrait", "schema.poserExtrait"]},
+        {"titre": "Router", "forme": "grand", "actions": ["circuit.router", "circuit.via", "circuit.routerAuto", "circuit.routerComplet", "circuit.routerChoisies", "circuit.routerPaire", "circuit.routerStrategies", "circuit.echangesBroches", "circuit.nettoyer", "circuit.lisser", "circuit.derouter", "circuit.pinceauReseau", "circuit.couperPiste", "circuit.accorder", "circuit.accorderGroupe", "circuit.regenererMotifs", "circuit.gouttes", "circuit.retirerGouttes"]},
+        {"titre": "Zone", "forme": "grand", "actions": ["circuit.zone", "circuit.contour", "circuit.decoupe", "circuit.texte", "circuit.zoneCarte", "circuit.planReseau", "circuit.coudre", "circuit.relierIlots", "circuit.dupliquerZone", "circuit.fusionnerZones", "circuit.soustraireZone", "circuit.couperZone", "circuit.zoneDepuisPistes", "circuit.arrondirZone", "circuit.figerZones", "circuit.mettreDeCote", "circuit.zonesNormales"]},
+        {"titre": "Dessin", "forme": "grand", "actions": ["circuit.codeQR", "circuit.code128", "circuit.logo", "circuit.gabarit", "circuit.contourPoints", "circuit.origineTravail", "circuit.origineFichiers", "circuit.reprendreReglages", "circuit.echangerCouches", "circuit.textesMasse"]},
         {"titre": "Modifier", "forme": "grille", "actions": ["objet.tourner", "objet.tournerInverse", "circuit.changerFace", "selection.supprimer", "circuit.mesurer"]},
         {"titre": "Presse-papiers", "forme": "grille", "actions": ["edition.copier", "edition.coller", "edition.dupliquer", "edition.couper", "selection.tout", "circuit.collageSpecial"]},
-        {"titre": "Vue", "forme": "grille", "actions": ["vue.toutVoir", "commun.inspecteur", "vue.zoomPlus", "vue.zoomMoins", "atelier.raccourcis"]},
+        {"titre": "Vue", "forme": "grille", "actions": ["vue.toutVoir", "commun.inspecteur", "vue.zoomPlus", "vue.zoomMoins", "atelier.raccourcis", "vue.reseaux"]},
         {"titre": "Couche active", "forme": "controle", "actions": ["circuit.coucheActive"]},
         {"titre": "Grille et unité", "forme": "controle", "actions": ["circuit.grilleUnite"]},
-        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes", "regles.signauxSerie", "regles.gabaritInterface", "regles.profilImpedance", "circuit.schemaLignes"]},
-        {"titre": "Révision", "forme": "grille", "actions": ["circuit.retouches", "schema.depuisCircuit"]},
-        {"titre": "Réseaux", "forme": "grand", "actions": ["vue.reseaux"]},
-        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf", "carte.importerDansCarte", "carte.importerDessin", "carte.exporterDxfCouches", "carte.exporter3D", "carte.idxEnvoyer", "carte.idxRecevoir", "carte.idxHistorique"]},
-        {"titre": "Automatiser", "forme": "grille", "actions": ["automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]}
+        {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes", "regles.signauxSerie", "regles.gabaritInterface", "regles.profilImpedance", "circuit.schemaLignes", "circuit.retouches", "schema.depuisCircuit"]},
+        {"titre": "Mécanique", "forme": "grand", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf", "carte.importerDansCarte", "carte.importerDessin", "carte.exporterDxfCouches", "carte.exporter3D", "carte.idxEnvoyer", "carte.idxRecevoir", "carte.idxHistorique"]}
       ]
     },
     {

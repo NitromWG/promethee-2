@@ -94,10 +94,6 @@ IlotsCuivre ilotsDuCuivre(const ConceptionElec& c) {
   }
   return r;
 }
-std::string brocheTexte(const ConceptionElec& c, const std::string& composant, const std::string& numero) {
-  const ComposantElec* x = c.composant(composant);
-  return (x ? x->reference : composant) + "." + numero;
-}
 // Fil de 2,54 mm tiré de la broche vers l'extérieur, terminé par une étiquette globale au nom du réseau
 bool etiqueter(ConceptionElec& c, std::size_t feuille, const SymbolePlace& sp, const BrochePlacee& b, const std::string& reseau) {
   if (feuille >= c.feuilles.size()) return false;

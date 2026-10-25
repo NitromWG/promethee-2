@@ -689,7 +689,7 @@ std::vector<std::string> verifierPublication(const Publication& p, const std::st
 // ---------- Fichier ----------
 // Format propre à la conception électronique (clé « format » de chaque conception, ECH-10) : absent ou 1 jusqu'à la
 // 0.28, 2 depuis la 0.29. Une conception d'un format plus récent s'ouvre en lecture tolérante, avec une alerte.
-inline constexpr int FORMAT_ELECTRONIQUE = 5;  // 2 : la 0.30 ; 3 : la 0.31 (lot L2) ; 4 : la 0.32 (lot L3) ; 5 : la 0.33 (lots L4 à L19)
+inline constexpr int FORMAT_ELECTRONIQUE = 6;  // 2 : la 0.30 ; 3 : la 0.31 (lot L2) ; 4 : la 0.32 (lot L3) ; 5 : la 0.33 (socle des lots L4 à L19) ; 6 : la 0.34 (fin des lots L4 à L19)
 // Écriture dans un ordre stable : clés dans un ordre fixe, clés inconnues ensuite ; listes dont l'ordre n'a pas de
 // sens (composants, symboles posés, fils, étiquettes, textes, empreintes placées, pistes, vias, jonctions) triées par
 // identifiant ; feuilles, zones (départage des priorités égales), classes, affectations et publications dans leur ordre

@@ -465,11 +465,13 @@ std::string netlistLignes(const SchemaLignes& s, double fronts, double duree, do
       }
       case GenreElementLigne::Terminaison:
         if (e.resistance <= 0 || e.resistance >= 1e9) break;
-        o << "Rt" << ++k << " " << a << " " << (e.tension != 0 ? "vtt" + std::to_string(k) : std::string("0")) << " " << nb(e.resistance) << "\n";
+        ++k;
+        o << "Rt" << k << " " << a << " " << (e.tension != 0 ? "vtt" + std::to_string(k) : std::string("0")) << " " << nb(e.resistance) << "\n";
         if (e.tension != 0) o << "Vtt" << k << " vtt" << k << " 0 " << nb(e.tension) << "\n";
         break;
       case GenreElementLigne::Recepteur:
-        o << "Cr" << ++k << " " << a << " 0 " << nb(e.capacite > 0 ? e.capacite : 2e-12) << "\nRr" << k << " " << a << " 0 1e6\n";
+        ++k;
+        o << "Cr" << k << " " << a << " 0 " << nb(e.capacite > 0 ? e.capacite : 2e-12) << "\nRr" << k << " " << a << " 0 1e6\n";
         break;
     }
   }

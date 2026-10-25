@@ -8,6 +8,7 @@
 
 #include <catch2/catch_test_macros.hpp>
 
+#include "promethee/controles_fabrication.hpp"
 #include "promethee/electronique.hpp"
 #include "promethee/remplissage_local.hpp"
 #include "promethee/robustesse.hpp"
@@ -116,6 +117,12 @@ TEST_CASE("9.2 · DRC complète de la carte de 2 000 composants avec sa zone GND
   WARN("2 000 composants : connectivité " << tk << " ms, zones " << tz << " ms, DRC " << td << " ms, état du routage " << te << " ms ; " << v.size() << " violation(s), "
                                           << e.chevelu.size() << " liaison(s)");
   CHECK(tk + tz + td < 10'000);
+  // Contrôles de fabrication (8.17) sur la connectivité et les zones déjà calculées : ils tiennent sur le fil du calcul
+  t0 = H::now();
+  const BilanFabrication f = controlerFabrication(c, k, z);
+  const double tf = ms(t0);
+  WARN("contrôles de fabrication : " << tf << " ms, " << f.constats.size() << " constat(s)");
+  CHECK(tf < 5'000);
 }
 
 // Profilage à la main : PROMETHEE_PHASE=connectivite|zones|drc|etat, PROMETHEE_COMPOSANTS=2000 (caché)

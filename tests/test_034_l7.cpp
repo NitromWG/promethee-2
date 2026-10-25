@@ -66,11 +66,6 @@ std::map<std::string, std::set<std::string>> reseaux(const ConceptionElec& c, st
   }
   return r;
 }
-std::set<std::set<std::string>> groupes(const ConceptionElec& c) {
-  std::set<std::set<std::string>> r;
-  for (const auto& [n, v] : reseaux(c)) r.insert(v);
-  return r;
-}
 const EmpreintePlacee* placee(const ConceptionElec& c, const std::string& composant) {
   for (const auto& e : c.circuit.empreintes)
     if (e.composant == composant) return &e;

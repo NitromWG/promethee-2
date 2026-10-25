@@ -214,7 +214,8 @@ std::vector<std::map<std::string, std::string>> apparierCanaux(const ConceptionE
   return r;
 }
 
-int recopierDisposition(ConceptionElec& c, const std::vector<std::string>& source, const std::vector<std::map<std::string, std::string>>& canaux, Pt decalage, bool pistes) {
+// Les canaux portent déjà chaque composant source et sa cible : la liste de la source ne sert qu'à l'appelant
+int recopierDisposition(ConceptionElec& c, const std::vector<std::string>& /*source*/, const std::vector<std::map<std::string, std::string>>& canaux, Pt decalage, bool pistes) {
   exigerModifiable(c);
   std::map<std::string, const EmpreintePlacee*> placees;
   for (const auto& e : c.circuit.empreintes) placees[e.composant] = &e;

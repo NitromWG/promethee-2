@@ -1,7 +1,42 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nitromwg.github.io/promethee/schemas/schemas/projet-0.33.schema.json",
-  "title": "Projet Prométhée écrit par la 0.33",
-  "description": "Le format courant : voir ../schema_projet.json et ../schema_conception.json.",
-  "$ref": "../schema_projet.json"
+  "title": "Projet Prométhée écrit pour la 0.33",
+  "description": "Ce que la 0.33 écrit, et ce que « Enregistrer pour une version précédente… » de la 0.34 écrit pour elle : cartes au format 5. Les clés de la 0.34 (blocs hiérarchiques, formes et tableaux du schéma, cuivre plein, zones de règles, cotes, pièces montées, points de vue, extensions des ateliers, licence, liens entre disciplines…) peuvent y rester : la 0.33 les garde objet par objet sans les appliquer ; la seconde vue des symboles est retirée et les folios de câblage de faisceau deviennent libres.",
+  "allOf": [
+    {
+      "$ref": "../schema_projet.json#/$defs/projet"
+    }
+  ],
+  "properties": {
+    "version": {
+      "const": 3
+    },
+    "electronique": {
+      "items": {
+        "$ref": "#/$defs/conception"
+      }
+    }
+  },
+  "$defs": {
+    "conception": {
+      "allOf": [
+        {
+          "$ref": "../schema_conception.json#/$defs/conception"
+        }
+      ],
+      "required": [
+        "format",
+        "formatElectronique"
+      ],
+      "properties": {
+        "format": {
+          "const": 5
+        },
+        "formatElectronique": {
+          "const": 5
+        }
+      }
+    }
+  }
 }

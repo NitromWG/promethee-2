@@ -51,6 +51,7 @@ def lignes(chemin):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
     p = argparse.ArgumentParser()
     p.add_argument("--programme", required=True)
     p.add_argument("--dossier", required=True)
@@ -73,7 +74,8 @@ def main():
         env = dict(os.environ, PROMETHEE_ACCES_EN_LIGNE=fichierReglages)
 
         def lancer(*args):
-            r = subprocess.run([a.programme, "--reglages", fichierReglages, *args], capture_output=True, text=True, env=env, timeout=60)
+            # Le programme écrit en UTF-8, quelle que soit la page de code du poste (Windows)
+            r = subprocess.run([a.programme, "--reglages", fichierReglages, *args], capture_output=True, encoding="utf-8", errors="replace", env=env, timeout=60)
             return r.returncode, r.stdout + r.stderr
 
         echecs = []

@@ -133,6 +133,9 @@ if(GERBV)
     execute_process(COMMAND ${GERBV} -x png --dpi=300 -o ${d}/apercu.png ${gerbers_d} ${percages_d}
                     RESULT_VARIABLE r OUTPUT_QUIET ERROR_VARIABLE messages)
     string(REGEX REPLACE "[^\n]*Unknown RS-274X extension found %T[^\n]*" "" reste "${messages}")
+    # gerbv ne lit pas les fentes détourées d'Excellon (G00, M15, G01, M16 ; 4.13) et le dit sans que le fichier soit
+    # faux : l'analyseur indépendant et gerbonara les relisent
+    string(REGEX REPLACE "[^\n]*Unsupported (G00|G01|M15|M16) [^\n]*" "" reste "${reste}")
     if(NOT r EQUAL 0 OR reste MATCHES "CRITICAL|ERROR")
       message(FATAL_ERROR "gerbv refuse le dossier ${d} (${r}) :\n${reste}")
     endif()

@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://nitromwg.github.io/promethee/schemas/schema_conception.json",
-  "title": "Conception électronique de Prométhée, format 5 (fichiers de la 0.33)",
-  "description": "Une carte électronique dans le fichier de projet (.prom) : schéma, composants, définitions de symboles et d'empreintes figées, circuit imprimé. Coordonnées et longueurs en nanomètres entiers. Chaque objet peut porter des clés qu'il ne connaît pas (écrites par une version plus récente) : elles sont gardées et réécrites telles quelles (ECH-11). La racine décrit le fichier de la 0.32 ; $defs/conception décrit la structure commune aux versions 0.28 à 0.32, que les schémas de docs/schemas restreignent.",
+  "title": "Conception électronique de Prométhée, format 6 (fichiers de la 0.34)",
+  "description": "Une carte électronique dans le fichier de projet (.prom) : schéma, composants, définitions de symboles et d'empreintes figées, circuit imprimé. Coordonnées et longueurs en nanomètres entiers. Chaque objet peut porter des clés qu'il ne connaît pas (écrites par une version plus récente) : elles sont gardées et réécrites telles quelles (ECH-11). La racine décrit le fichier de la 0.34 ; $defs/conception décrit la structure commune aux versions 0.28 à 0.34, que les schémas de docs/schemas restreignent.",
   "allOf": [{ "$ref": "#/$defs/conception" }],
   "required": ["format", "formatElectronique"],
   "properties": {
-    "format": { "const": 5, "description": "Format de la conception (ECH-10) : 2 pour la 0.30, 3 pour la 0.31, 4 pour la 0.32, 5 pour la 0.33." },
-    "formatElectronique": { "const": 5, "description": "Même format, sous le nom que lit la 0.29 : sans lui, elle prendrait la carte pour une carte de la 0.28." }
+    "format": { "const": 6, "description": "Format de la conception (ECH-10) : 2 pour la 0.30, 3 pour la 0.31, 4 pour la 0.32, 5 pour la 0.33, 6 pour la 0.34." },
+    "formatElectronique": { "const": 6, "description": "Même format, sous le nom que lit la 0.29 : sans lui, elle prendrait la carte pour une carte de la 0.28." }
   },
   "$defs": {
     "nm": { "type": "integer", "description": "Longueur ou coordonnée en nanomètres." },
@@ -22,7 +22,9 @@
     },
     "couche": {
       "type": "string",
-      "enum": ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu", "F.Mask", "B.Mask", "F.Paste", "B.Paste", "F.SilkS", "B.SilkS", "Edge.Cuts", "F.CrtYd", "B.CrtYd", "F.Fab", "B.Fab"]
+      "description": "Couches de la 0.28 à la 0.33, puis (0.34) les cuivres internes In3.Cu à In30.Cu, la colle, le revêtement et les couches libres.",
+      "enum": ["F.Cu", "In1.Cu", "In2.Cu", "B.Cu", "F.Mask", "B.Mask", "F.Paste", "B.Paste", "F.SilkS", "B.SilkS", "Edge.Cuts", "F.CrtYd", "B.CrtYd", "F.Fab", "B.Fab",
+               "In3.Cu", "In4.Cu", "In5.Cu", "In6.Cu", "In7.Cu", "In8.Cu", "In9.Cu", "In10.Cu", "In11.Cu", "In12.Cu", "In13.Cu", "In14.Cu", "In15.Cu", "In16.Cu", "In17.Cu", "In18.Cu", "In19.Cu", "In20.Cu", "In21.Cu", "In22.Cu", "In23.Cu", "In24.Cu", "In25.Cu", "In26.Cu", "In27.Cu", "In28.Cu", "In29.Cu", "In30.Cu", "F.Adhes", "B.Adhes", "F.Coating", "B.Coating", "Dwgs.User", "Cmts.User", "User.1", "User.2", "User.3", "User.4", "User.5", "User.6", "User.7", "User.8", "User.9"]
     },
     "chaines": { "type": "object", "additionalProperties": { "type": "string" } },
     "conception": {
@@ -56,6 +58,12 @@
           "description": "Notes attachées aux objets (0.33) : commentaires de revue, tâches et journal, en fil de discussion (parent).",
           "items": { "type": "object", "required": ["uuid", "genre", "texte"], "properties": { "genre": { "enum": ["commentaire", "tache", "journal"] }, "objet": { "type": "string" }, "parent": { "type": "string" }, "close": { "type": "boolean" }, "priorite": { "type": "integer" } } }
         },
+        "piecesMontees": { "type": "array", "items": { "type": "object", "required": ["uuid", "reference", "nom", "place"] }, "description": "Pièces mécaniques montées sur la carte (0.34) : entretoises, dissipateurs, vis, avec leur place 3D et leur article ; comptées dans la nomenclature commune." },
+        "boitierImporte": { "type": "object", "required": ["modele", "place"], "description": "Boîtier du commerce importé en STEP (0.34) : modèle, place, rotation et jeu, pour contrôler la carte dans son boîtier." },
+        "pointsDeVue": { "type": "array", "items": { "type": "object", "required": ["nom", "cible", "azimut", "elevation", "distance"] }, "description": "Points de vue nommés des vues 3D (0.34) : cible, azimut, élévation, distance, projection, champ." },
+        "reglagesSchema": { "type": "object", "description": "Réglages du schéma (0.34) : styles des fils et des bus, tailles des textes et des étiquettes, grille, renvois entre feuilles." },
+        "aliasBus": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } }, "description": "Alias de bus (0.34) : nom → membres." },
+        "extensions": { "type": "object", "description": "Données des ateliers (0.34), par clé : programmes embarqués, organigrammes, classeur de simulation, platine d'essai, couche de l'enseignant et consignes, revues formelles, schéma de lignes, retouches, plans, panneau ; faisceaux de câblage dans les projets électriques." },
         "jeuxSorties": {
           "type": "array",
           "description": "Jeux de sorties enregistrés (0.33) : dossier à variables ({projet}, {carte}, {revision}, {variante}, {date}, et celles données par -D CLE=VALEUR), liste de sorties, variante, archive zip, contrôles avant publication.",
@@ -173,6 +181,11 @@
         "repetitions": { "type": "integer", "minimum": 2, "description": "Feuille de canal répétée N fois (0.33)." },
         "modele": { "type": "string", "description": "Feuille modèle dont celle-ci est une instance (0.33), avec son numéro (instance)." },
         "instance": { "type": "integer" },
+        "blocs": { "type": "array", "items": { "type": "object", "required": ["uuid", "feuille"] }, "description": "Blocs hiérarchiques (0.34) : feuille fille désignée, ports reliés à ses étiquettes hiérarchiques." },
+        "directives": { "type": "array", "items": { "type": "object" }, "description": "Directives posées sur les fils (0.34) : classes et règles des réseaux, sans liaison électrique." },
+        "formes": { "type": "array", "items": { "type": "object" }, "description": "Formes dessinées ou importées sur la feuille (0.34)." },
+        "tableaux": { "type": "array", "items": { "type": "object" }, "description": "Tableaux de texte (0.34)." },
+        "images": { "type": "array", "items": { "type": "object" }, "description": "Images posées sur la feuille (0.34)." },
         "symboles": { "type": "array", "items": { "$ref": "#/$defs/symbolePlace" } },
         "fils": {
           "type": "array",
@@ -370,6 +383,12 @@
       "required": ["contour", "empilage", "regles", "serigraphie", "fabrication", "empreintes", "pistes", "vias", "zones", "textes"],
       "properties": {
         "volumes": { "type": "array", "items": { "$ref": "#/$defs/volume" }, "description": "Volumes libres posés sur la carte (0.32)." },
+        "regions": { "type": "array", "items": { "type": "object", "required": ["uuid", "reseau", "couche", "forme"], "properties": { "couche": { "$ref": "#/$defs/couche" }, "forme": { "$ref": "#/$defs/points" } } }, "description": "Cuivre plein (0.34) : gouttes, cuivre propre à la carte, logos." },
+        "zonesRegles": { "type": "array", "items": { "type": "object", "required": ["uuid", "contour"] }, "description": "Zones de règles, d'interdiction et de placement (0.34)." },
+        "motifs": { "type": "array", "items": { "type": "object", "required": ["uuid", "reseau", "genre"], "properties": { "genre": { "enum": ["accordeon", "trombone", "dentsDeScie"] } } }, "description": "Motifs d'accord de longueur (0.34) ; leurs pistes portent « motif »." },
+        "groupes": { "type": "array", "items": { "type": "object", "required": ["uuid", "nom", "membres"] }, "description": "Groupes d'objets du circuit (0.34), imbriqués par « parent »." },
+        "cotes": { "type": "array", "items": { "type": "object", "required": ["uuid", "genre", "points"] }, "description": "Cotes de la carte (0.34)." },
+        "gabarits": { "type": "array", "items": { "type": "object" }, "description": "Gabarits de pastilles nommés (0.34), cités par « gabarit »." },
         "contour": {
           "type": "object",
           "required": ["origine", "largeur", "hauteur", "rayon", "libre"],
@@ -386,7 +405,8 @@
           "type": "object",
           "required": ["couches", "epaisseur", "cuivre", "materiau", "finition", "vernis", "serigraphie"],
           "properties": {
-            "couches": { "type": "integer", "enum": [1, 2, 4] },
+            "couches": { "type": "integer", "minimum": 1, "maximum": 32, "description": "Couches de cuivre : 1, 2 ou 4 jusqu'à la 0.33, 1 à 32 depuis la 0.34." },
+            "pile": { "type": "array", "items": { "type": "object", "required": ["genre", "epaisseur"], "properties": { "genre": { "enum": ["cuivre", "dielectrique", "ame"] } } }, "description": "Empilage détaillé (0.34) : cuivres typés (signal, plan, mixte, cavalier) et diélectriques (permittivité, pertes, préimprégné), de haut en bas." },
             "epaisseur": { "type": "number" },
             "cuivre": { "type": "number" },
             "materiau": { "type": "string" },

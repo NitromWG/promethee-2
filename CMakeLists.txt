@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.22)
-project(Promethee VERSION 0.33.0 LANGUAGES CXX
+project(Promethee VERSION 0.34.0 LANGUAGES CXX
         DESCRIPTION "Plateforme libre d'ingénierie intégrée : carte et boîtier dans un seul modèle")
 
 # Windows : évite le plantage connu des programmes compilés avec MSVC 17.10+ face à une ancienne msvcp140.dll.
@@ -19,7 +19,8 @@ option(PROMETHEE_TESTS "Compiler les tests" ON)
 option(PROMETHEE_APP "Compiler l'application de bureau (Qt 6)" ON)
 
 if(MSVC)
-  add_compile_options(/W4 /utf-8 /permissive-)
+  # /bigobj : les gros fichiers d'essais et de lecture JSON dépassent le nombre de sections d'un objet ordinaire
+  add_compile_options(/W4 /utf-8 /permissive- /bigobj)
 else()
   # Les agrégats du modèle ont des membres à valeur par défaut, pensés pour une initialisation partielle
   add_compile_options(-Wall -Wextra -Wpedantic -Wno-missing-field-initializers)

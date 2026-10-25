@@ -1,282 +1,113 @@
-# Refonte de l'électronique : ce que livre la 0.33 et ce qui reste
+# Refonte de l'électronique : ce que livrent la 0.33 et la 0.34, et ce qui reste
 
-Le plan de refonte du module électronique (audit du 15 octobre 2026) découpe le travail en lots L0 à L19. Les lots L0 à L3 sont livrés en 0.29 à 0.32. La 0.33 livre en une fois les lots L4 à L19 : pour chacun, un socle complet et vérifié (essais du noyau `tests/test_electronique_lN.cpp`, parcours d'interface `app/EssaisElectroniqueLN.cpp`), pas la totalité des tâches du plan. Ce fichier dit, lot par lot, ce qui est livré et ce qui reste, par numéro de tâche du plan ; une tâche listée « reste » n'est pas faite, ou seulement en partie, dans la 0.33.
+Le plan de refonte du module électronique (audit du 15 octobre 2026) découpe le travail en lots L0 à L19. Les lots L0 à L3 sont livrés en 0.29 à 0.32. La 0.33 livre un socle de chaque lot L4 à L19 ; la 0.34 livre toutes les tâches que la 0.33 laissait, chacune avec ses essais du noyau (`tests/test_034_*.cpp`) et, quand elle a des gestes, ses parcours d'interface (`app/EssaisElectronique034*.cpp`, lots `034L4` à `034L19`). Ce fichier dit, lot par lot, ce que chaque version livre, puis ce qui reste en partie.
 
 ## L4 · Empreintes et bibliothèque
 
-Livré : Articles du projet (symbole, empreinte, modèle 3D, sources, paramètres) avec version, héritage d'un article de base champ par champ et mise à jour proposée aux composants qui en sont tirés ; recherche riche (« Résistance>1k -0402 ») sur 10 000 articles ; « 10k 0603 » pose la bonne résistance avec sa hauteur et son corps ; brochage MOSFET vérifié par boîtier ; pastilles IPC-7351B nominales calculées ; fenêtre des empreintes filtrée par famille ; ERC-08 et code LCSC ; archives SnapEDA reprises en un article contrôlé ; bibliothèques citées par variable (${BIBLIO_EQUIPE}) ; standardisation d'un composant générique.
+Livré en 0.33 : Articles du projet (symbole, empreinte, modèle 3D, sources, paramètres) avec version, héritage d'un article de base champ par champ et mise à jour proposée aux composants qui en sont tirés ; recherche riche (« Résistance>1k -0402 ») sur 10 000 articles ; « 10k 0603 » pose la bonne résistance avec sa hauteur et son corps ; brochage MOSFET vérifié par boîtier ; pastilles IPC-7351B nominales calculées ; fenêtre des empreintes filtrée par famille ; ERC-08 et code LCSC ; archives SnapEDA reprises en un article contrôlé ; bibliothèques citées par variable (${BIBLIO_EQUIPE}) ; standardisation d'un composant générique.
 
-Reste :
-
-- 4.13 Fentes en Excellon, détourées (G00, M15, G01, M16) et compatibles XNC, G85 en option du profil
-- 4.18 Approvisionnement hors ligne
-- 4.20 Mise à jour et échange en masse, en une commande
-- 4.23 Tableur et gestion de bibliothèque
-- 4.24 Pastilles complètes, suite
-- 4.25 Générateur IPC étendu
-- 4.26 Générateur par nom en série
-- 4.27 Perçage complet
-- 4.28 Affectation des empreintes en tableau, non modale
+Livré en 0.34 : Fentes en Excellon détourées (G00, M15, G01, M16) ou en G85 selon le profil du fabricant, trous décalés et trous en plus, tolérances, tableau et plan de perçage, forets du profil, sept jeux d'options relus aux mêmes trous (4.13, 4.27) ; approvisionnement hors ligne, besoins par carte et stock en tiroir (4.18) ; échange de symboles et de valeurs en masse, en une commande (4.20) ; bibliothèque en tableau, série E24 de 1 Ω à 1 MΩ générée et contrôlée (4.23) ; pastilles chanfreinées, trapèzes et libres, vernis et pâte propres, motifs de pâte, gabarits de piles de pastilles suivis par toutes les pastilles qui les citent (4.24) ; générateur IPC étendu jusqu'aux BGA, à 0,05 mm de l'empreinte KiCad équivalente (4.25), et par nom en série dans les densités M, N et L (4.26) ; affectation des empreintes en tableau non modal, par règles d'équivalence (4.28).
 
 ## L5 · Circuit imprimé
 
-Livré : Routeur interactif qui contourne à l'isolement et à 45°, et mode Pousser ; liaison routée d'office ou laissée au chevelu avec sa raison ; violations exclues qui reviennent « à revoir » quand l'objet bouge ; « À placer » groupé par feuille ; couronne de LED ; cartouche de tracé près de la tête avec auréole d'isolement ; repère de sérigraphie déplacé et gardé ; rapport de vérification HTML relié aux objets.
+Livré en 0.33 : Routeur interactif qui contourne à l'isolement et à 45°, et mode Pousser ; liaison routée d'office ou laissée au chevelu avec sa raison ; violations exclues qui reviennent « à revoir » quand l'objet bouge ; « À placer » groupé par feuille ; couronne de LED ; cartouche de tracé près de la tête avec auréole d'isolement ; repère de sérigraphie déplacé et gardé ; rapport de vérification HTML relié aux objets.
 
-Reste :
-
-- 5.4 Zones de règles et de placement, collisions en direct, contour et découpes modifiables par poignées
-- 5.6 Chevelu utile, renumérotation selon la carte, corps en couche de fabrication, survol, mesure accrochée
-- 5.8 Largeur et via pendant le tracé, couche active synchronisée
-- 5.9 Glisser une piste posée, nettoyage, routage de plusieurs pistes
-- 5.10 Paires différentielles, accord de longueur, gouttes
-- 5.11 Zones
-- 5.12 Gestionnaire de contraintes
-- 5.14 Noms de réseaux à chemin, fin des suffixes « #2 », migration par alias (E2)
-- 5.15 Navigateur de réseaux, cotations, gabarits de carte liés au boîtier, codes 2D et logos
-- 5.16 Liste des liaisons restantes utile, presse-papiers du circuit partagé entre vues (C23, C24)
-- 5.17 Amener et choisir
-- 5.19 Changements en masse, chacun en un pas d’annulation et avec son journal
-- 5.22 Cuivre calculé autour des pistes
-- 5.23 Édition des pistes posées
-- 5.24 Placement assisté
-- 5.25 Remplissage enrichi et cuivre généré, dans le moteur Clipper2
-- 5.26 Zones et vernis
-- 5.27 Règles du gestionnaire de contraintes
-- 5.28 Contrôles nouveaux de la DRC, numérotés à la suite des règles
-- 5.30 Placement et pistes guidés par les règles
-- 5.31 Dessin de la carte
-- 5.32 Voir et retrouver
+Livré en 0.34 : Contour modifié par ses sommets et saisi dans le repère de travail, collisions d'encombrement en direct, zones de règles et de placement (5.4, 5.31) ; renumérotation selon la carte et chevelu mesuré (5.6, 5.19) ; nettoyage prévu puis choisi, segment glissé à 45°, via déplacée, déroutage, pinceau et lissage (5.9, 5.23) ; plusieurs liaisons routées d'une commande, paires à écart constant, motifs d'accord de longueur refaits quand la règle change, gouttes (5.9, 5.10, 5.21, 5.22) ; zones : plan du réseau, opérations booléennes, création depuis des pistes, hachures, remplissage figé ou périmé, couture de vias, plan partagé entre trois rails sans recouvrement (5.11, 5.25, 5.26) ; gestionnaire de contraintes à valeurs minimale, préférée et maximale résolues par priorité puis par sévérité, tables d'isolement sourcées (IPC-2221B, CEI 60664-1), règles en fichier, quinze contrôles nouveaux de la DRC (5.12, 5.27, 5.28) ; noms de réseaux à chemin (5.14) ; QR code, Micro QR, Code 128, logos vectorisés, cotes et gabarits de carte (5.15) ; presse-papiers du circuit et collage spécial (5.16) ; carte sans schéma (5.17) ; placement repris d'un CSV de KiCad ou d'un classeur d'Altium, découplage placé au plus près de sa broche (5.19, 5.24) ; placement et pistes guidés par les règles (5.30) ; réglages repris d'une carte à l'autre (5.32).
 
 ## L6 · Mécatronique
 
-Livré : Modèles STEP exacts qui remplacent la boîte et donnent la hauteur ; dossier de modèles associé d'un coup ; carte équipée en STEP nommé ; contrôle de la carte dans son boîtier (DRC qui vise le composant) ; découpes de paroi qui suivent les connecteurs ; façades (découpes, légendes, échelles) en SVG et DXF ; contour piloté par une esquisse ; coques du boîtier en STL posés à plat, avec volume, masse et coût d'impression.
+Livré en 0.33 : Modèles STEP exacts qui remplacent la boîte et donnent la hauteur ; dossier de modèles associé d'un coup ; carte équipée en STEP nommé ; contrôle de la carte dans son boîtier (DRC qui vise le composant) ; découpes de paroi qui suivent les connecteurs ; façades (découpes, légendes, échelles) en SVG et DXF ; contour piloté par une esquisse ; coques du boîtier en STL posés à plat, avec volume, masse et coût d'impression.
 
-Reste :
-
-- 6.7 Boîtier du commerce importé en STEP pour les contrôles
-- 6.8 Pièces montées sur la carte, nomenclature commune
-- 6.11 Navigation et apparence communes aux deux vues 3D, dans une classe partagée par Vue3D et VuePiece
-- 6.12 Distances exactes
-- 6.17 Échanges avec la CAO mécanique
-- 6.18 Images et vidéos de la carte
+Livré en 0.34 : Boîtier du commerce importé en STEP et contrôlé contre la carte (6.7) ; pièces montées sur la carte, comptées dans la nomenclature commune (6.8) ; points de vue nommés communs aux deux vues 3D (6.11) ; distances exactes entre corps, écart de la DRC qui mène aux deux (6.12) ; échanges IDF avec la CAO mécanique (6.17) ; rendus à fond transparent, interruptibles, et images clés (6.18).
 
 ## L7 · Schéma avancé et éditeurs
 
-Livré : Bus D[0..7] ; feuilles de canal répétées avec valeurs par canal ; ERC de polarité des électrolytiques ; composants routés déplacés vers une autre feuille avec leurs pistes ; congés et chanfreins au circuit ; contour décalé de pastilles proches en un polygone.
+Livré en 0.33 : Bus D[0..7] ; feuilles de canal répétées avec valeurs par canal ; ERC de polarité des électrolytiques ; composants routés déplacés vers une autre feuille avec leurs pistes ; congés et chanfreins au circuit ; contour décalé de pastilles proches en un polygone.
 
-Reste :
-
-- 7.2 Modèle hiérarchique
-- 7.3 Navigation dans la hiérarchie, fil d’Ariane, synchronisation des ports, ERC-33
-- 7.6 Renvois entre feuilles, formats et cartouches modifiables, variables de texte, images et tableaux,…
-- 7.7 Éditeur graphique de symboles, tableau des broches, contrôles CS
-- 7.8 Échange de portes et de broches avec rétroannotation du schéma
-- 7.9 Éditeur graphique d’empreintes, contrôles CE
-- 7.10 Cadre, pages et renvois
-- 7.11 Textes riches
-- 7.13 Connectivité étendue
-- 7.14 Conception compilée
-- 7.16 Réutilisation
-- 7.18 Broches dans l’éditeur de symboles
-- 7.19 Formes au schéma, sur le module de formes 2D de 6.14
-- 7.20 Dessin du symbole
-- 7.21 Éditeur d’empreintes
-- 7.24 Cuivre propre à la carte
-- 7.25 Styles et réglages par défaut
+Livré en 0.34 : Hiérarchie par blocs de feuille, feuilles à plat migrées sans changer un réseau, ports synchronisés (7.2, 7.3) ; variables de texte et expressions, cartouches et formats modifiables, renvois entre feuilles sous les bobines, textes riches, images et tableaux (7.6, 7.10, 7.11) ; éditeur de symboles en tableau, symboles collés depuis une fiche, contrôles CS, broches et leurs fonctions (7.7, 7.18) ; échange de portes et de broches avec rétroannotation (7.8) ; éditeur d'empreintes et contrôles CE, BGA renuméroté (7.9, 7.21) ; faisceaux et bus sur plusieurs niveaux (7.13) ; directives compilées en classes et règles (7.14) ; disposition d'une voie recopiée sur les autres (7.16) ; formes importées en DXF et en SVG (7.19) ; dessin normalisé des symboles par l'assistant (7.20) ; cuivre propre à la carte sans toucher la bibliothèque (7.24) ; styles et réglages par défaut en jeux (7.25).
 
 ## L8 · Fabrication et cartes complexes
 
-Livré : Panneau en languettes contrôlé ; routage complet de l'exemple ; impédance IPC-2141 et paires différentielles proposées pour l'empilage ; connectivité relue dans les fichiers écrits avant l'envoi ; devis JLCPCB et PCBWay hors ligne ; visionneuse HTML autonome.
+Livré en 0.33 : Panneau en languettes contrôlé ; routage complet de l'exemple ; impédance IPC-2141 et paires différentielles proposées pour l'empilage ; connectivité relue dans les fichiers écrits avant l'envoi ; devis JLCPCB et PCBWay hors ligne ; visionneuse HTML autonome.
 
-Reste :
-
-- 8.4 Gerber
-- 8.5 Nomenclature configurable
-- 8.6 Archive pour le fabricant, récapitulatif et statistiques de fabrication
-- 8.7 Gerber X3 et plan de perçage
-- 8.10 Ligne de fuite
-- 8.11 Documents
-- 8.12 Usinages de la carte nue dans le modèle
-- 8.13 Sérigraphie préparée au circuit et dans l’éditeur d’empreinte
-- 8.14 Règles d’assemblage à condition dans le gestionnaire de contraintes (type de boîtier, classe de…
-- 8.15 Modèle commun des positions (composants, mires, points de test, avec face et point de référence) et…
-- 8.16 Panneau de copies liées à leur carte source, de ce projet ou d’un autre
-- 8.17 Moteur de contrôles de fabrication et d’assemblage décrits en données (procédé, fabricant, gravité,…
-- 8.20 Empilage de 8.3 porté à 32 cuivres typés (signal, plan, mixte, cavalier), impair, asymétrique ou sur âme…
-- 8.21 Moteur de lignes de transmission en formules fermées (Hammerstad et Jensen, Wadell, Kirschning et…
-- 8.22 Via en pile de pastilles
-- 8.23 Couches internes
-- 8.24 Modèle des contraintes dans le noyau
-- 8.25 Cinq familles de règles ajoutées à la DRC sur l’index spatial de 5.7
-- 8.26 Modèle de signaux dans le noyau
-- 8.27 Paires complètes
-- 8.28 Routeur automatique sans grille et topologique
-- 8.29 Sorties PDF de 8.11 complétées
-- 8.30 Éditeur de dossiers de plans sur le moteur de dessin.cpp et de MiseEnPlan.cpp (cadre, cartouche, coupe,…
+Livré en 0.34 : Gerber à arcs et macros, Gerber X3 des composants (8.4, 8.7) ; nomenclature configurable aux formats JLCPCB et PCBWay (8.5) ; archive pour le fabricant avec récapitulatif et statistiques (8.6) ; lignes de fuite et taux de cuivre (8.10) ; PDF complétés par mise à jour incrémentale, signets, liens, recherche, typon compensé (8.11, 8.29) ; demi-trous (8.12) ; sérigraphie préparée et numéro de série par copie (8.13) ; règles d'assemblage à condition, pâte, colle et vernis (8.14) ; positions communes et panneau de copies liées à leur carte source (8.15, 8.16) ; contrôles de fabrication décrits en données, pièges à acide compris (8.17) ; empilage à 32 cuivres typés, impair, asymétrique ou sur âme (8.20) ; lignes de transmission en formules fermées, pertes de Huray et de Djordjevic et Sarkar, à 2 % du calculateur de KiCad (8.21) ; vias en piles de pastilles, micro-vias laser, vias remplies, contre-perçage (8.22, 8.23) ; contraintes du noyau et cinq familles de règles ajoutées à la DRC (8.24, 8.25) ; signaux, bus et gabarits d'interface (8.26) ; paires complètes et accords en retard (8.27) ; routeur automatique à stratégies comparées, échanges de broches par l'algorithme hongrois (8.28) ; dossier de plans dont le tableau de perçage suit la carte (8.30).
 
 ## L9 · Performances
 
-Livré : DRC de 2 000 composants avec zone sous 10 s, en fond ; glisser à 60 images par seconde ; connectivité linéaire ; remplissage local d'une zone ; 3D sans recalcul ; UUID doublés réparés à la lecture ; chien de garde du fil principal ; version portable.
+Livré en 0.33 : DRC de 2 000 composants avec zone sous 10 s, en fond ; glisser à 60 images par seconde ; connectivité linéaire ; remplissage local d'une zone ; 3D sans recalcul ; UUID doublés réparés à la lecture ; chien de garde du fil principal ; version portable.
 
-Reste :
-
-- 9.6 Calcul numérique robuste
-- 9.8 Routeur d’appoint sur l’index et sans recalcul complet entre passes (A8)
+Livré en 0.34 : Calcul géométrique robuste aux cas dégénérés (9.6) ; routeur d'appoint sur l'index spatial, sans recalcul complet entre passes (9.8).
 
 ## L10 · Échanges
 
-Livré : Netlist KiCad lue et carte mise à jour depuis une netlist ; DXF de la mécanique de la carte ; Specctra (DSN, SES relue) pour Freerouting ; dossier Gerber relu en carte modifiable aux mêmes réseaux ; BoardView et IPC-2581.
+Livré en 0.33 : Netlist KiCad lue et carte mise à jour depuis une netlist ; DXF de la mécanique de la carte ; Specctra (DSN, SES relue) pour Freerouting ; dossier Gerber relu en carte modifiable aux mêmes réseaux ; BoardView et IPC-2581.
 
-Reste :
-
-- 10.1 Import de cartes KiCad complet
-- 10.2 Export de cartes KiCad avec .kicad_pro, noms actuels, attributs (X5, ECH-02)
-- 10.3 Import et export de schémas .kicad_sch (X6, ECH-03)
-- 10.4 Bibliothèques KiCad entières, symboles et empreintes (X10, SYM-10, EMP-12, ECH-04)
-- 10.5 Import EAGLE, schéma et carte
-- 10.6 Import EasyEDA et LCSC
-- 10.10 GLB, STL, VRML, PDF 3D
-- 10.12 Chaîne d’import commune à tous les formats de cartes
-- 10.14 Imports côté schéma
-- 10.15 Projets Altium Designer (.PrjPcb) importés d’un coup, schéma ASCII ou binaire et carte reliés,…
-- 10.17 Formats de Siemens et de Zuken
-- 10.18 Formats anciens
-- 10.19 Reprise de l’existant
-- 10.20 Netlists tierces
-- 10.21 Dessins 2D
-- 10.22 Exports vers d’autres outils de CAO
-- 10.24 Exports 3D de la carte par les écrivains de geometrie/src/echanges.cpp (OBJ avec matières, PLY, BREP),…
+Livré en 0.34 : KiCad complet : cartes importées et exportées avec leur .kicad_pro, schémas hiérarchiques, bibliothèques entières (10.1 à 10.4) ; EAGLE, EasyEDA et LCSC (10.5, 10.6) ; carte équipée en GLB, VRML, STL, COLLADA, AMF, OpenSCAD, XAO et STEP compressé (10.10) ; chaîne d'import commune avec tableau des couches (10.12) ; schémas KiCad 5, LTspice et synoptiques Visio (10.14) ; projets Altium (schémas binaires et ASCII, cartes, bibliothèques, conteneur CFB) (10.15) ; PADS et CADSTAR (10.17) ; formats anciens : Sprint-Layout, Protel Autotrax, gEDA PCB, gschem, P-CAD 2000 (10.18) ; reprise de l'existant en série, fiches IPC/DAC-2552 et boîtiers JEP30 (10.19) ; netlists tierces et écrivain CSV unique (10.20) ; dessins DXF et SVG (10.21) ; exports PADS, P-CAD et archive pour Altium (10.22) ; échanges IDX avec la mécanique (10.24).
 
 ## L11 · Simulation
 
-Livré : Netlist SPICE tirée du schéma avec contrôles avant calcul ; ngspice chargé comme bibliothèque partagée au moment du calcul, sur son fil, interruptible (libngspice doit être installée sur le poste) ; filtre RC à 1 %, astable 555 à 5 % ; valeur réglée pendant la simulation et réécrite au schéma en un pas ; sources en français.
+Livré en 0.33 : Netlist SPICE tirée du schéma avec contrôles avant calcul ; ngspice chargé comme bibliothèque partagée au moment du calcul, sur son fil, interruptible (libngspice doit être installée sur le poste) ; filtre RC à 1 %, astable 555 à 5 % ; valeur réglée pendant la simulation et réécrite au schéma en un pas ; sources en français.
 
-Reste :
-
-- 11.5 Modèles par article, compatibilité LTspice et PSpice
-- 11.7 Calculateurs
-- 11.8 Netlist ouverte à l’utilisateur
-- 11.9 Tableau de bord avant le calcul
-- 11.11 Modèles intégrés réglés dans une fiche à champs bornés, comme les calculateurs, qui écrit la ligne…
-- 11.12 Modèles Verilog-A compilés par OpenVAF et chargés par ngspice au format OSDI, rattachés à l’article…
-- 11.13 Panneau des courbes complété
-- 11.14 Classeur de simulation gardé dans le projet, format migré
-- 11.15 Mesures automatiques calculées par Prométhée sur les vecteurs à chaque calcul, de la bande passante au…
-- 11.17 Famille « Carte », nourrie par l’empilage et l’objet choisi
-- 11.18 Famille « Établi »
-- 11.19 Famille « Énergie et chaleur », qui prolonge les fiches awg, batterie et armoire de l’atelier électrique
+Livré en 0.34 : Modèles des articles compatibles PSpice, LTspice et HSPICE (11.5) ; calculateurs en quatre familles, dont la carte, l'établi et l'énergie (11.7, 11.17 à 11.19) ; netlist ouverte et partie simulée seule (11.8) ; préparation et remèdes en français (11.9) ; modèles intégrés ajustés sur la fiche, IBIS et Verilog-A (11.11, 11.12) ; courbes calculées par expression et exports (11.13) ; classeur gardé dans le projet (11.14) ; mesures automatiques comparées à une référence (11.15).
 
 ## L12 · Variantes et travail à plusieurs
 
-Livré : Variantes de montage (non monté, valeur, article, empreinte) et variante active en un pas ; coût par palier pour N cartes ; comparaison par catégorie et fusion à trois voies ; historique local par instantanés compressés, restauré à l'octet ; verrou à côté du projet avec signal de vie ; archive du projet ; notes attachées aux objets ; modèles de projet et réglages par sections ; schéma de système entre cartes avec son ERC. Git intégré (12.3, 12.16) n'est pas fait : seuls la fusion et le verrou le sont.
+Livré en 0.33 : Variantes de montage (non monté, valeur, article, empreinte) et variante active en un pas ; coût par palier pour N cartes ; comparaison par catégorie et fusion à trois voies ; historique local par instantanés compressés, restauré à l'octet ; verrou à côté du projet avec signal de vie ; archive du projet ; notes attachées aux objets ; modèles de projet et réglages par sections ; schéma de système entre cartes avec son ERC.
 
-Reste :
-
-- 12.6 Historique des révisions au cartouche
-- 12.11 Commande Partager à trois sorties
-- 12.13 Rapports PDF de la vie du projet sur un même générateur
-- 12.15 Bibliothèque d’équipe hors réseau
-- 12.16 Git de 12.3 complété
-- 12.18 Données d’achat par ligne de nomenclature (délai d’usine, stock par distributeur, distributeurs agréés,…
-- 12.20 Faisceaux intérieurs et entre cartes tirés des connecteurs, des brochages et des réseaux des cartes,…
+Livré en 0.34 : Carte posée comme appareil du projet électrique et bornier câblé sur un folio (12.6) ; matériel libre sous CERN-OHL, paquet rouvert à l'identique (12.11) ; revue formelle signée et rapport PDF figé sur l'empreinte SHA-256 (12.13) ; bibliothèque d'équipe hors réseau reversée sans doublon (12.15) ; Git du poste, sans réseau tant qu'il n'est pas activé, contributions d'articles (12.16) ; nomenclature commune du système et données d'achat (12.18) ; liens entre disciplines « à revoir » jusqu'à l'accusé de lecture, faisceaux entre cartes (12.20).
 
 ## L13 · Automatisation
 
-Livré : Ligne de commande (erc, drc, revue, valider, exigences, sorties, cout, comparer, fusionner, archiver, extraire, placer, api, isolement, mise-en-service) ; jeux de sorties avec contrôles avant publication ; interface JSON-RPC 2.0 sur un canal local réservé à l'utilisateur, chaque requête ou lot étant un pas d'annulation ; placement automatique ; revue de conception par règles (LED sans résistance, régulateur sans condensateur, I2C sans tirage).
+Livré en 0.33 : Ligne de commande (erc, drc, revue, valider, exigences, sorties, cout, comparer, fusionner, archiver, extraire, placer, api, isolement, mise-en-service) ; jeux de sorties avec contrôles avant publication ; interface JSON-RPC 2.0 sur un canal local réservé à l'utilisateur, chaque requête ou lot étant un pas d'annulation ; placement automatique ; revue de conception par règles (LED sans résistance, régulateur sans condensateur, I2C sans tirage).
 
-Reste :
-
-- 13.3 API Python sur les commandes annulables
-- 13.4 Serveur MCP
-- 13.5 Brochage lu dans un fichier BSDL ou un tableau de fiche
-- 13.6 Ligne de commande complétée
-- 13.8 Ligne de commande sous le canevas, généralisée depuis celle de l’esquisseur (Esquisseur.cpp
-- 13.9 Console Python ancrée dans l’atelier et éditeur de scripts intégré, points d’arrêt et pas à pas par le…
-- 13.11 Langage d’expressions unique sur les propriétés des objets, compilé une fois, pour les requêtes comme…
-- 13.14 Circuits types posés par le même moteur de règles
-- 13.15 Moteur de l’assistant au choix
-- 13.16 Fiches techniques interrogées
-- 13.17 Simulation confiée à l’assistant
+Livré en 0.34 : API Python sur les commandes annulables et console ancrée (13.3, 13.9) ; propositions par le protocole MCP, refusables (13.4) ; brochages lus en BSDL (13.5) ; ligne de commande sans écran (13.6) ; macros sous le canevas (13.8) ; langage d'expressions unique pour les requêtes et les règles (13.11) ; circuits types posés par les règles (13.14) ; assistant local au choix, sans connexion sortante (13.15) ; fiches techniques interrogées avec l'extrait qui répond (13.16) ; simulation confiée à l'assistant (13.17).
 
 ## L14 · Simulation avancée
 
-Livré : Monte-Carlo, pire cas et balayage ; assistants qui calculent en valeurs normalisées puis posent sur la feuille une résistance de LED, un diviseur, un astable à 555, un filtre RC ou de Sallen-Key (coupure simulée à 3 % de la prévision).
+Livré en 0.33 : Monte-Carlo, pire cas et balayage ; assistants qui calculent en valeurs normalisées puis posent sur la feuille une résistance de LED, un diviseur, un astable à 555, un filtre RC ou de Sallen-Key (coupure simulée à 3 % de la prévision).
 
-Reste :
-
-- 14.2 Simulation continue et mixte
-- 14.3 Retour visuel
-- 14.4 Instruments de base
-- 14.5 Façades et instruments personnalisés
-- 14.6 Instruments numériques
-- 14.7 Analyses natives de ngspice dans les profils
-- 14.8 Autres moteurs et mesures réelles
-- 14.10 Analyseurs posés sur le montage, chacun lançant sa propre analyse sur ce qui est branché entre ses bornes
-- 14.11 Simulation nourrie par le projet
-- 14.14 Alimentations
+Livré en 0.34 : Simulation continue et mixte avec instruments, générateurs réglés pendant le calcul (14.2, 14.4) ; retour visuel sur le schéma, LED qui fument (14.3) ; instruments écrits en Python (14.5) ; décodage I2C et déclenchement (14.6) ; fonctions de transfert symboliques (14.7) ; Xyce à côté de ngspice (14.8) ; analyseur de réseau et paramètres S (14.10) ; mécanique du projet dans la simulation (14.11) ; alimentations à découpage posées avec leur nomenclature (14.14).
 
 ## L15 · Microcontrôleurs, FPGA et logique
 
-Livré : Logique à quatre états (portes, bascules, oscillateur en anneau, diviseur) avec table de vérité ; export Verilog structurel ; symbole de FPGA tiré de son brochage, une unité par banc.
+Livré en 0.33 : Logique à quatre états (portes, bascules, oscillateur en anneau, diviseur) avec table de vérité ; export Verilog structurel ; symbole de FPGA tiré de son brochage, une unité par banc.
 
-Reste :
-
-- 15.3 Onglet programme
-- 15.4 Co-simulation du microcontrôleur
-- 15.5 Mise au point
-- 15.6 Modules et organigrammes
-- 15.7 Composants décrits par du code et matériel réel
-- 15.8 Programme éprouvé sans matériel
-- 15.10 Machines à états et schémas à contacts sur la base du GRAFCET (noyau/src/electrique_grafcet.cpp)
-- 15.12 Logique programmable
+Livré en 0.34 : Onglet programme et écarts avec le schéma (15.3) ; co-simulation de l'ATmega328P par simavr et terminal série (15.4) ; mise au point par avr-gdb (15.5) ; modules et organigrammes convertis en croquis Arduino (15.6) ; composants décrits en Verilog ou en VHDL, co-simulés par Icarus, GHDL ou Verilator (15.7) ; robot suiveur de ligne éprouvé sans matériel (15.8) ; machines à états (15.10) ; logique programmable et GAL16V8 (15.12).
 
 ## L16 · Prototypage et atelier
 
-Livré : Gravure à l'anglaise (sillons d'isolement en G-code), perçage, découpe avec attaches et pochoir de pâte.
+Livré en 0.33 : Gravure à l'anglaise (sillons d'isolement en G-code), perçage, découpe avec attaches et pochoir de pâte.
 
-Reste :
-
-- 16.2 Vue platine d’essai
-- 16.3 Connexions de la platine
-- 16.4 Platine imprimée et en 3D
-- 16.6 Documents de câblage
-- 16.8 Compléments d’usinage
-- 16.10 Salle de TP
-- 16.11 Consignes et séries
-- 16.12 Ce que l’enseignant impose
-- 16.13 Évaluation et tuteur
-- 16.14 Classe et diffusion
+Livré en 0.34 : Platine d'essai synchronisée avec le schéma, montée d'elle-même, imprimée et en 3D (16.2 à 16.4) ; documents de câblage et guitare (16.6) ; palpage en grille, profondeur corrigée par interpolation bilinéaire, nettoyage en poche, plaque à bandes (16.8) ; salle de TP : réglages de l'établissement, essais du poste, recueil d'exemples (16.10) ; consignes en données vérifiées sur le projet de l'élève (16.11) ; couche de l'enseignant scellée, parties verrouillées, pannes cachées (16.12) ; évaluation par isomorphisme de graphes (16.13) ; classe sans service en ligne, IMS Common Cartridge, page HTML autonome qui simule hors ligne (16.14).
 
 ## L17 · Essais, conformité et fiabilité
 
-Livré : Plan de mise sous tension (ohmmètre puis rails dans l'ordre des régulateurs) ; points de test, couverture et procès-verbal par numéro de série ; contraintes d'emploi, durée de vie à la chaleur, MTBF, modes de défaillance et conformité.
+Livré en 0.33 : Plan de mise sous tension (ohmmètre puis rails dans l'ordre des régulateurs) ; points de test, couverture et procès-verbal par numéro de série ; contraintes d'emploi, durée de vie à la chaleur, MTBF, modes de défaillance et conformité.
 
-Reste :
-
-- 17.6 Le schéma de liaison de l’import KiCad (kicad_electronique.cpp) devient une commande du noyau valable…
+Livré en 0.34 : Schéma déduit d'une carte sans schéma, aux mêmes réseaux, et calque des retouches par numéro de série proposé à la révision suivante (17.6).
 
 ## L18 · Cartes rapides
 
-Livré : Plan de référence sous chaque tronçon de piste, diaphonie de pistes parallèles, chute de tension d'un rail et inductance de montage des découplages, en formules fermées. Aucun solveur de champ (openEMS, Elmer, FastHenry) n'est branché.
+Livré en 0.33 : Plan de référence sous chaque tronçon de piste, diaphonie de pistes parallèles, chute de tension d'un rail et inductance de montage des découplages, en formules fermées.
 
-Reste :
-
-- 18.4 Schéma de lignes
+Livré en 0.34 : Schéma de lignes, topologie extraite superposée à la prévue, moignons de via signalés (18.4).
 
 ## L19 · Entreprise
 
-Livré : Équipe et rôles, cycle de vie des articles, schémas de révision (sans I, O, Q, S, X, Z), numéros internes ; ordres de modification avec relecteur et responsable ; exigences chiffrées vérifiées sur les valeurs réelles. Les dépôts signés Ed25519, le PLM et l'ERP ne sont pas faits.
+Livré en 0.33 : Équipe et rôles, cycle de vie des articles, schémas de révision (sans I, O, Q, S, X, Z), numéros internes ; ordres de modification avec relecteur et responsable ; exigences chiffrées vérifiées sur les valeurs réelles.
 
-Reste :
+Livré en 0.34 : Demandes d'articles suivies jusqu'à la notification, santé de la bibliothèque d'équipe sur son fil, fusion et correction annulables (19.4) ; liste d'achat au conditionnement le moins cher, port et douane compris, tableau de bord recalculé sur les seules lignes touchées, page pour les acheteurs et paniers des distributeurs (19.7) ; faisceaux : folio de câblage, câbles, contacts, épissures (19.10), planche à l'échelle 1 et connecteurs dessinés depuis leur modèle 3D (19.11), longueurs par la topologie, en 3D ou mises à plat, circuits continus (19.12), plan de fabrication, classeur, fichiers des machines et devis (19.13) ; dépôt vers le PLM et programme séparé d'accès en ligne : PLM, distributeurs, ERP et tickets dans les deux sens (19.14).
 
-- 19.4 Une demande d’article manquant se remplit dans un formulaire (référence, fiche jointe, champs imposés…
-- 19.7 Le tableau de bord de la nomenclature se recalcule à chaque commande, sur les seules lignes touchées
-- 19.10 Le schéma de câblage de faisceau est un nouveau folio de l’atelier électrique, qui garde fils numérotés,…
-- 19.11 La planche existante se dessine depuis la connectivité de 19.10
-- 19.12 Les feuilles de topologie dessinent à l’échelle, avec l’esquisseur de la mécanique, les espaces d’une…
-- 19.13 Le plan de fabrication du faisceau suit un gabarit de plan de L8
-- 19.14 Les liaisons d’entreprise passent d’abord par des fichiers
+## Ce qui reste en partie
 
-## Ce qui reste en dehors des lots
-
-La console Python, le serveur MCP et l'assistant local (llama.cpp) attendent que l'interface JSON-RPC de la 0.33 serve de base ; la co-simulation de microcontrôleur, la vue platine d'essai, les importeurs Altium, EAGLE, PADS et Cadence, les solveurs de champ, le PLM et les faisceaux entre cartes restent à faire. Une variante active n'est pas encore barrée dans les vues ni dans le PDF du schéma.
+- Les approbations et les dépôts de l'équipe portent le nom, la date et l'empreinte SHA-256 de ce qu'ils approuvent ; leur signature par une clé Ed25519 (libsodium) n'est pas faite (19.2).
+- Aucun solveur de champ (openEMS, Elmer, FastHenry) n'est branché : l'intégrité du signal et de l'alimentation reste en formules fermées, validées contre les calculateurs de référence (L18).
+- La topologie d'un faisceau se dessine à l'échelle dans sa propre vue ; son tracé avec l'esquisseur de la mécanique reste à faire (19.12).
+- Le tracé 3D d'un faisceau relie ses points d'attache par des droites et des arcs au rayon minimal ; il ne suit pas encore une courbe dessinée dans la mécanique (19.12).
+- La carte s'exporte en GLB, VRML, STL et dans les autres formats 3D, pas encore en PDF 3D (U3D ou PRC) (10.10).
+- Parmi les formats anciens, Protel PCB (autre qu'Autotrax), Tango, Pulsonix et CADint ne sont pas lus (10.18).
+- Xyce est employé quand il est installé sur le poste ; son essai n'a pas encore tourné sur une machine qui l'a (14.8).
+- La carte des fusibles du GAL16V8 suit le format JEDEC, sans avoir été programmée dans un vrai circuit (15.12).
+- La co-simulation passe par des processus à part (simavr, Icarus, GHDL, Verilator) plutôt que par le modèle d_cosim de ngspice (15.4, 15.7).
+- La page HTML de classe simule par son propre calcul nodal en JavaScript, pas par ngspice compilé en WebAssembly (16.14).
+- Le programme d'accès en ligne (promethee-en-ligne) se compile avec Prométhée mais n'est pas dans le paquet Windows, qui reste sans extension TLS ni accès réseau.

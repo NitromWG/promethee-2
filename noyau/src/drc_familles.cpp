@@ -470,7 +470,9 @@ void verifierFamilles034(const ConceptionElec& c, const Connectivite& k, const R
         if (ecartBord > static_cast<double>(ecart)) continue;
         const double t0 = ((q.a.x - p.a.x) * ux + (q.a.y - p.a.y) * uy) / lu, t1 = ((q.b.x - p.a.x) * ux + (q.b.y - p.a.y) * uy) / lu;
         const double commun = std::max(0.0, std::min(lu, std::max(t0, t1)) - std::max(0.0, std::min(t0, t1)));
-        const auto cle = std::minmax(k.canonique(p.reseau), k.canonique(q.reseau));
+        // std::minmax rend des références : sur deux temporaires, elles pendraient
+        const std::string ra = k.canonique(p.reseau), rb = k.canonique(q.reseau);
+        const auto cle = std::minmax(ra, rb);
         paralleles[{cle.first, cle.second}] += commun;
         ou[{cle.first, cle.second}] = milieuDe(p.a, p.b);
       }

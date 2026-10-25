@@ -472,8 +472,8 @@ TEST_CASE("Format 5 (0.33) : un projet écrit pour la 0.32 garde ce qu'elle ne c
   c.jeuxSorties.push_back(jeuJlcpcbPourEssai());
   p.electronique.push_back(c);
   p.exigences.push_back({"EX-1", "Coût", "", "analyse", {}, "cout", "<=", "40 €", 100});
-  CHECK(versJson(c)["format"] == 5);
-  CHECK(versionFichierCourante() == "0.33");
+  CHECK(versJson(c)["format"] == FORMAT_ELECTRONIQUE);
+  CHECK(versionFichierCourante() == "0.34");
   const FichierAnterieur f = pourVersion(p, "0.32");
   std::string pertes;
   for (const auto& x : f.pertes) pertes += x + "\n";

@@ -82,6 +82,11 @@ std::string liste(const std::vector<std::string>& refs) {
 }  // namespace
 
 Validation valider(const ConceptionElec& c, const Connectivite& k, const EtatRoutage& etat, const std::vector<Violation>& erc, const std::vector<Violation>& drc) {
+  return valider(c, k, etat, erc, drc, controlerFabrication(c, k, remplirZones(c, k)).constats);
+}
+
+Validation valider(const ConceptionElec& c, const Connectivite& k, const EtatRoutage& etat, const std::vector<Violation>& erc, const std::vector<Violation>& drc,
+                   const std::vector<ConstatFabrication>& fabricationControlee) {
   (void)k;
   Validation v;
   auto etape = [](const char* nom) {
@@ -186,7 +191,7 @@ Validation valider(const ConceptionElec& c, const Connectivite& k, const EtatRou
     }
     // Contrôles de fabrication et d'assemblage décrits en données (8.17) : pièges à acide, copeaux de vernis, écarts
     // de machine et de retouche, soulèvement, pâte sur via, MSL ; la nomenclature a déjà son étape (BOM-02)
-    for (const auto& x : controlerFabrication(c).constats)
+    for (const auto& x : fabricationControlee)
       if (x.code != "DFM-27") signaler(fabrication, x.gravite, x.code, x.message, x.conseil, x.objets);
     fabrication.score = borne(100 - 30.0 * fabrication.erreurs - 5.0 * fabrication.avertissements);
   }
@@ -208,7 +213,7 @@ Validation valider(const ConceptionElec& c) {
   const auto erc = verifierERC(c, k);
   const Remplissages r = remplirZones(c, k);
   const EtatRoutage e = etatRoutage(c, k, r);
-  return valider(c, k, e, erc, verifierDRCReglee(c, k, r));  // gravités réglées et exclusions du projet (2.33)
+  return valider(c, k, e, erc, verifierDRCReglee(c, k, r), controlerFabrication(c, k, r).constats);  // gravités réglées et exclusions du projet (2.33)
 }
 
 std::string empreinteConception(const ConceptionElec& c) {
@@ -359,12 +364,18 @@ std::vector<std::string> controlerDossierFabrication(const ConceptionElec& c, co
     if (metallises) percagesLus = e;
     if (e.rfind("M48", 0) != 0 || e.find("METRIC") == std::string::npos || e.find("M30") == std::string::npos) d.push_back(nom + " : en-tête Excellon métrique incomplet");
     std::size_t coups = 0;
-    for (std::size_t i = e.find("\nX"); i != std::string::npos; i = e.find("\nX", i + 2)) {
+    auto coup = [&](const char* debut) {
       double x = 0, y = 0;
-      if (std::sscanf(e.c_str() + i + 1, "X%lfY%lf", &x, &y) != 2) continue;
+      if (std::sscanf(debut, "X%lfY%lf", &x, &y) != 2) return;
       ++coups;
       const Pt p = depuisRepereFabrication(m.repere, {static_cast<Nm>(std::llround(x * 1e6)), static_cast<Nm>(std::llround(y * 1e6))});
       if (!carte.gonflee(1000).contient(p)) d.push_back(nom + " : un trou hors de la carte");
+    };
+    // Trou rond ou fente en G85 : une ligne « X…Y… » ; fente détourée (4.13) : « G00X…Y… », M15, « G01X…Y… », M16,
+    // comptée une fois à son départ
+    for (std::size_t i = e.find('\n'); i != std::string::npos; i = e.find('\n', i + 1)) {
+      if (e.compare(i + 1, 1, "X") == 0) coup(e.c_str() + i + 1);
+      else if (e.compare(i + 1, 4, "G00X") == 0) coup(e.c_str() + i + 4);
     }
     const std::size_t attendus = static_cast<std::size_t>(std::count_if(m.trous.begin(), m.trous.end(), [&](const TrouFab& t) { return t.metallise == metallises; }));
     if (coups != attendus) d.push_back(nom + " : " + std::to_string(coups) + " trou(s) écrit(s) pour " + std::to_string(attendus) + " dans la carte");

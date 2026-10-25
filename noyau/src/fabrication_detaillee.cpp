@@ -327,7 +327,6 @@ int ramenerAuxForets(ModeleFabrication& m, const std::vector<Nm>& forets, Nm tol
 std::string gerberComposants(const ConceptionElec& c, bool dessous, const std::string& version) {
   // Gerber X3 (8.7) : un flash par composant au point de placement, avec ses attributs ; ses broches en flashs
   // .P ; le contour du corps en trait. Repère de fabrication commun (origine au coin bas gauche)
-  const Boite carte = boite(c.circuit.contour.polygone());
   std::ostringstream s;
   auto xy = [&](Pt p) {
     const Pt q = versRepereFabrication(repereFichiers(c), p);

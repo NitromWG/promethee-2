@@ -444,6 +444,7 @@ QWidget* FenetreOutilsConception::onglet(const QString& id, const QString& titre
 }
 
 void FenetreOutilsConception::refaire() {
+  majTableauBord();  // suivi des commandes suspendu fenêtre fermée
   if (m_variante) {
     const ConceptionElec* c = m_atelier.conceptionCourante();
     const QSignalBlocker b(m_variante);

@@ -19,10 +19,12 @@ QString q(const std::string& s) { return QString::fromStdString(s); }
 }  // namespace
 
 // ---------- Validation et publication ----------
-Validation AtelierElectronique::validation() const {
+Validation AtelierElectronique::validation(bool complete) const {
   const ConceptionElec* c = conceptionCourante();
   if (!c) return {};
-  return valider(*c, m_calculs.k, m_calculs.etat, m_erc, m_calculs.drc);
+  if (complete && m_calculs.generationFabrication != m_generation)
+    return valider(*c, m_calculs.k, m_calculs.etat, m_erc, m_calculs.drc, controlerFabrication(*c, m_calculs.k, m_calculs.zones).constats);
+  return valider(*c, m_calculs.k, m_calculs.etat, m_erc, m_calculs.drc, m_calculs.fabrication);
 }
 
 bool AtelierElectronique::publier(const QString& dossierParent, const QString& auteur, const QString& derogation, QString* erreur) {
@@ -71,7 +73,7 @@ void AtelierElectronique::publierInteractif() {
     return;
   }
   recalculer();
-  const Validation v = validation();
+  const Validation v = validation(true);
   QString derogation;
   if (v.critiques() > 0) {
     // Erreurs critiques : aucune dérogation possible (courts-circuits, liaisons non routées, empreintes inconnues…)

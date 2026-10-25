@@ -890,7 +890,11 @@ def verifier(dossier, attendu, defaut):
         if pate:
             for x, y, o, *_ in pate.flashes:
                 if not any(math.hypot(fx - x, fy - y) <= TOL and fo.forme == o.forme and fo.dimensions() == o.dimensions() for fx, fy, fo, *_ in flashes_cuivre):
-                    defaut(f"{pate.nom} : ouverture en ({x:.4f} ; {y:.4f}) sans pastille identique sur {nom_cuivre}")
+                    # Marge de pâte propre à la pastille (4.24) : ouverture réduite au même endroit, qui tient dans la pastille
+                    reduite = any(math.hypot(fx - x, fy - y) <= TOL and all(a <= b + TOL for a, b in zip(sorted(o.dimensions()), sorted(fo.dimensions())))
+                                  for fx, fy, fo, *_ in flashes_cuivre)
+                    if not reduite:
+                        defaut(f"{pate.nom} : ouverture en ({x:.4f} ; {y:.4f}) sans pastille identique sur {nom_cuivre}")
             for poly, *_ in pate.regions:
                 # Fenêtre de pâte découpée (grande pastille, F2) : dans une pastille de cuivre de la même face
                 identique = any(len(cp) == len(poly) and all(math.hypot(a[0] - b[0], a[1] - b[1]) <= TOL for a, b in zip(cp, poly)) for cp, *_ in regions_cuivre)

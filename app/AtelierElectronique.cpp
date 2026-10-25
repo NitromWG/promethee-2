@@ -15,7 +15,9 @@
 #include <array>
 #include <future>
 #include <cctype>
+#include <filesystem>
 #include <map>
+#include <mutex>
 #include <optional>
 #include <set>
 #include <utility>
@@ -787,6 +789,43 @@ AtelierElectronique::Resultat calculerConception(const ConceptionElec& c, int ni
 
 AtelierElectronique::~AtelierElectronique() {
   if (m_fil.joinable()) m_fil.join();
+  for (auto& f : m_filsFabrication) f.arret->store(true);
+  for (auto& f : m_filsFabrication)
+    if (f.fil.joinable()) f.fil.join();
+}
+
+void AtelierElectronique::arreterControlesFabrication() {
+  for (auto& f : m_filsFabrication) f.arret->store(true);
+  std::erase_if(m_filsFabrication, [](FilFabrication& f) {
+    if (!f.fini->load()) return false;
+    if (f.fil.joinable()) f.fil.join();  // déjà sorti de sa fonction : rien à attendre
+    return true;
+  });
+}
+
+// Contrôles de fabrication (8.17) sur la connectivité et les zones du calcul complet, sur un fil à part et à la
+// priorité minimale : plus d'une seconde sur une carte de 2 000 composants, plus de 100 ms dès 150. Le fil précédent
+// est arrêté s'il tourne encore, sans être attendu (l'interface ne se fige jamais sur lui)
+void AtelierElectronique::lancerControlesFabrication() {
+  arreterControlesFabrication();
+  const ConceptionElec* c = conceptionCourante();
+  if (!c || c->schemaSeul) return;
+  FilFabrication f{{}, std::make_shared<std::atomic<bool>>(false), std::make_shared<std::atomic<bool>>(false)};
+  const std::uint64_t generation = m_generation;
+  QPointer<AtelierElectronique> moi(this);
+  f.fil = std::thread([copie = *c, k = m_calculs.k, zones = m_calculs.zones, generation, moi, arret = f.arret, fini = f.fini] {
+    prioriteMinimale();
+    auto b = std::make_shared<BilanFabrication>(controlerFabrication(copie, k, zones, controlesFabricationParDefaut(), arret.get()));
+    if (!b->interrompu)
+      QMetaObject::invokeMethod(qApp, [moi, b, generation] {
+        if (!moi || generation != moi->m_generation) return;
+        moi->m_calculs.fabrication = std::move(b->constats);
+        moi->m_calculs.generationFabrication = generation;
+        moi->m_inspecteur->resultats();
+      }, Qt::QueuedConnection);
+    fini->store(true);
+  });
+  m_filsFabrication.push_back(std::move(f));
 }
 
 void AtelierElectronique::recalculer() {
@@ -865,6 +904,7 @@ void AtelierElectronique::lancerCalcul(int niveau) {
   const ConceptionElec* c = conceptionCourante();
   if (!c) return;
   if (m_fil.joinable()) m_fil.join();  // le fil précédent a déjà rendu son résultat
+  arreterControlesFabrication();      // ils portaient sur l'état d'avant ; ils repartiront après le calcul complet
   m_calculEnCours = true;
   // Au-delà de 300 ms, la vue montre la flèche avec sablier (charte) ; la saisie reste possible
   QTimer::singleShot(300, this, [this, g = m_generation] {
@@ -917,6 +957,7 @@ void AtelierElectronique::appliquerResultat(Resultat&& r) {
     // La carte dans le boîtier qu'elle pilote (6.4) : hauteur sous le couvercle, collisions
     for (auto& v : prom::verifierCarteDansBoitier(m_doc->projet(), static_cast<std::size_t>(std::max(0, m_conception)))) m_calculs.drc.push_back(std::move(v));
     m_circuitPerime = false;
+    lancerControlesFabrication();
   }
   m_schema->setConnectivite(&m_calculs.k);
   m_schema->setViolations(&m_erc);
@@ -1689,9 +1730,28 @@ QString AtelierElectronique::cheminBibliothequePerso() {
   return QDir(portable::dossierDonneesAppli()).filePath(QStringLiteral("bibliotheque-electronique.json"));
 }
 
+// L'inspecteur relit la bibliothèque à chaque rafraîchissement (empreintes proposées) : l'analyse du fichier est
+// gardée tant que ses octets ne changent pas (relire le fichier coûte peu, l'analyser beaucoup sur une grande
+// bibliothèque). La comparaison porte sur le contenu, pas sur la date, trop grossière pour deux écritures rapprochées.
 prom::ecad::LectureBibliotheque AtelierElectronique::lectureBibliothequePerso() {
+  static std::mutex verrou;
+  static std::filesystem::path cheminLu;
+  static std::optional<std::string> contenuLu;  // vide : fichier absent
+  static prom::ecad::LectureBibliotheque lecture;
+  static bool lu = false;
   try {
-    return prom::ecad::lireFichierBibliotheque(prom::cheminFichier(cheminBibliothequePerso().toStdString()));
+    const std::filesystem::path chemin = prom::cheminFichier(cheminBibliothequePerso().toStdString());
+    std::error_code ec;
+    std::optional<std::string> contenu;
+    if (std::filesystem::exists(chemin, ec)) contenu = prom::lireFichier(chemin);
+    const std::lock_guard<std::mutex> garde(verrou);
+    if (!lu || chemin != cheminLu || contenu != contenuLu) {
+      lecture = contenu ? prom::ecad::lireBibliotheque(*contenu) : prom::ecad::LectureBibliotheque{};
+      cheminLu = chemin;
+      contenuLu = std::move(contenu);
+      lu = true;
+    }
+    return lecture;
   } catch (const std::exception& e) {
     prom::ecad::LectureBibliotheque l;
     l.abimee = true;

@@ -26,6 +26,7 @@
 
 #include "OutilVue.hpp"
 #include "promethee/circuit_edition.hpp"
+#include "promethee/controles_fabrication.hpp"
 #include "promethee/electronique.hpp"
 
 namespace prom::ecad {
@@ -55,6 +56,10 @@ class VueCircuit : public QWidget {
     std::vector<prom::ecad::TraitSerigraphie> textes;
     bool textesValides = false;
     std::uint64_t generationDoc = ~std::uint64_t{0};
+    // Contrôles de fabrication (8.17), menés sur un fil à part après chaque calcul complet : à jour pour la
+    // génération « generationFabrication » de l'atelier
+    std::vector<prom::ecad::ConstatFabrication> fabrication;
+    std::uint64_t generationFabrication = ~std::uint64_t{0};
   };
   explicit VueCircuit(Document* doc, QWidget* parent = nullptr);
   ~VueCircuit() override;

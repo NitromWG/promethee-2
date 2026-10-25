@@ -16,6 +16,7 @@
 #include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
@@ -138,14 +139,22 @@ struct ServeurPlm {
   QProcess processus;
   QString journal, adresse;
   bool lance = false;
-  QString raison;
+  QString raison, m_python;
   explicit ServeurPlm(const QString& dossier) {
-    const QString script = QDir(QString::fromUtf8(qgetenv("PROMETHEE_DONNEES"))).filePath(QStringLiteral("../plm_simule.py"));
-    const QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
-    if (python.isEmpty() || !QFile::exists(script)) {
-      raison = python.isEmpty() ? QStringLiteral("python3 absent") : QStringLiteral("tests/plm_simule.py absent");
+    // Données d'essai : la variable PROMETHEE_DONNEES, sinon le dépôt vu depuis l'exécutable (build/app) ou le dossier
+    // courant ; le programme d'accès en ligne doit être à côté de Prométhée (il n'est pas dans le paquet Windows)
+    QString donnees = qEnvironmentVariable("PROMETHEE_DONNEES");
+    for (const QString& essai : {QCoreApplication::applicationDirPath() + QStringLiteral("/../../tests/donnees"), QStringLiteral("tests/donnees")})
+      if (donnees.isEmpty() && QFileInfo::exists(essai + QStringLiteral("/../plm_simule.py"))) donnees = essai;
+    const QString script = QDir(donnees).filePath(QStringLiteral("../plm_simule.py"));
+    QString python = QStandardPaths::findExecutable(QStringLiteral("python3"));
+    if (python.isEmpty()) python = QStandardPaths::findExecutable(QStringLiteral("python"));
+    const bool programme = !QStandardPaths::findExecutable(QStringLiteral("promethee-en-ligne"), {QCoreApplication::applicationDirPath()}).isEmpty();
+    if (python.isEmpty() || !QFile::exists(script) || !programme) {
+      raison = python.isEmpty() ? QStringLiteral("Python absent") : !programme ? QStringLiteral("programme d'accès en ligne absent à côté de Prométhée") : QStringLiteral("tests/plm_simule.py absent");
       return;
     }
+    m_python = python;
     journal = QDir(dossier).filePath(QStringLiteral("connexions.log"));
     const QString port = QDir(dossier).filePath(QStringLiteral("port.txt"));
     processus.start(python, {script, QStringLiteral("--journal"), journal, QStringLiteral("--fichier-port"), port, QStringLiteral("--jeton"), QStringLiteral("secret")});
@@ -623,7 +632,7 @@ void essaisElectronique034L19(FenetrePrincipale& f, const Verifier& verifier0) {
       const auto locaux = prom::lireTickets(equipe.toStdString(), false);
       const QString distant = locaux.empty() ? QString() : QString::fromStdString(locaux.front().distant);
       QProcess clore;
-      clore.start(QStandardPaths::findExecutable(QStringLiteral("python3")),
+      clore.start(serveur.m_python,
                   {QStringLiteral("-c"), QStringLiteral("import sys,urllib.request as u; u.urlopen(u.Request(sys.argv[1], data=b'{}', method='POST', headers={'Authorization': 'Bearer secret'})).read()"),
                    serveur.adresse + QStringLiteral("/api/tickets/") + distant + QStringLiteral("/clore")});
       clore.waitForFinished(20000);

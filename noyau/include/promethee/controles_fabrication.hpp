@@ -50,6 +50,13 @@ struct BilanFabrication {
 };
 BilanFabrication controlerFabrication(const ConceptionElec& c, const std::vector<ControleFabrication>& controles = controlesFabricationParDefaut(),
                                       const std::atomic<bool>* arret = nullptr);
+// Sur la connectivité et les zones déjà calculées (fil du calcul de l'atelier, validation) : rien n'est refait
+BilanFabrication controlerFabrication(const ConceptionElec& c, const Connectivite& k, const Remplissages& zones,
+                                      const std::vector<ControleFabrication>& controles = controlesFabricationParDefaut(), const std::atomic<bool>* arret = nullptr);
+// Validation (publication) avec les contrôles de fabrication déjà menés, sur le fil du calcul de l'atelier : rien de
+// lourd n'est refait à chaque relecture de l'inspecteur
+Validation valider(const ConceptionElec& c, const Connectivite& k, const EtatRoutage& etat, const std::vector<Violation>& erc, const std::vector<Violation>& drc,
+                   const std::vector<ConstatFabrication>& fabrication);
 // Rapport illustré pour le fabricant (HTML autonome, une vignette par constat)
 std::string rapportFabricationHtml(const ConceptionElec& c, const BilanFabrication& b);
 

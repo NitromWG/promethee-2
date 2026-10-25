@@ -79,6 +79,9 @@ class PileMessages : public QWidget {
   void montrer(const MessageAtelier& m);
   int nombre() const { return static_cast<int>(m_bulles.size()); }
   QString texte(int i) const;  // essais
+  // Toutes les bulles partent d'un coup (essais : un clic visé ne tombe pas sur une bulle) ; le panneau Messages les
+  // garde. Cacher la pile ne suffirait pas : elle se replace, et se montre, à chaque mise en page de son hôte
+  void effacer();
 
  protected:
   bool eventFilter(QObject* o, QEvent* e) override;

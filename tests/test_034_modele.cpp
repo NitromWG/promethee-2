@@ -3,6 +3,7 @@
 // Gerber X3 (8.7), usinages de la carte nue (8.12), zones enrichies (5.11, 5.25, 5.26), relecture sans perte.
 // Licence GPL-3.0-only.
 #include <algorithm>
+#include <numbers>
 #include <set>
 #include <string>
 

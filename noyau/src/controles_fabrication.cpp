@@ -7,6 +7,7 @@
 #include <cstdio>
 #include <numbers>
 #include <set>
+#include <tuple>
 #include <sstream>
 
 #include <nlohmann/json.hpp>
@@ -95,6 +96,19 @@ Polygones formesCouche(const ModeleFabrication& m, Couche k) {
       }
   return r;
 }
+// Polygones dont la boîte touche « b » : les opérations de Clipper2 restent locales sur une grande carte
+Polygones voisins(const Polygones& v, const std::vector<Boite>& boites, const Boite& b) {
+  Polygones r;
+  for (std::size_t i = 0; i < v.size(); ++i)
+    if (boites[i].touche(b)) r.push_back(v[i]);
+  return r;
+}
+std::vector<Boite> boitesDe(const Polygones& v) {
+  std::vector<Boite> r;
+  r.reserve(v.size());
+  for (const auto& p : v) r.push_back(boite(p));
+  return r;
+}
 Pt centreIlot(const Polygone& p) {
   const Boite b = boite(p);
   return b.centre();
@@ -177,9 +191,13 @@ std::string texteControlesFabrication(const std::vector<ControleFabrication>& v)
 }
 
 BilanFabrication controlerFabrication(const ConceptionElec& c, const std::vector<ControleFabrication>& controles, const std::atomic<bool>* arret) {
-  BilanFabrication b;
   const Connectivite k = connectivite(c);
-  const Remplissages zones = remplirZones(c, k);
+  return controlerFabrication(c, k, remplirZones(c, k), controles, arret);
+}
+
+BilanFabrication controlerFabrication(const ConceptionElec& c, const Connectivite& k, const Remplissages& zones, const std::vector<ControleFabrication>& controles,
+                                      const std::atomic<bool>* arret) {
+  BilanFabrication b;
   const ModeleFabrication m = modeleFabrication(c, k, zones);
   auto arrete = [&] {
     if (arret && arret->load()) {
@@ -208,25 +226,69 @@ BilanFabrication controlerFabrication(const ConceptionElec& c, const std::vector
       }
       const double r = reglage(kk, "rayon", 0.1), theta = reglage(kk, "angle", 70) * std::numbers::pi / 180;
       const double seuil = r * r * (1 / std::tan(theta / 2) - (std::numbers::pi - theta) / 2);
+      // Les zones remplies n'ont pas de coin aigu (leur cuivre s'arrondit à l'isolement) et leur union coûterait cher
+      // sur une grande carte : la fermeture ne porte que sur les pistes, les pastilles, les vias et les régions ; les
+      // zones restent dans le test d'occupation. Une zone remplie se reconnaît à sa couche, son réseau et sa boîte
+      std::set<std::tuple<int, std::string, Nm, Nm, Nm, Nm>> remplissages;
+      for (const auto& z : c.circuit.zones)
+        if (const auto it = zones.find(z.uuid); it != zones.end())
+          for (const Polygone& q : it->second) {
+            double aire = 0;
+            for (std::size_t i = 0; i < q.size(); ++i) {
+              const Pt a = q[i], b = q[(i + 1) % q.size()];
+              aire += static_cast<double>(a.x) * static_cast<double>(b.y) - static_cast<double>(b.x) * static_cast<double>(a.y);
+            }
+            if (aire <= 0) continue;  // trou
+            const Boite b = boite(q);
+            remplissages.insert({static_cast<int>(z.couche), z.reseau, b.x0, b.y0, b.x1, b.y1});
+          }
+      std::map<Couche, std::map<std::string, Polygones>> sansZones;
+      for (const auto& cf : m.couches) {
+        if (!estCuivre(cf.couche)) continue;
+        for (const auto& pr : cf.primitives) {
+          if (pr.type == PrimitiveFab::Type::Region && pr.fonction == "Conductor" && !pr.region.empty()) {
+            const Boite b = boite(pr.region);
+            if (remplissages.count({static_cast<int>(cf.couche), pr.reseau, b.x0, b.y0, b.x1, b.y1})) continue;
+          }
+          auto& v = sansZones[cf.couche][pr.reseau];
+          if (pr.type == PrimitiveFab::Type::Arc)
+            for (auto& x : formeArc(pr)) v.push_back(std::move(x));
+          else
+            v.push_back(formePrimitive(pr));
+        }
+      }
       for (const auto& [couche, reseaux] : parReseau) {
-        Polygones tout;
-        for (const auto& [n, v] : reseaux) tout.insert(tout.end(), v.begin(), v.end());
-        const Polygones cuivreTout = unir(tout);
-        for (const auto& [n, v] : reseaux) {
+        // Boîte du cuivre de chaque réseau : un coin comblé n'est cherché que dans le cuivre des réseaux voisins
+        std::map<std::string, Boite> boitesReseaux;
+        for (const auto& [n, v] : reseaux) boitesReseaux[n] = boite(v);
+        const auto itSans = sansZones.find(couche);
+        if (itSans == sansZones.end()) continue;
+        for (const auto& [n, v] : itSans->second) {
           if (arrete()) break;
           const Polygones cuivre = unir(v);
           const Polygones ferme = gonfler(gonfler(cuivre, nm(r)), -nm(r));
-          for (const auto& il : ilots(soustraire(ferme, cuivreTout))) {
+          // Ce que la fermeture ajoute au cuivre du réseau : les coins aigus, et rien d'autre
+          for (const auto& il : ilots(soustraire(ferme, cuivre))) {
             Polygones morceau{il.exterieur};
             morceau.insert(morceau.end(), il.trous.begin(), il.trous.end());
             if (aireMm2(morceau) < seuil) continue;
+            // Un coin comblé que le cuivre d'un autre réseau occupe n'est pas un piège (c'est un défaut d'isolement,
+            // que la DRC signale) : test du point au centre, sur les seuls réseaux dont la boîte le contient
+            const Pt centre = centreIlot(il.exterieur);
+            bool occupe = false;
+            for (const auto& [autre, w] : reseaux)
+              if (autre != n && boitesReseaux[autre].contient(centre) && dedans(w, centre)) {
+                occupe = true;
+                break;
+              }
+            if (occupe) continue;
             ConstatFabrication x;
-            x.position = centreIlot(il.exterieur);
+            x.position = centre;
             x.couche = couche;
             x.message = std::string("Piège à acide sur ") + nomCouche(couche) + (n.empty() ? "" : " (réseau " + n + ")") + " : coin de cuivre plus aigu que " +
                         mmTexte(reglage(kk, "angle", 70), 0) + "°";
             x.conseil = "Raccorder les pistes à 90° ou plus, ou arrondir le coin (goutte).";
-            x.vignette = vignette(cuivreTout, morceau, x.position, 1'500'000);
+            x.vignette = vignette(cuivre, morceau, x.position, 1'500'000);
             constat(kk, x);
           }
         }
@@ -268,9 +330,15 @@ BilanFabrication controlerFabrication(const ConceptionElec& c, const std::vector
         if (!d || !x) continue;
         corps.push_back({&e, encombrementSurCarte(e, *d), x->reference, familleBoitier(e.copieLocale.empty() ? e.empreinte : e.copieLocale)});
       }
+      // Paires écartées d'office par leurs boîtes : seules les voisines se mesurent
+      std::vector<Boite> brutes, elargies;
+      for (const auto& x : corps) {
+        brutes.push_back(boite(x.p));
+        elargies.push_back(brutes.back().gonflee(nm(ecart)));
+      }
       for (std::size_t i = 0; i < corps.size(); ++i)
         for (std::size_t j = i + 1; j < corps.size(); ++j) {
-          if (corps[i].e->dessous != corps[j].e->dessous) continue;
+          if (corps[i].e->dessous != corps[j].e->dessous || !elargies[i].touche(brutes[j])) continue;
           if (kk.code == "DFM-24") {
             const bool fragileI = corps[i].famille == "BGA" || corps[i].famille == "QFN", fragileJ = corps[j].famille == "BGA" || corps[j].famille == "QFN";
             if (!fragileI && !fragileJ) continue;
@@ -310,7 +378,12 @@ BilanFabrication controlerFabrication(const ConceptionElec& c, const std::vector
           if (itc == parReseau.end()) continue;
           const auto itr = itc->second.find(v[static_cast<std::size_t>(i)]->reseau);
           if (itr == itc->second.end()) continue;
-          aires[i] = aireMm2(intersecter(unir(itr->second), {cercle(v[static_cast<std::size_t>(i)]->pastille.position, 1'000'000)}));
+          const Polygone disque = cercle(v[static_cast<std::size_t>(i)]->pastille.position, 1'000'000);
+          Polygones proche;
+          const Boite bd = boite(disque);
+          for (const auto& q : itr->second)
+            if (boite(q).touche(bd)) proche.push_back(q);
+          aires[i] = aireMm2(intersecter(unir(proche), {disque}));
         }
         const double grand = std::max(aires[0], aires[1]), petit = std::max(1e-6, std::min(aires[0], aires[1]));
         if (grand / petit < rapport) continue;
@@ -324,10 +397,13 @@ BilanFabrication controlerFabrication(const ConceptionElec& c, const std::vector
       }
     } else if (kk.code == "DFM-26") {
       for (const Couche pc : {Couche::PateDessus, Couche::PateDessous}) {
-        const Polygones pate = unir(formesCouche(m, pc));
+        const Polygones pate = formesCouche(m, pc);
         if (pate.empty()) continue;
+        const std::vector<Boite> boitesPate = boitesDe(pate);
         for (const auto& v : c.circuit.vias) {
-          if (intersecter(pate, {cercle(v.p, std::max<Nm>(v.percage / 2, 1))}).empty()) continue;
+          const Polygone trou = cercle(v.p, std::max<Nm>(v.percage / 2, 1));
+          const Polygones proche = voisins(pate, boitesPate, boite(trou));
+          if (proche.empty() || intersecter(unir(proche), {trou}).empty()) continue;
           ConstatFabrication x;
           x.position = v.p;
           x.couche = pc;
