@@ -281,7 +281,8 @@ void essaisElectronique034L19(FenetrePrincipale& f, const Verifier& verifier0) {
     prom::ecrireFichierAtomique(prom::cheminFichier(grande.toStdString()), texteContenuBibliotheque(bibliothequeSemee(6000)));
     w->choisir(equipe, grande);
     w->lancerSante();
-    attendre(30);
+    // Aussitôt : sur une machine rapide, 6 000 articles s'analysent en moins de 30 ms ; l'arrêt est lu avant chaque
+    // article, sur le fil de l'analyse
     w->interrompreSante();
     attendreQue([&] { return !w->santeEnCours(); }, 60000);
     verifier(w->sante().interrompu, "034 L19 · 19.4 : l'analyse de santé s'interrompt", std::to_string(w->sante().articles) + " article(s)");
