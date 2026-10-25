@@ -320,12 +320,18 @@ AdaptationModele adapterModele(const std::string& texte, const std::string& comp
 }
 
 std::string nomModele(const std::string& texte) {
-  static const std::regex sc(R"(^\s*\.subckt\s+(\S+))", std::regex::icase | std::regex::multiline);
-  static const std::regex md(R"(^\s*\.model\s+(\S+))", std::regex::icase | std::regex::multiline);
-  std::smatch m;
-  if (std::regex_search(texte, m, sc)) return m[1].str();
-  if (std::regex_search(texte, m, md)) return m[1].str();
-  return {};
+  // Ligne par ligne : la bibliothèque de MSVC n'a pas std::regex::multiline
+  const auto chercher = [&texte](const std::string& motCle) -> std::string {
+    std::istringstream in(texte);
+    for (std::string l; std::getline(in, l);) {
+      std::istringstream mots(l);
+      std::string premier, nom;
+      if ((mots >> premier) && minuscules(premier) == motCle && (mots >> nom)) return nom;
+    }
+    return {};
+  };
+  if (std::string n = chercher(".subckt"); !n.empty()) return n;
+  return chercher(".model");
 }
 
 int noeudsSousCircuit(const std::string& texte, const std::string& nom) {
