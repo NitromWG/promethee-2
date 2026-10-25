@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <map>
+#include <numbers>
 #include <set>
 #include <sstream>
 
@@ -13,6 +14,7 @@
 #include "promethee/fichiers.hpp"
 #include "promethee/kicad_electronique.hpp"
 #include "promethee/netlists_tierces.hpp"
+#include "promethee/police.hpp"
 #include "cao_interne.hpp"
 #include "kicad_interne.hpp"
 
@@ -29,22 +31,6 @@ std::string nb(double v, int dec = 4) {
   }
   return s == "-0" ? "0" : s;
 }
-std::string sansEspace(const std::string& s) {
-  std::string r;
-  for (unsigned char ch : s) r += (std::isspace(ch) || ch == '"' || ch == '(' || ch == ')') ? '_' : static_cast<char>(ch);
-  return r.empty() ? "_" : r;
-}
-std::vector<std::string> mots(const std::string& s) {
-  std::vector<std::string> r;
-  std::istringstream in(s);
-  for (std::string m; in >> m;) r.push_back(m);
-  return r;
-}
-double reel(const std::string& s) {
-  char* fin = nullptr;
-  const double v = std::strtod(s.c_str(), &fin);
-  return fin == s.c_str() ? 0 : v;
-}
 }  // namespace
 
 bool estPcadAscii(const std::string& t) { return t.rfind("ACCEL_ASCII", 0) == 0 || t.find("(asciiHeader") != std::string::npos; }
@@ -55,6 +41,10 @@ bool estPcadAscii(const std::string& t) { return t.rfind("ACCEL_ASCII", 0) == 0 
 // ======================================================================================================================
 // P-CAD ASCII (ACCEL_ASCII)
 // ======================================================================================================================
+namespace {
+int numeroPcad(Couche k, int n) { return k == Couche::CuivreDessus ? 1 : k == Couche::CuivreDessous ? 2 : 11 + rangCuivre(k, n); }
+}  // namespace
+
 std::string pcadAsciiCarte(const ConceptionElec& c, RapportEcritureCao* rapport) {
   RapportEcritureCao r;
   const int n = c.circuit.empilage.couchesCuivre;
@@ -79,9 +69,11 @@ std::string pcadAsciiCarte(const ConceptionElec& c, RapportEcritureCao* rapport)
     }
     o << "  (patternDefExtended " << q(em.empreinte) << " (originalName " << q(em.empreinte) << ")\n    (patternGraphicsDef (patternGraphicsNameDef \"Primary\")\n      (multiLayer\n";
     i = 0;
-    for (const auto& p : d->pastilles)
-      o << "        (pad (padNum " << ++i << ") (padStyleRef " << q(em.empreinte + "_" + std::to_string(i)) << ") " << pt(p.position) << " (rotation " << nb(p.rotation) << ") (defaultPinDes "
+    for (const auto& p : d->pastilles) {
+      ++i;
+      o << "        (pad (padNum " << i << ") (padStyleRef " << q(em.empreinte + "_" + std::to_string(i)) << ") " << pt(p.position) << " (rotation " << nb(p.rotation) << ") (defaultPinDes "
         << q(p.numero) << "))\n";
+    }
     o << "      )\n      (layerContents (layerNumRef 6)\n";
     for (const auto& t : d->traits)
       if (t.couche == Couche::SerigraphieDessus && t.rayon == 0) o << "        (line " << pt(t.a) << " " << pt(t.b) << " (width " << nb(mm(t.epaisseur)) << "))\n";
@@ -100,9 +92,10 @@ std::string pcadAsciiCarte(const ConceptionElec& c, RapportEcritureCao* rapport)
     ++r.reseaux;
   }
   o << ")\n\n(pcbDesign \"PCBDesign_1\"\n";
+  // Couches numérotées comme dans P-CAD : Top 1, Bottom 2, Board 3, sérigraphies 6 et 7, internes à partir de 12
   for (Couche k : couchesCuivre(n))
-    o << "  (layerDef " << q(codeCouche(k)) << " (layerNum " << rangCuivre(k, n) + 1 << ") (layerType Signal))\n";
-  o << "  (layerDef \"Board\" (layerNum " << n + 1 << ") (layerType NonSignal))\n  (multiLayer\n";
+    o << "  (layerDef " << q(k == Couche::CuivreDessus ? "Top" : k == Couche::CuivreDessous ? "Bottom" : "Mid" + std::to_string(rangCuivre(k, n))) << " (layerNum " << numeroPcad(k, n) << ") (layerType Signal))\n";
+  o << "  (layerDef \"Board\" (layerNum 3) (layerType NonSignal))\n  (layerDef \"Top Silk\" (layerNum 6) (layerType NonSignal))\n  (multiLayer\n";
   for (const auto& em : c.circuit.empreintes)
     if (const ComposantElec* x = c.composant(em.composant))
       o << "    (pattern (patternRef " << q(em.empreinte) << ") (refDesRef " << q(x->reference) << ") " << pt(em.position) << " (rotation " << nb(em.rotation) << ") (isFlipped "
@@ -114,7 +107,7 @@ std::string pcadAsciiCarte(const ConceptionElec& c, RapportEcritureCao* rapport)
   }
   o << "  )\n";
   for (Couche k : couchesCuivre(n)) {
-    o << "  (layerContents (layerNumRef " << rangCuivre(k, n) + 1 << ")\n";
+    o << "  (layerContents (layerNumRef " << numeroPcad(k, n) << ")\n";
     for (const auto& p : c.circuit.pistes) {
       if (p.couche != k) continue;
       for (const auto& [a, b] : segmentsPiste(p, 20'000)) {
@@ -125,7 +118,7 @@ std::string pcadAsciiCarte(const ConceptionElec& c, RapportEcritureCao* rapport)
     o << "  )\n";
   }
   const Polygone contour = c.circuit.contour.polygone();
-  o << "  (layerContents (layerNumRef " << n + 1 << ")\n";
+  o << "  (layerContents (layerNumRef 3)\n";
   for (std::size_t i = 0; i < contour.size(); ++i) o << "    (line " << pt(contour[i]) << " " << pt(contour[(i + 1) % contour.size()]) << " (width 0.1))\n";
   o << "  )\n)\n";
   for (const auto& z : c.circuit.zones) r.nonEcrits.push_back("zone de cuivre « " + z.reseau + " » sur " + codeCouche(z.couche));
@@ -157,6 +150,16 @@ std::vector<std::pair<std::string, std::string>> archivePourAltium(const Concept
 // Lecture PADS ASCII et P-CAD ASCII
 // ======================================================================================================================
 ConceptionElec cao_interne::assemblerCarte(CarteLue& l, const std::string& nom, const std::string& prefixe, RapportLectureCao& r) {
+  // Pièces de la carte seule : hors du schéma, leurs broches gardent le réseau du cuivre
+  if (!l.carteSeule.empty()) {
+    std::erase_if(l.netlist.composants, [&](const ComposantNetlist& x) { return l.carteSeule.count(x.reference) > 0; });
+    for (auto& [n, v] : l.netlist.reseaux)
+      std::erase_if(v, [&](const Broche& b) {
+        if (!l.carteSeule.count(b.first)) return false;
+        l.reseauxCarteSeule[b] = n;
+        return true;
+      });
+  }
   // Valeurs et empreintes, puis schéma de liaison par la netlist
   for (auto& x : l.netlist.composants) x.empreinte = prefixe + x.empreinte;
   ConceptionElec c = conceptionDepuisNetlist(l.netlist, nom);
@@ -197,6 +200,9 @@ ConceptionElec cao_interne::assemblerCarte(CarteLue& l, const std::string& nom, 
       em.rotation = p.rotation;
       em.dessous = p.dessous;
       c.circuit.empreintes.push_back(em);
+      if (const auto d = l.empreintes.find(p.decal); d != l.empreintes.end())
+        for (const Pastille& q : d->second.pastilles)
+          if (const auto it = l.reseauxCarteSeule.find({p.ref, q.numero}); it != l.reseauxCarteSeule.end()) c.nomsReseaux[n.uuid + ":" + q.numero] = it->second;
       continue;
     }
     x->empreinte = prefixe + p.decal;
@@ -227,7 +233,56 @@ ConceptionElec cao_interne::assemblerCarte(CarteLue& l, const std::string& nom, 
     v.uuid = nouvelUuid();
     c.circuit.vias.push_back(v);
   }
+  for (auto& x : l.regions) {
+    x.uuid = nouvelUuid();
+    c.circuit.regions.push_back(x);
+  }
+  for (auto& x : l.zones) {
+    x.uuid = nouvelUuid();
+    c.circuit.zones.push_back(x);
+  }
+  for (auto& x : l.zonesRegles) {
+    x.uuid = nouvelUuid();
+    c.circuit.zonesRegles.push_back(x);
+  }
+  for (auto& x : l.dessins) {
+    x.uuid = nouvelUuid();
+    c.circuit.dessins.push_back(x);
+  }
+  for (auto& x : l.textes) {
+    x.uuid = nouvelUuid();
+    c.circuit.textes.push_back(x);
+  }
+  if (l.contour.size() < 3) {
+    // Sans contour dans le fichier : la boîte du cuivre élargie de 2 mm, plutôt que le rectangle d'une carte neuve
+    Boite b;
+    for (const auto& p : l.poses)
+      if (const auto d = l.empreintes.find(p.decal); d != l.empreintes.end()) {
+        EmpreintePlacee e;
+        e.position = p.p;
+        e.rotation = p.rotation;
+        e.dessous = p.dessous;
+        for (const Pastille& q : d->second.pastilles) b.etendre(boite(formePastille(pastilleSurCarte(e, q))));
+      }
+    for (const auto& p : l.pistes)
+      for (const auto& [a, x] : segmentsPiste(p)) b.etendre(Boite{std::min(a.x, x.x), std::min(a.y, x.y), std::max(a.x, x.x), std::max(a.y, x.y)}.gonflee(p.largeur / 2));
+    for (const auto& v : l.vias) b.etendre(Boite{v.p.x, v.p.y, v.p.x, v.p.y}.gonflee(v.diametre / 2));
+    for (const auto& g : l.regions) b.etendre(boite(g.forme));
+    for (const auto& d : l.dessins)
+      for (const Pt& q : d.points) b.etendre(q);
+    for (const auto& t : l.textes) {
+      const Nm m = std::max(largeurTexte(t.texte, t.hauteur), t.hauteur);
+      b.etendre(Boite{t.p.x, t.p.y, t.p.x, t.p.y}.gonflee(m / 2 + t.hauteur));
+    }
+    if (!b.vide()) {
+      b = b.gonflee(2 * NM_PAR_MM);
+      l.contour = {{b.x0, b.y0}, {b.x1, b.y0}, {b.x1, b.y1}, {b.x0, b.y1}};
+      r.alertes.push_back("aucun contour de carte dans le fichier : la boîte du cuivre élargie de 2 mm en tient lieu");
+    }
+  }
   if (l.contour.size() >= 3) c.circuit.contour.libre = orienter(l.contour);
+  for (const Polygone& q : l.decoupes)
+    if (q.size() >= 3) c.circuit.contour.decoupes.push_back(orienter(q));
   synchroniserReseaux(c);
   r.composants = static_cast<int>(l.poses.size());
   r.reseaux = static_cast<int>(l.netlist.reseaux.size());
@@ -235,13 +290,6 @@ ConceptionElec cao_interne::assemblerCarte(CarteLue& l, const std::string& nom, 
   r.vias = static_cast<int>(l.vias.size());
   return c;
 }
-namespace {
-Couche couchePads(int numero, int n) {
-  if (numero <= 1) return Couche::CuivreDessus;
-  if (numero >= n) return Couche::CuivreDessous;
-  return cuivreInterne(std::clamp(numero - 1, 1, MAX_CUIVRES - 2));
-}
-}  // namespace
 
 ConceptionElec conceptionDepuisPcad(const std::string& texte, const std::string& nom, RapportLectureCao* rapport) {
   RapportLectureCao r;
@@ -331,16 +379,46 @@ ConceptionElec conceptionDepuisPcad(const std::string& texte, const std::string&
         }
       }
     if (bloc.nom() == "pcbDesign") {
-      int cuivres = 0, couchePlanche = -1;
-      std::map<int, Couche> couches;
+      // Couches d'après leur définition : Signal ou Plane (Top, Bottom, internes dans l'ordre), Board, sérigraphies ;
+      // sans définition, la numérotation de P-CAD (1 Top, 2 Bottom, 3 Board, 6 et 7 sérigraphies)
+      enum class Role { Cuivre, Contour, Seri, Autre };
+      struct CouchePcad {
+        Role role = Role::Autre;
+        Couche couche = Couche::CuivreDessus;
+      };
+      std::map<int, CouchePcad> couches;
+      std::vector<std::pair<int, std::string>> internes;
       for (const auto& e : bloc.elements)
         if (e.nom() == "layerDef") {
           const Expr* t = e.enfant("layerType");
           const Expr* num = e.enfant("layerNum");
-          if (t && num && t->valeur(1) == "Signal") ++cuivres;
-          if (num && (texteDe(e, 1) == "Board" || texteDe(e, 1) == "Board Outline")) couchePlanche = static_cast<int>(num->nombre(1));
+          if (!num) continue;
+          const int k = static_cast<int>(num->nombre(1));
+          std::string n = texteDe(e, 1);
+          for (char& ch : n) ch = static_cast<char>(std::tolower(static_cast<unsigned char>(ch)));
+          const std::string type = t ? t->valeur(1) : std::string();
+          if (type == "Signal" || type == "Plane") {
+            if (n == "top" || k == 1) couches[k] = {Role::Cuivre, Couche::CuivreDessus};
+            else if (n == "bottom" || k == 2) couches[k] = {Role::Cuivre, Couche::CuivreDessous};
+            else internes.push_back({k, n});
+          } else if (n == "board" || n == "board outline") couches[k] = {Role::Contour, Couche::CuivreDessus};
+          else if (n == "top silk") couches[k] = {Role::Seri, Couche::SerigraphieDessus};
+          else if (n == "bot silk" || n == "bottom silk") couches[k] = {Role::Seri, Couche::SerigraphieDessous};
         }
-      l.cuivres = std::max(2, cuivres);
+      if (couches.empty() && internes.empty())
+        couches = {{1, {Role::Cuivre, Couche::CuivreDessus}}, {2, {Role::Cuivre, Couche::CuivreDessous}}, {3, {Role::Contour, Couche::CuivreDessus}}, {6, {Role::Seri, Couche::SerigraphieDessus}}, {7, {Role::Seri, Couche::SerigraphieDessous}}};
+      std::sort(internes.begin(), internes.end());
+      for (std::size_t i = 0; i < internes.size(); ++i) couches[internes[i].first] = {Role::Cuivre, cuivreInterne(static_cast<int>(std::min<std::size_t>(i + 1, MAX_CUIVRES - 2)))};
+      l.cuivres = 2 + static_cast<int>(internes.size());
+      // Longueur d'une valeur, suivie ou non de son unité (« 17.8 mm » au milieu d'un fichier en mils)
+      auto longueur = [&](const Expr& x, std::size_t i) {
+        const double v = x.nombre(i);
+        const std::string u = x.valeur(i + 1);
+        return nm(u == "mm" ? v : u == "mil" ? v * 0.0254 : u == "in" ? v * 25.4 : v * unite);
+      };
+      auto point = [&](const Expr* e) { return e ? Pt{longueur(*e, 1), -longueur(*e, 2)} : Pt{}; };
+      std::vector<std::pair<Pt, Pt>> bord;
+      int libres = 0;
       for (const auto& e : bloc.elements) {
         if (e.nom() == "multiLayer")
           for (const auto& x : e.elements) {
@@ -348,47 +426,170 @@ ConceptionElec conceptionDepuisPcad(const std::string& texte, const std::string&
               cao_interne::CarteLue::Pose p;
               if (const Expr* a = x.enfant("refDesRef")) p.ref = a->valeur(1);
               if (const Expr* a = x.enfant("patternRef")) p.decal = a->valeur(1);
-              const Expr* ppt = x.enfant("pt");
-              p.p = {nm(ppt ? ppt->nombre(1) * unite : 0), -nm(ppt ? ppt->nombre(2) * unite : 0)};
+              p.p = point(x.enfant("pt"));
               if (const Expr* a = x.enfant("rotation")) p.rotation = a->nombre(1);
               if (const Expr* a = x.enfant("isFlipped")) p.dessous = a->valeur(1) == "True";
               l.poses.push_back(p);
             } else if (x.nom() == "via") {
               Via v;
-              const Expr* ppt = x.enfant("pt");
-              v.p = {nm(ppt ? ppt->nombre(1) * unite : 0), -nm(ppt ? ppt->nombre(2) * unite : 0)};
+              v.p = point(x.enfant("pt"));
               if (const Expr* a = x.enfant("netNameRef")) v.reseau = a->valeur(1);
-              if (const Expr* a = x.enfant("diam")) v.diametre = nm(a->nombre(1) * unite);
-              if (const Expr* a = x.enfant("holeDiam")) v.percage = nm(a->nombre(1) * unite);
+              if (const Expr* a = x.enfant("diam")) v.diametre = longueur(*a, 1);
+              if (const Expr* a = x.enfant("holeDiam")) v.percage = longueur(*a, 1);
               l.vias.push_back(v);
+            } else if (x.nom() == "pad") {
+              // Pastille libre : une pièce de la carte seule, son réseau gardé
+              const Expr* st = x.enfant("padStyleRef");
+              if (!st || !stylesPads.count(st->valeur(1))) continue;
+              const auto& sp = stylesPads[st->valeur(1)];
+              Pastille q;
+              q.numero = "1";
+              q.largeur = nm(sp[0].first);
+              q.hauteur = nm(sp[0].second);
+              q.percage = nm(sp[1].first);
+              q.type = q.percage > 0 ? TypePastille::Traversante : TypePastille::CMS;
+              q.forme = sp[1].second == 1 ? (q.largeur == q.hauteur ? FormePastille::Rond : FormePastille::Ovale) : FormePastille::Rect;
+              DefEmpreinte d;
+              d.pastilles.push_back(q);
+              const std::string id = "pastille-libre-" + std::to_string(++libres);
+              l.empreintes[id] = d;
+              cao_interne::CarteLue::Pose p;
+              p.ref = "PL" + std::to_string(libres);
+              p.decal = id;
+              p.p = point(x.enfant("pt"));
+              if (const Expr* a = x.enfant("rotation")) p.rotation = a->nombre(1);
+              l.poses.push_back(p);
+              l.carteSeule.insert(p.ref);
+              if (const Expr* a = x.enfant("netNameRef")) l.netlist.reseaux[a->valeur(1)].push_back({p.ref, "1"});
             }
           }
-        if (e.nom() == "layerContents") {
-          const Expr* num = e.enfant("layerNumRef");
-          const int k = num ? static_cast<int>(num->nombre(1)) : 0;
-          for (const auto& x : e.elements) {
-            if (x.nom() != "line") continue;
-            std::vector<const Expr*> pts;
-            for (const auto& y : x.elements)
-              if (y.nom() == "pt") pts.push_back(&y);
-            if (pts.size() < 2) continue;
-            Pt a{nm(pts[0]->nombre(1) * unite), -nm(pts[0]->nombre(2) * unite)}, b{nm(pts[1]->nombre(1) * unite), -nm(pts[1]->nombre(2) * unite)};
-            if (k == couchePlanche) {
-              if (l.contour.empty()) l.contour.push_back(a);
-              if (!(l.contour.front() == b)) l.contour.push_back(b);
-              continue;
+        if (e.nom() != "layerContents") continue;
+        const Expr* num = e.enfant("layerNumRef");
+        const auto ic = couches.find(num ? static_cast<int>(num->nombre(1)) : 0);
+        if (ic == couches.end()) continue;
+        const CouchePcad k = ic->second;
+        auto points = [&](const Expr& x) {
+          Polygone q;
+          for (const auto& y : x.elements)
+            if (y.nom() == "pt") q.push_back(point(&y));
+          return q;
+        };
+        for (const auto& x : e.elements) {
+          const Expr* w = x.enfant("width");
+          const Nm largeur = w ? longueur(*w, 1) : 0;
+          const std::string reseau = x.enfant("netNameRef") ? x.enfant("netNameRef")->valeur(1) : std::string();
+          if (x.nom() == "line" || x.nom() == "arc") {
+            // Arc : centre, rayon, angle de départ et balayage en degrés (sens direct, y vers le haut)
+            std::vector<Pt> traits = points(x);
+            std::optional<Pt> milieu;
+            if (x.nom() == "arc") {
+              const Pt c = point(x.enfant("pt"));
+              const double r = static_cast<double>(x.enfant("radius") ? longueur(*x.enfant("radius"), 1) : 0);
+              const double a0 = x.enfant("startAngle") ? x.enfant("startAngle")->nombre(1) : 0, da = x.enfant("sweepAngle") ? x.enfant("sweepAngle")->nombre(1) : 360;
+              auto sur = [&](double a) { return Pt{c.x + static_cast<Nm>(std::llround(r * std::cos(a * std::numbers::pi / 180))), c.y - static_cast<Nm>(std::llround(r * std::sin(a * std::numbers::pi / 180)))}; };
+              traits.clear();
+              const int n = std::max(2, static_cast<int>(std::ceil(std::abs(da) / 10)));
+              for (int i = 0; i <= n; ++i) traits.push_back(sur(a0 + da * i / n));
+              if (k.role == Role::Cuivre && std::abs(da) < 360) {
+                // Arc de piste d'un seul tenant
+                Piste t;
+                t.couche = k.couche;
+                t.a = sur(a0);
+                t.b = sur(a0 + da);
+                t.milieu = sur(a0 + da / 2);
+                t.largeur = std::max<Nm>(largeur, 50'000);
+                t.reseau = reseau;
+                l.pistes.push_back(t);
+                continue;
+              }
             }
-            if (k < 1 || k > l.cuivres) continue;
-            Piste t;
-            t.couche = couchePads(k, l.cuivres);
-            t.a = a;
-            t.b = b;
-            if (const Expr* w = x.enfant("width")) t.largeur = nm(w->nombre(1) * unite);
-            if (const Expr* n = x.enfant("netNameRef")) t.reseau = n->valeur(1);
-            l.pistes.push_back(t);
+            for (std::size_t i = 1; i < traits.size(); ++i) {
+              if (k.role == Role::Contour) bord.push_back({traits[i - 1], traits[i]});
+              else if (k.role == Role::Cuivre) {
+                Piste t;
+                t.couche = k.couche;
+                t.a = traits[i - 1];
+                t.b = traits[i];
+                t.largeur = std::max<Nm>(largeur, 50'000);
+                t.reseau = reseau;
+                l.pistes.push_back(t);
+              } else if (k.role == Role::Seri) {
+                DessinCircuit d;
+                d.couche = k.couche;
+                d.points = {traits[i - 1], traits[i]};
+                d.epaisseur = std::max<Nm>(largeur, 50'000);
+                l.dessins.push_back(d);
+              }
+            }
+          } else if (x.nom() == "pcbPoly") {
+            const Polygone q = points(x);
+            if (q.size() < 3) continue;
+            if (k.role == Role::Cuivre) {
+              RegionCuivre g;
+              g.genre = "libre";
+              g.couche = k.couche;
+              g.forme = orienter(q);
+              g.reseau = reseau;
+              l.regions.push_back(g);
+            } else if (k.role == Role::Seri) {
+              DessinCircuit d;
+              d.forme = DessinCircuit::Forme::Polygone;
+              d.couche = k.couche;
+              d.points = q;
+              d.plein = true;
+              d.epaisseur = 0;
+              l.dessins.push_back(d);
+            } else if (k.role == Role::Contour)
+              for (std::size_t i = 0; i < q.size(); ++i) bord.push_back({q[i], q[(i + 1) % q.size()]});
+          } else if ((x.nom() == "copperPour95" || x.nom() == "planeObj") && k.role == Role::Cuivre) {
+            // Remplissage : une zone au réseau donné, contour pris de son polygone
+            const Expr* poly = x.enfant("pcbPoly");
+            const Polygone q = poly ? points(*poly) : points(x);
+            if (q.size() < 3) continue;
+            Zone z;
+            z.couche = k.couche;
+            z.reseau = reseau;
+            z.contour = orienter(q);
+            l.zones.push_back(z);
+          } else if (x.nom() == "polyKeepOut" && k.role == Role::Cuivre) {
+            const Polygone q = points(x);
+            if (q.size() < 3) continue;
+            ZoneRegle z;
+            z.nom = "interdit P-CAD";
+            z.contour = orienter(q);
+            z.couches = bit(k.couche);
+            z.interditPistes = z.interditVias = z.interditZones = true;
+            l.zonesRegles.push_back(z);
+          } else if (x.nom() == "text" && (k.role == Role::Cuivre || k.role == Role::Seri)) {
+            // Texte : ancre en bas à gauche, boîte donnée (« extent »), retourné s'il est sur l'autre face
+            TexteCircuit t;
+            t.texte = x.valeur(2);
+            for (auto& ch : t.texte)
+              if (ch == '\r' || ch == '\n') ch = ' ';
+            t.couche = k.couche;
+            const Pt a = point(x.enfant("pt"));
+            double lx = 0, ly = 0;
+            if (const Expr* ex = x.enfant("extent")) {
+              lx = static_cast<double>(longueur(*ex, 1));
+              const bool unite1 = ex->valeur(2) == "mm" || ex->valeur(2) == "mil" || ex->valeur(2) == "in";
+              ly = static_cast<double>(longueur(*ex, unite1 ? 3 : 2));
+            }
+            const double rot = x.enfant("rotation") ? x.enfant("rotation")->nombre(1) : 0;
+            const bool retourne = x.enfant("isFlipped") && x.enfant("isFlipped")->valeur(1) == "True";
+            t.rotation = retourne ? -rot : rot;
+            if (retourne) t.miroir = true;
+            t.hauteur = static_cast<Nm>(std::max(100'000.0, ly > 0 ? ly * 0.7 : 1'000'000.0));
+            if (lx > 0) {
+              const double lt = static_cast<double>(largeurTexte(t.texte, t.hauteur));
+              if (lt > lx) t.hauteur = static_cast<Nm>(static_cast<double>(t.hauteur) * lx / lt);
+            }
+            const double dx = (retourne ? -lx : lx) / 2, dy = -ly / 2, c = std::cos(t.rotation * std::numbers::pi / 180), sn = std::sin(t.rotation * std::numbers::pi / 180);
+            t.p = a + Pt{static_cast<Nm>(std::llround(dx * c + dy * sn)), static_cast<Nm>(std::llround(-dx * sn + dy * c))};
+            l.textes.push_back(t);
           }
         }
       }
+      if (!bord.empty() && !cao_interne::contourDepuisTraits(l, bord)) r.alertes.push_back("contour de la couche Board non fermé");
     }
   }
   for (auto& x : l.netlist.composants)

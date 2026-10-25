@@ -158,6 +158,27 @@ void essaisElectronique034L10(FenetrePrincipale& f, const Verifier& verifier) {
     verifier(kicad5 && ltspice, "10.14 : schéma KiCad 5 (cache et feuille fille) et circuit LTspice ouverts, réseaux identiques aux netlists que ces logiciels écrivent", detail);
   }
 
+  // ---------- 10.18 · Formats anciens ouverts d'un geste : carte Sprint-Layout, projet gEDA (schéma et carte) ----------
+  {
+    std::string detail;
+    bool sprint = false, geda = false;
+    if (f.importerConceptionTierce(d + QStringLiteral("/sprint/12F629_SM.lay6"), 0, false)) {
+      attendre(400);
+      const ConceptionElec& c = doc->projet().electronique.back();
+      int plans = 0;
+      for (const auto& z : c.circuit.zones) plans += z.reseau == "GND_PLANE";
+      sprint = c.circuit.empreintes.size() == 14 && plans == 2;
+      detail += "Sprint-Layout : " + std::to_string(c.circuit.empreintes.size()) + " empreinte(s), " + std::to_string(plans) + " plan(s) ; ";
+    }
+    if (f.importerConceptionTierce(d + QStringLiteral("/geda/goodfet50.sch"), 0, false)) {
+      attendre(400);
+      const ConceptionElec& c = doc->projet().electronique.back();
+      geda = !c.schemaSeul && c.circuit.empreintes.size() == 16 && c.composants.size() >= 16;
+      detail += "gEDA : " + std::to_string(c.composants.size()) + " composant(s), " + std::to_string(c.circuit.empreintes.size()) + " empreinte(s) reliée(s)";
+    }
+    verifier(sprint && geda, "10.18 : carte Sprint-Layout (plans de masse en zones) et projet gEDA (schéma gschem et sa carte reliés) ouverts d'un geste", detail);
+  }
+
   // ---------- 10.12 · Carte KiCad de quatre couches ajoutée à la carte ouverte, un seul Ctrl+Z la retire ----------
   {
     AtelierElectronique* a = ouvrir(f, carteDeMesure(20, false));

@@ -7,8 +7,11 @@
 #include <set>
 
 #include "promethee/archive.hpp"
+#include "promethee/formats_anciens.hpp"
+#include "promethee/formats_cao.hpp"
 #include "promethee/import_altium.hpp"
 #include "promethee/import_eagle.hpp"
+#include "promethee/import_easyeda.hpp"
 #include "promethee/kicad_electronique.hpp"
 #include "kicad_interne.hpp"
 
@@ -117,10 +120,12 @@ void importerKicad(const std::vector<FichierBibliotheque>& fichiers, ContenuBibl
 }
 }  // namespace
 
-std::string filtreBibliotheques() { return "*.kicad_sym *.kicad_mod *.lbr *.SchLib *.PcbLib *.IntLib *.schlib *.pcblib *.intlib"; }
+std::string filtreBibliotheques() { return "*.kicad_sym *.kicad_mod *.lbr *.SchLib *.PcbLib *.IntLib *.schlib *.pcblib *.intlib *.fp *.sym *.lmk *.LMK *.cpa *.csa *.json"; }
 
 bool fichierBibliothequeLu(const std::string& chemin) {
-  return finit(chemin, ".kicad_sym") || finit(chemin, ".kicad_mod") || finit(chemin, ".lbr") || finit(chemin, ".schlib") || finit(chemin, ".pcblib") || finit(chemin, ".intlib");
+  for (const char* e : {".kicad_sym", ".kicad_mod", ".lbr", ".schlib", ".pcblib", ".intlib", ".fp", ".sym", ".lmk", ".cpa", ".csa", ".json"})
+    if (finit(chemin, e)) return true;
+  return false;
 }
 
 namespace {
@@ -162,6 +167,68 @@ void importerAltium(const std::string& chemin, const std::string& octets, Conten
 }
 }  // namespace
 
+namespace {
+// Dossier qui porte un fichier de bibliothèque (« newlib/0805.fp » → « newlib ») : il nomme la bibliothèque
+std::string dossierDe(const std::string& chemin) {
+  const auto p = chemin.find_last_of("/\\");
+  return p == std::string::npos ? std::string() : base(chemin.substr(0, p));
+}
+// Bibliothèques des formats anciens et des autres outils (10.18) : empreintes gEDA (.fp), symboles gEDA (.sym, un
+// article chacun), macros Sprint-Layout (.lmk), archives de bibliothèque CADSTAR (.cpa d'empreintes, .csa de
+// symboles), composants EasyEDA ou LCSC enregistrés en JSON (article, symbole, empreinte)
+void importerAncien(const FichierBibliotheque& f, ContenuBibliotheque& dest, bool remplacer, RapportBibliotheque& rap) {
+  const std::string nom = sansExtension(base(f.chemin)), lib = dossierDe(f.chemin);
+  const std::string complet = lib.empty() ? nom : lib + ":" + nom;
+  if (finit(f.chemin, ".fp")) {
+    auto d = empreinteDepuisGedaFp(f.contenu, nom);
+    if (!d || d->pastilles.empty()) return rap.refuser("empreinte", complet, "aucun élément (« Element[…] ») lisible");
+    d->id = "geda:" + complet;
+    rap.poser(dest.empreintes, std::move(*d), "empreinte", complet, remplacer);
+  } else if (finit(f.chemin, ".sym")) {
+    std::string raison;
+    auto d = symboleDepuisGedaSym(f.contenu, complet, &raison);
+    if (!d) return rap.refuser("symbole", complet, raison);
+    rap.poser(dest.symboles, *d, "symbole", complet, remplacer);
+    Article a;
+    a.id = "geda:" + complet;
+    a.nom = nom;
+    a.valeur = nom;
+    a.description = d->description;
+    a.categorie = "Importés de gEDA";
+    a.symbole = d->id;
+    a.fiche = d->fiche;
+    rap.poser(dest.articles, std::move(a), "article", complet, remplacer);
+  } else if (finit(f.chemin, ".lmk")) {
+    std::string alerte;
+    auto d = empreinteDepuisMacroSprint(f.contenu, nom, &alerte);
+    if (!d) return rap.refuser("empreinte", complet, alerte.empty() ? "macro vide" : alerte);
+    d->id = "sprint:" + complet;
+    rap.poser(dest.empreintes, std::move(*d), "empreinte", complet, remplacer);
+    if (!alerte.empty()) rap.objets.back().detail = alerte;
+  } else if (finit(f.chemin, ".cpa") || finit(f.chemin, ".csa")) {
+    if (!estArchiveCadstar(f.contenu)) return rap.refuser("bibliothèque", base(f.chemin), "archive CADSTAR illisible");
+    RapportLectureCao r;
+    const ConceptionElec c = conceptionDepuisCadstar(f.contenu, nom, &r);
+    int lus = 0;
+    for (const auto& [id, d] : c.empreintes)
+      if (id.rfind("cadstar:", 0) == 0) {
+        rap.poser(dest.empreintes, d, "empreinte", lib.empty() ? d.description : lib + ":" + d.description, remplacer), ++lus;
+      }
+    for (const auto& [id, d] : c.symboles)
+      if (id.rfind("cadstar:", 0) == 0) {
+        rap.poser(dest.symboles, d, "symbole", d.nom, remplacer), ++lus;
+      }
+    if (!lus) rap.refuser("bibliothèque", base(f.chemin), "aucun symbole ni empreinte dans l'archive");
+  } else if (finit(f.chemin, ".json")) {
+    const ImportArchive a = importerComposantEasyEda(f.contenu);
+    if (a.article.id.empty() && a.symboles.empty() && !a.empreinte) return rap.refuser("composant", base(f.chemin), a.alertes.empty() ? "pas un composant EasyEDA ou LCSC" : a.alertes.front());
+    for (const auto& s : a.symboles) rap.poser(dest.symboles, s, "symbole", s.nom, remplacer);
+    if (a.empreinte) rap.poser(dest.empreintes, *a.empreinte, "empreinte", a.empreinte->description.empty() ? a.empreinte->id : a.empreinte->description, remplacer);
+    if (!a.article.id.empty()) rap.poser(dest.articles, a.article, "article", a.article.nom.empty() ? a.article.id : a.article.nom, remplacer);
+  }
+}
+}  // namespace
+
 RapportBibliotheque importerBibliotheques(const std::vector<FichierBibliotheque>& fichiers, ContenuBibliotheque& destination, bool remplacer) {
   RapportBibliotheque rap;
   importerKicad(fichiers, destination, remplacer, rap);
@@ -176,6 +243,12 @@ RapportBibliotheque importerBibliotheques(const std::vector<FichierBibliotheque>
     } else if (finit(f.chemin, ".schlib") || finit(f.chemin, ".pcblib") || finit(f.chemin, ".intlib")) {
       try {
         importerAltium(f.chemin, f.contenu, destination, remplacer, rap);
+      } catch (const std::exception& e) {
+        rap.refuser("bibliothèque", base(f.chemin), e.what());
+      }
+    } else if (finit(f.chemin, ".fp") || finit(f.chemin, ".sym") || finit(f.chemin, ".lmk") || finit(f.chemin, ".cpa") || finit(f.chemin, ".csa") || finit(f.chemin, ".json")) {
+      try {
+        importerAncien(f, destination, remplacer, rap);
       } catch (const std::exception& e) {
         rap.refuser("bibliothèque", base(f.chemin), e.what());
       }

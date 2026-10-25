@@ -1,0 +1,3 @@
+*.pcb -text
+*.sch -text
+*.sym -text

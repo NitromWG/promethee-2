@@ -7,6 +7,7 @@
 #include <set>
 
 #include "promethee/circuit_edition.hpp"
+#include "promethee/formats_anciens.hpp"
 #include "promethee/formats_cao.hpp"
 #include "promethee/import_altium.hpp"
 #include "promethee/import_eagle.hpp"
@@ -31,10 +32,34 @@ std::string baseDe(const std::string& n) {
   return p == std::string::npos ? f : f.substr(0, p);
 }
 bool estXmlEagle(const std::string& t) { return t.find("<eagle") != std::string::npos && t.find("<drawing") != std::string::npos; }
+// Symboles d'un schéma gschem : à côté du fichier, puis dans les dossiers que nomme son « gafrc » (lignes
+// « (component-library "dossier") »), enfin la bibliothèque standard incorporée
+LecteurSymboles lecteurGschem(const LecteurVoisin& lire) {
+  std::vector<std::string> dossiers{""};
+  for (const char* rc : {"gafrc", "gschemrc", "lepton.conf"})
+    if (const auto t = lire ? lire(rc) : std::nullopt)
+      for (std::size_t p = t->find("component-library"); p != std::string::npos; p = t->find("component-library", p + 1)) {
+        const auto a = t->find('"', p), b = a == std::string::npos ? a : t->find('"', a + 1);
+        if (b != std::string::npos) dossiers.push_back(t->substr(a + 1, b - a - 1) + "/");
+      }
+  return [lire, dossiers](const std::string& n) -> std::optional<std::string> {
+    if (!lire) return std::nullopt;
+    for (const auto& d : dossiers)
+      if (auto t = lire(d + n)) return t;
+    return std::nullopt;
+  };
+}
+void ajouterLiaison(ImportTiers& r, ConceptionElec& carte) {
+  const RapportLiaison l = relierCarteAuSchema(r.conception, carte);
+  for (const auto& x : l.carteSeule) r.alertes.push_back(x + " : posé sur la carte sans composant au schéma");
+  for (const auto& x : l.schemaSeul) r.alertes.push_back(x + " : au schéma, absent de la carte");
+  for (const auto& x : l.ecarts) r.alertes.push_back(x);
+  r.conception.schemaSeul = false;
+}
 }  // namespace
 
 std::string filtreConceptionsTierces() {
-  return "*.kicad_pcb *.kicad_sch *.kicad_pro *.sch *.brd *.asc *.txt *.pcb *.vsdx *.cpa *.csa *.PrjPcb *.SchDoc *.PcbDoc *.CSPcbDoc *.CSSchDoc *.CMPcbDoc *.CMSchDoc *.SWPcbDoc *.prjpcb *.schdoc *.pcbdoc";
+  return "*.kicad_pcb *.kicad_sch *.kicad_pro *.sch *.brd *.asc *.txt *.pcb *.PCB *.vsdx *.cpa *.csa *.PrjPcb *.SchDoc *.PcbDoc *.CSPcbDoc *.CSSchDoc *.CMPcbDoc *.CMSchDoc *.SWPcbDoc *.prjpcb *.schdoc *.pcbdoc *.lay6 *.lay";
 }
 
 std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichier, const std::string& contenu, const LecteurVoisin& lire, std::string* erreur) {
@@ -115,6 +140,20 @@ std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichie
         for (const auto& x : l.ecarts) r.alertes.push_back(x);
         r.conception.schemaSeul = false;
       }
+    } else if (ext == "sch" && estSchemaGschem(contenu)) {
+      // gschem ou lepton-schematic : la carte gEDA voisine (.pcb) est reliée
+      r.logiciel = contenu.find("lepton") != std::string::npos ? "Lepton" : "gEDA";
+      RapportLectureCao rl;
+      r.conception = conceptionDepuisGschem(contenu, base, lecteurGschem(lire), &rl);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rl.alertes;
+      if (const auto pcb = voisin("pcb"); pcb && estGedaPcb(*pcb)) {
+        RapportLectureCao rc;
+        ConceptionElec carte = conceptionDepuisGedaPcb(*pcb, base, &rc);
+        r.fichiers.push_back(base + ".pcb");
+        r.alertes.insert(r.alertes.end(), rc.alertes.begin(), rc.alertes.end());
+        ajouterLiaison(r, carte);
+      }
     } else if (estSchemaLtspice(contenu)) {
       r.logiciel = "LTspice";
       RapportImportSchema rs;
@@ -153,6 +192,33 @@ std::optional<ImportTiers> importerConceptionTierce(const std::string& nomFichie
       r.conception = conceptionDepuisPcad(contenu, base, &rl);
       r.fichiers.push_back(nomFichier);
       r.alertes = rl.alertes;
+    } else if (estSprintLayout(contenu)) {
+      r.logiciel = "Sprint-Layout";
+      RapportLectureCao rl;
+      r.conception = conceptionDepuisSprintLayout(contenu, base, &rl);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rl.alertes;
+    } else if (estAutotrax(contenu)) {
+      r.logiciel = contenu.find("PCB FILE 5") != std::string::npos ? "Easytrax" : "Protel Autotrax";
+      RapportLectureCao rl;
+      r.conception = conceptionDepuisAutotrax(contenu, base, &rl);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rl.alertes;
+    } else if (estGedaPcb(contenu)) {
+      // gEDA PCB : le schéma gschem voisin (.sch), s'il y est, donne le schéma ; la carte s'y relie
+      r.logiciel = "gEDA";
+      RapportLectureCao rl;
+      ConceptionElec carte = conceptionDepuisGedaPcb(contenu, base, &rl);
+      r.fichiers.push_back(nomFichier);
+      r.alertes = rl.alertes;
+      if (const auto sch = voisin("sch"); sch && estSchemaGschem(*sch)) {
+        RapportLectureCao rs;
+        r.conception = conceptionDepuisGschem(*sch, base, lecteurGschem(lire), &rs);
+        r.fichiers.push_back(base + ".sch");
+        r.alertes.insert(r.alertes.end(), rs.alertes.begin(), rs.alertes.end());
+        ajouterLiaison(r, carte);
+      } else
+        r.conception = std::move(carte);
     } else {
       if (erreur) *erreur = "Format de « " + nomFichier + " » non reconnu.";
       return std::nullopt;
