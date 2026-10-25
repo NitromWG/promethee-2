@@ -72,13 +72,30 @@ std::optional<double> nombre(const std::string& t0) {
     if (t[i] == ',' && std::isdigit(static_cast<unsigned char>(t[i - 1])) && std::isdigit(static_cast<unsigned char>(t[i + 1]))) t[i] = '.';
   // Lecture indépendante de la langue du poste (point décimal)
   if (!(std::isdigit(static_cast<unsigned char>(t[0])) || ((t[0] == '-' || t[0] == '+' || t[0] == '.') && t.size() > 1))) return std::nullopt;
-  std::istringstream in(t);
+  // Le nombre en tête est délimité à la main avant d'être lu : la bibliothèque standard de macOS (libc++) prend les
+  // lettres a à f, i, n, p et x pour une suite possible du nombre, et refuserait « 8cm » ou « 90deg »
+  const auto chiffre = [&](std::size_t k) { return k < t.size() && std::isdigit(static_cast<unsigned char>(t[k])); };
+  std::size_t fin = t[0] == '-' || t[0] == '+' ? 1 : 0;
+  const std::size_t debut = fin;
+  while (chiffre(fin)) ++fin;
+  if (fin < t.size() && t[fin] == '.') {
+    ++fin;
+    while (chiffre(fin)) ++fin;
+  }
+  if (fin == debut || (fin == debut + 1 && t[debut] == '.')) return std::nullopt;
+  if (fin < t.size() && (t[fin] == 'e' || t[fin] == 'E')) {  // exposant, s'il porte des chiffres (« 2e3 », pas « 2em »)
+    std::size_t k = fin + 1;
+    if (k < t.size() && (t[k] == '+' || t[k] == '-')) ++k;
+    if (chiffre(k)) {
+      while (chiffre(k)) ++k;
+      fin = k;
+    }
+  }
+  std::istringstream in(t.substr(0, fin));
   in.imbue(std::locale::classic());
   double v = 0;
   if (!(in >> v)) return std::nullopt;
-  std::string reste;
-  std::getline(in, reste);
-  std::string unite = normal(sansBlancs(reste));
+  std::string unite = normal(sansBlancs(t.substr(fin)));
   if (unite.empty() || unite == "mm") return v;
   if (unite == "cm") return v * 10;
   if (unite == "m") return v * 1000;
