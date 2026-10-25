@@ -60,9 +60,10 @@ Write-Host "Paquet $nomPaquet ($identifiant)"
 if (Test-Path $dest) { Remove-Item -Recurse -Force $dest }
 New-Item -ItemType Directory -Force -Path $dest | Out-Null
 
-# 1. Programme et bibliothèques déposées par vcpkg à côté de lui, sans fichiers de développement.
+# 1. Programme et bibliothèques déposées par vcpkg à côté de lui, sans fichiers de développement. Le programme
+#    séparé d'accès en ligne (décision D13) n'est pas livré : le paquet reste sans extension TLS ni accès réseau.
 $binaires = Join-Path $Build "app\Release"
-Get-ChildItem $binaires -File | Where-Object { $_.Extension -notin ".lib", ".exp", ".pdb", ".ilk", ".manifest" } |
+Get-ChildItem $binaires -File | Where-Object { ($_.Extension -notin @(".lib", ".exp", ".pdb", ".ilk", ".manifest")) -and ($_.Name -ne "promethee-en-ligne.exe") } |
   ForEach-Object { Copy-Item $_.FullName $dest }
 $exe = Join-Path $dest "Promethee.exe"
 if (-not (Test-Path $exe)) { throw "Promethee.exe absent de $binaires" }
