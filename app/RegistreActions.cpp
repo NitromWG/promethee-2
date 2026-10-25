@@ -212,6 +212,21 @@ RegistreActions::RegistreActions() {
   ajouter("conception.guidee", QStringLiteral("Conception guidée par modules"), P::Atelier, {});
   ajouter("conception.circuitsTypes", QStringLiteral("Circuits types proposés"), P::Atelier, {});
   ajouter("composant.brochage", QStringLiteral("Composant depuis un brochage (BSDL, tableau de fiche)"), P::Atelier, {});
+  // 0.34, lot L14 : laboratoire de simulation
+  ajouter("simulation.laboratoire", QStringLiteral("Laboratoire : simulation continue et instruments"), P::Atelier, {});
+  ajouter("simulation.logique", QStringLiteral("Analyseur logique et décodeurs (I2C, SPI, CAN)"), P::Atelier, {});
+  ajouter("simulation.symbolique", QStringLiteral("Analyse symbolique H(s) et analyses natives"), P::Atelier, {});
+  ajouter("simulation.reseau", QStringLiteral("Analyseur de réseau (paramètres S, Touchstone)"), P::Atelier, {});
+  ajouter("simulation.alimentation", QStringLiteral("Alimentation : abaisseur, boucle, arbre des rails"), P::Atelier, {});
+  ajouter("simulation.mesures", QStringLiteral("Mesures réelles et autres moteurs"), P::Atelier, {});
+  // 0.34, lot L15 : microcontrôleurs, FPGA et logique
+  ajouter("programme.ouvrir", QStringLiteral("Programme du microcontrôleur (sources, compilation, écarts avec le schéma)"), P::Atelier, {});
+  ajouter("programme.cosimuler", QStringLiteral("Co-simuler le microcontrôleur, terminal série et mise au point"), P::Atelier, {});
+  ajouter("programme.organigramme", QStringLiteral("Modules de la galerie et organigramme"), P::Atelier, {});
+  ajouter("programme.hdl", QStringLiteral("Composant décrit en Verilog ou en VHDL"), P::Atelier, {});
+  ajouter("programme.machine", QStringLiteral("Machine à états (bascules, VHDL)"), P::Atelier, {});
+  ajouter("programme.robot", QStringLiteral("Robot sur une piste (programme éprouvé sans matériel)"), P::Atelier, {});
+  ajouter("programme.logique", QStringLiteral("Logique programmable (VHDL, GHDL, Yosys, GAL)"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
   ajouter("schema.alimentation.3v3", QStringLiteral("Alimentation +3V3"), P::Schema, {});
@@ -493,6 +508,19 @@ RegistreActions::RegistreActions() {
       {"conception.guidee", "Guidée…", "pcb", "gabarit, module et interfaces : blocs posés, reliés, placés, routés et vérifiés"},
       {"conception.circuitsTypes", "Circuits types…", "composants", "découplages, tirages et protections proposés, posés d’un clic"},
       {"composant.brochage", "Brochage…", "creer-composant", "symbole tiré d’un fichier BSDL ou du tableau de brochage d’une fiche"},
+      {"simulation.laboratoire", "Laboratoire…", "erc", "simulation continue : boutons, générateurs, LED et afficheurs pendant le calcul ; oscilloscope, multimètre"},
+      {"simulation.logique", "Logique…", "fil", "voies logiques, déclenchement, décodage I2C, SPI et CAN"},
+      {"simulation.symbolique", "H(s)…", "texte", "fonction de transfert en lettres, pôles, bruit, Fourier"},
+      {"simulation.reseau", "Réseau…", "piste", "paramètres S entre deux ports, Touchstone, abaque de Smith"},
+      {"simulation.alimentation", "Abaisseur…", "alimentation", "inductance, condensateurs, correcteur de type III vérifié par ngspice ; arbre des rails"},
+      {"simulation.mesures", "Mesures…", "rapport", "CSV d’oscilloscope et captures sigrok superposés à la simulation ; Xyce, Qucsator"},
+      {"programme.ouvrir", "Programme…", "texte", "sources Arduino, MicroPython ou C du projet, compilées ; écarts avec le schéma qui mènent à la broche"},
+      {"programme.cosimuler", "Co-simuler…", "erc", "le programme sur simavr, pas à pas avec le circuit ; terminal série, points d’arrêt, registres"},
+      {"programme.organigramme", "Organigramme…", "composants", "capteur de la galerie relié, blocs proposés, organigramme converti en croquis"},
+      {"programme.hdl", "HDL…", "creer-composant", "composant en Verilog ou en VHDL, co-simulé par Icarus, Verilator ou GHDL"},
+      {"programme.machine", "Machine à états…", "repetition-lineaire", "table de transitions, bascules aux équations réduites, VHDL simulé par GHDL"},
+      {"programme.robot", "Robot…", "piste", "robot à deux roues sur une piste en image : un tour sans matériel"},
+      {"programme.logique", "Logique…", "proprietes", "schéma logique en VHDL, table de vérité par GHDL, Yosys, JEDEC du GAL16V8"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},
       {"schema.etiquetteGlobale", "Étiquette globale", "etiquette", "relie les fils du même nom sur toutes les feuilles"},

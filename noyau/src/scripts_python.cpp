@@ -131,6 +131,26 @@ def courbe(nom, x, y, axe_x="", axe_y=""):
     return appeler("script.courbe", nom=nom, x=[float(v) for v in x], y=[float(v) for v in y], axeX=axe_x, axeY=axe_y)
 
 
+def echantillons(sonde):
+    """Instrument (14.5) : bloc suivant d'échantillons [(t, v), …] de la sonde ; liste vide quand il n'y en a plus."""
+    return [tuple(x) for x in appeler("instrument.echantillons", sonde=sonde)]
+
+
+def sondes():
+    """Instrument : sondes branchées."""
+    return appeler("instrument.sondes")
+
+
+def afficher(nom, valeur):
+    """Instrument : une mesure rendue à sa façade (« frequence », 1234.5)."""
+    return appeler("instrument.afficher", nom=nom, valeur=float(valeur))
+
+
+def facade(svg):
+    """Instrument : façade SVG déclarée (éléments nommés bouton:, calibre:, menu:, affichage:)."""
+    return appeler("instrument.facade", svg=svg)
+
+
 def signaler(message, code="PY-1", objet=None, x=0.0, y=0.0, erreur=True):
     """Contrôle écrit en Python : une violation rendue avec celles de la DRC."""
     return appeler("script.signaler", message=message, code=code, objet=objet, x=x, y=y, erreur=erreur)
@@ -313,6 +333,11 @@ ResultatScript executerScript(Projet& p, const std::string& code, const OptionsS
           rep["result"] = d2;
           return rep.dump();
         }
+        if (o.hote)
+          if (const auto v = o.hote(m, params)) {
+            rep["result"] = *v;
+            return rep.dump();
+          }
         // Conception visée par défaut : celle de l'atelier qui lance le script
         J qc = q;
         if (o.conception >= 0 && (!qc.contains("params") || (qc["params"].is_object() && !qc["params"].contains("conception")))) qc["params"]["conception"] = o.conception;

@@ -917,7 +917,7 @@ class VueSchema::OutilPose : public OutilBase {
     if (insertionRefusee) emit m_vue.message(QStringLiteral("Insertion impossible : le fil doit traverser le composant dans son axe."));
     // Sans Alt, un composant à deux broches lâché dans l'axe d'un fil : la bulle propose de l'y insérer, d'un clic
     else if (!inserer && d && d->broches.size() == 2 && !electrique())
-      if (const ConceptionElec* c = m_vue.conception()) {
+      if (m_vue.conception()) {
         bool surUnFil = false;
         if (const Feuille* f = m_vue.feuilleCourante())
           for (const auto& s : f->symboles)

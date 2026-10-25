@@ -4,7 +4,10 @@
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <condition_variable>
 #include <cstdlib>
+#include <cstring>
+#include <deque>
 #include <filesystem>
 #include <mutex>
 #include <thread>
@@ -17,6 +20,7 @@
 #include <fcntl.h>
 #include <poll.h>
 #include <signal.h>
+#include <spawn.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -36,6 +40,54 @@ void noter(const std::vector<std::string>& a) {
   const std::lock_guard<std::mutex> v(g_journal);
   g_lances.push_back(a);
 }
+#ifndef _WIN32
+// L'enfant est lancé par posix_spawn, sans copie de la mémoire du parent : un parent qui a réservé beaucoup de
+// mémoire (simulation continue de ngspice, grandes images) ne fait plus échouer le lancement, ce que fork faisait.
+// Entrée, sortie et erreurs sur les tubes donnés ; « fermer » : descripteurs du parent à ne pas transmettre.
+// Rend le pid, ou −1 avec la raison dans « raison ».
+#if defined(__APPLE__) || (defined(__GLIBC__) && (__GLIBC__ > 2 || (__GLIBC__ == 2 && __GLIBC_MINOR__ >= 29)))
+#define PROMETHEE_SPAWN_CHDIR 1
+#endif
+pid_t lancerEnfant(const std::string& chemin, std::vector<char*>& av, std::vector<char*>& envp, const std::string& dossier, int in, int out, int err,
+                   std::initializer_list<int> fermer, std::string* raison) {
+  posix_spawn_file_actions_t fa;
+  posix_spawn_file_actions_init(&fa);
+  posix_spawn_file_actions_adddup2(&fa, in, 0);
+  posix_spawn_file_actions_adddup2(&fa, out, 1);
+  posix_spawn_file_actions_adddup2(&fa, err, 2);
+  for (int f : fermer)
+    if (f > 2) posix_spawn_file_actions_addclose(&fa, f);
+#ifdef PROMETHEE_SPAWN_CHDIR
+  if (!dossier.empty()) posix_spawn_file_actions_addchdir_np(&fa, dossier.c_str());
+#endif
+  pid_t pid = -1;
+  int e = 0;
+#ifndef PROMETHEE_SPAWN_CHDIR
+  // Sans chdir dans posix_spawn : fork, comme avant
+  if (!dossier.empty()) {
+    pid = ::fork();
+    if (pid == 0) {
+      ::dup2(in, 0);
+      ::dup2(out, 1);
+      ::dup2(err, 2);
+      for (int f : fermer)
+        if (f > 2) ::close(f);
+      if (::chdir(dossier.c_str()) != 0) ::_exit(126);
+      ::execve(chemin.c_str(), av.data(), envp.data());
+      ::_exit(127);
+    }
+    e = pid < 0 ? errno : 0;
+  } else
+#endif
+    e = posix_spawn(&pid, chemin.c_str(), &fa, nullptr, av.data(), envp.data());
+  posix_spawn_file_actions_destroy(&fa);
+  if (e != 0) {
+    if (raison) *raison = std::string("processus impossible à créer (") + std::strerror(e) + ")";
+    return -1;
+  }
+  return pid;
+}
+#endif
 }  // namespace
 
 std::vector<std::vector<std::string>> programmesLances() {
@@ -243,21 +295,10 @@ ResultatProcessus executerProcessus(const std::vector<std::string>& argv, const 
     r.erreurs = "tubes impossibles à créer";
     return r;
   }
-  const std::string dossier = o.dossier;
-  const pid_t pid = ::fork();
+  const pid_t pid = lancerEnfant(chemin, av, envp, o.dossier, entree[0], sortie[1], erreur[1], {entree[0], entree[1], sortie[0], sortie[1], erreur[0], erreur[1]}, &r.erreurs);
   if (pid < 0) {
     for (int f : {entree[0], entree[1], sortie[0], sortie[1], erreur[0], erreur[1]}) ::close(f);
-    r.erreurs = "processus impossible à créer";
     return r;
-  }
-  if (pid == 0) {
-    ::dup2(entree[0], 0);
-    ::dup2(sortie[1], 1);
-    ::dup2(erreur[1], 2);
-    for (int f : {entree[0], entree[1], sortie[0], sortie[1], erreur[0], erreur[1]}) ::close(f);
-    if (!dossier.empty() && ::chdir(dossier.c_str()) != 0) ::_exit(126);
-    ::execve(chemin.c_str(), av.data(), envp.data());
-    ::_exit(127);
   }
   ::close(entree[0]);
   ::close(sortie[1]);
@@ -492,21 +533,10 @@ ResultatProcessus dialoguerProcessus(const std::vector<std::string>& argv, const
     r.erreurs = "tubes impossibles à créer";
     return r;
   }
-  const std::string dossier = o.dossier;
-  const pid_t pid = ::fork();
+  const pid_t pid = lancerEnfant(chemin, av, envp, o.dossier, entree[0], sortie[1], erreur[1], {entree[0], entree[1], sortie[0], sortie[1], erreur[0], erreur[1]}, &r.erreurs);
   if (pid < 0) {
     for (int f : {entree[0], entree[1], sortie[0], sortie[1], erreur[0], erreur[1]}) ::close(f);
-    r.erreurs = "processus impossible à créer";
     return r;
-  }
-  if (pid == 0) {
-    ::dup2(entree[0], 0);
-    ::dup2(sortie[1], 1);
-    ::dup2(erreur[1], 2);
-    for (int f : {entree[0], entree[1], sortie[0], sortie[1], erreur[0], erreur[1]}) ::close(f);
-    if (!dossier.empty() && ::chdir(dossier.c_str()) != 0) ::_exit(126);
-    ::execve(chemin.c_str(), av.data(), envp.data());
-    ::_exit(127);
   }
   ::close(entree[0]);
   ::close(sortie[1]);
@@ -583,6 +613,284 @@ ResultatProcessus dialoguerProcessus(const std::vector<std::string>& argv, const
     r.erreurs = "« " + argv[0] + " » n’a pas pu être lancé";
   }
   return r;
+}
+#endif
+
+// ---------- Programme lancé qui dialogue à la demande ----------
+struct ProcessusInteractif::Etat {
+  std::mutex verrou;
+  std::condition_variable arrivee;
+  std::deque<std::string> lignes;
+  std::string reste, erreurs;
+  bool sortieFermee = false;
+  std::thread lecteur, lecteurErreurs;
+#ifdef _WIN32
+  HANDLE entree = nullptr, sortie = nullptr, erreur = nullptr, processus = nullptr, fil = nullptr;
+#else
+  int entree = -1, sortie = -1, erreur = -1;
+  pid_t pid = -1;
+#endif
+  bool lance = false;
+  int code = -1;
+  void recevoir(const char* t, std::size_t n) {
+    std::lock_guard<std::mutex> g(verrou);
+    reste.append(t, n);
+    std::size_t i;
+    while ((i = reste.find('\n')) != std::string::npos) {
+      std::string l = reste.substr(0, i);
+      if (!l.empty() && l.back() == '\r') l.pop_back();
+      lignes.push_back(std::move(l));
+      reste.erase(0, i + 1);
+    }
+    arrivee.notify_all();
+  }
+  void fin() {
+    std::lock_guard<std::mutex> g(verrou);
+    if (!reste.empty()) lignes.push_back(reste), reste.clear();
+    sortieFermee = true;
+    arrivee.notify_all();
+  }
+};
+
+ProcessusInteractif::ProcessusInteractif() : m_etat(std::make_shared<Etat>()) {}
+ProcessusInteractif::~ProcessusInteractif() { arreter(); }
+
+std::optional<std::string> ProcessusInteractif::lireLigne(double delai) {
+  std::unique_lock<std::mutex> g(m_etat->verrou);
+  m_etat->arrivee.wait_for(g, std::chrono::duration<double>(std::max(0.0, delai)), [&] { return !m_etat->lignes.empty() || m_etat->sortieFermee; });
+  if (m_etat->lignes.empty()) return std::nullopt;
+  std::string l = std::move(m_etat->lignes.front());
+  m_etat->lignes.pop_front();
+  return l;
+}
+
+std::string ProcessusInteractif::erreurs() const {
+  std::lock_guard<std::mutex> g(m_etat->verrou);
+  return m_etat->erreurs;
+}
+
+#ifdef _WIN32
+bool ProcessusInteractif::demarrer(const std::vector<std::string>& argv, const OptionsProcessus& o, std::string* erreur) {
+  arreter();
+  m_etat = std::make_shared<Etat>();
+  auto refuser = [&](const std::string& e) {
+    if (erreur) *erreur = e;
+    return false;
+  };
+  if (argv.empty()) return refuser("commande vide");
+  noter(argv);
+  const std::string chemin = programmeDuPoste(argv[0]);
+  if (chemin.empty()) return refuser("« " + argv[0] + " » est introuvable sur ce poste");
+  SECURITY_ATTRIBUTES sa{sizeof(SECURITY_ATTRIBUTES), nullptr, TRUE};
+  HANDLE entreeL = nullptr, entreeE = nullptr, sortieL = nullptr, sortieE = nullptr, erreurL = nullptr, erreurE = nullptr;
+  if (!CreatePipe(&entreeL, &entreeE, &sa, 0) || !CreatePipe(&sortieL, &sortieE, &sa, 0) || !CreatePipe(&erreurL, &erreurE, &sa, 0)) return refuser("tubes impossibles à créer");
+  SetHandleInformation(entreeE, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(sortieL, HANDLE_FLAG_INHERIT, 0);
+  SetHandleInformation(erreurL, HANDLE_FLAG_INHERIT, 0);
+  std::wstring ligne = citer(large(chemin));
+  for (std::size_t i = 1; i < argv.size(); ++i) ligne += L" " + citer(large(argv[i]));
+  for (const auto& [k, v] : o.environnement) SetEnvironmentVariableW(large(k).c_str(), large(v).c_str());
+  STARTUPINFOW si{};
+  si.cb = sizeof si;
+  si.dwFlags = STARTF_USESTDHANDLES;
+  si.hStdInput = entreeL;
+  si.hStdOutput = sortieE;
+  si.hStdError = erreurE;
+  PROCESS_INFORMATION pi{};
+  const std::wstring dossier = large(o.dossier);
+  const BOOL ok = CreateProcessW(nullptr, ligne.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW, nullptr, dossier.empty() ? nullptr : dossier.c_str(), &si, &pi);
+  CloseHandle(entreeL);
+  CloseHandle(sortieE);
+  CloseHandle(erreurE);
+  if (!ok) {
+    CloseHandle(entreeE);
+    CloseHandle(sortieL);
+    CloseHandle(erreurL);
+    return refuser("« " + argv[0] + " » n’a pas pu être lancé");
+  }
+  Etat& e = *m_etat;
+  e.entree = entreeE;
+  e.sortie = sortieL;
+  e.erreur = erreurL;
+  e.processus = pi.hProcess;
+  e.fil = pi.hThread;
+  e.lance = true;
+  e.lecteur = std::thread([&e] {
+    char t[8192];
+    DWORD lu = 0;
+    while (ReadFile(e.sortie, t, sizeof t, &lu, nullptr) && lu > 0) e.recevoir(t, lu);
+    e.fin();
+  });
+  e.lecteurErreurs = std::thread([&e] {
+    char t[4096];
+    DWORD lu = 0;
+    while (ReadFile(e.erreur, t, sizeof t, &lu, nullptr) && lu > 0) {
+      std::lock_guard<std::mutex> g(e.verrou);
+      e.erreurs.append(t, lu);
+    }
+  });
+  return true;
+}
+
+bool ProcessusInteractif::enCours() const { return m_etat->lance && m_etat->processus && WaitForSingleObject(m_etat->processus, 0) == WAIT_TIMEOUT; }
+
+bool ProcessusInteractif::ecrire(const std::string& texte) {
+  if (!m_etat->entree) return false;
+  DWORD ecrit = 0;
+  std::size_t fait = 0;
+  while (fait < texte.size()) {
+    if (!WriteFile(m_etat->entree, texte.data() + fait, static_cast<DWORD>(std::min<std::size_t>(texte.size() - fait, 65536)), &ecrit, nullptr) || ecrit == 0) return false;
+    fait += ecrit;
+  }
+  return true;
+}
+
+void ProcessusInteractif::fermerEntree() {
+  if (m_etat->entree) CloseHandle(m_etat->entree), m_etat->entree = nullptr;
+}
+
+int ProcessusInteractif::arreter() {
+  Etat& e = *m_etat;
+  if (!e.lance) return e.code;
+  fermerEntree();
+  if (WaitForSingleObject(e.processus, 300) == WAIT_TIMEOUT) TerminateProcess(e.processus, 1);
+  WaitForSingleObject(e.processus, INFINITE);
+  DWORD code = 0;
+  GetExitCodeProcess(e.processus, &code);
+  e.code = static_cast<int>(code);
+  if (e.lecteur.joinable()) e.lecteur.join();
+  if (e.lecteurErreurs.joinable()) e.lecteurErreurs.join();
+  for (HANDLE* h : {&e.sortie, &e.erreur, &e.processus, &e.fil})
+    if (*h) CloseHandle(*h), *h = nullptr;
+  e.lance = false;
+  return e.code;
+}
+#else
+bool ProcessusInteractif::demarrer(const std::vector<std::string>& argv, const OptionsProcessus& o, std::string* erreur) {
+  arreter();
+  m_etat = std::make_shared<Etat>();
+  auto refuser = [&](const std::string& e) {
+    if (erreur) *erreur = e;
+    return false;
+  };
+  if (argv.empty()) return refuser("commande vide");
+  noter(argv);
+  const std::string chemin = programmeDuPoste(argv[0]);
+  if (chemin.empty()) return refuser("« " + argv[0] + " » est introuvable sur ce poste");
+  static const bool sansSigpipe = [] {
+    ::signal(SIGPIPE, SIG_IGN);
+    return true;
+  }();
+  (void)sansSigpipe;
+  std::map<std::string, std::string> env;
+  for (char** e = environ; e && *e; ++e) {
+    const std::string s = *e;
+    if (const std::size_t i = s.find('='); i != std::string::npos) env[s.substr(0, i)] = s.substr(i + 1);
+  }
+  for (const auto& [k, v] : o.environnement) env[k] = v;
+  std::vector<std::string> textesEnv, args(argv);
+  for (const auto& [k, v] : env) textesEnv.push_back(k + "=" + v);
+  std::vector<char*> envp, av;
+  for (auto& s : textesEnv) envp.push_back(s.data());
+  envp.push_back(nullptr);
+  for (auto& s : args) av.push_back(s.data());
+  av.push_back(nullptr);
+  int entree[2] = {-1, -1}, sortie[2] = {-1, -1}, err[2] = {-1, -1};
+  if (::pipe(entree) != 0 || ::pipe(sortie) != 0 || ::pipe(err) != 0) {
+    for (int f : {entree[0], entree[1], sortie[0], sortie[1], err[0], err[1]})
+      if (f >= 0) ::close(f);
+    return refuser("tubes impossibles à créer");
+  }
+  std::string raison;
+  const pid_t pid = lancerEnfant(chemin, av, envp, o.dossier, entree[0], sortie[1], err[1], {entree[0], entree[1], sortie[0], sortie[1], err[0], err[1]}, &raison);
+  if (pid < 0) {
+    for (int f : {entree[0], entree[1], sortie[0], sortie[1], err[0], err[1]}) ::close(f);
+    return refuser(raison);
+  }
+  ::close(entree[0]);
+  ::close(sortie[1]);
+  ::close(err[1]);
+  Etat& e = *m_etat;
+  e.entree = entree[1];
+  e.sortie = sortie[0];
+  e.erreur = err[0];
+  e.pid = pid;
+  e.lance = true;
+  e.lecteur = std::thread([&e] {
+    char t[8192];
+    for (;;) {
+      const ssize_t k = ::read(e.sortie, t, sizeof t);
+      if (k > 0) e.recevoir(t, static_cast<std::size_t>(k));
+      else if (k < 0 && errno == EINTR) continue;
+      else break;
+    }
+    e.fin();
+  });
+  e.lecteurErreurs = std::thread([&e] {
+    char t[4096];
+    for (;;) {
+      const ssize_t k = ::read(e.erreur, t, sizeof t);
+      if (k > 0) {
+        std::lock_guard<std::mutex> g(e.verrou);
+        e.erreurs.append(t, static_cast<std::size_t>(k));
+      } else if (k < 0 && errno == EINTR) continue;
+      else break;
+    }
+  });
+  return true;
+}
+
+bool ProcessusInteractif::enCours() const {
+  if (!m_etat->lance || m_etat->pid <= 0) return false;
+  int statut = 0;
+  const pid_t r = ::waitpid(m_etat->pid, &statut, WNOHANG);
+  if (r == 0) return true;
+  if (r == m_etat->pid) {
+    m_etat->code = WIFEXITED(statut) ? WEXITSTATUS(statut) : -1;
+    m_etat->pid = -1;
+  }
+  return false;
+}
+
+bool ProcessusInteractif::ecrire(const std::string& texte) {
+  if (m_etat->entree < 0) return false;
+  std::size_t fait = 0;
+  while (fait < texte.size()) {
+    const ssize_t k = ::write(m_etat->entree, texte.data() + fait, std::min<std::size_t>(texte.size() - fait, 65536));
+    if (k > 0) fait += static_cast<std::size_t>(k);
+    else if (k < 0 && errno == EINTR) continue;
+    else return false;
+  }
+  return true;
+}
+
+void ProcessusInteractif::fermerEntree() {
+  if (m_etat->entree >= 0) ::close(m_etat->entree), m_etat->entree = -1;
+}
+
+int ProcessusInteractif::arreter() {
+  Etat& e = *m_etat;
+  if (!e.lance) return e.code;
+  fermerEntree();
+  if (e.pid > 0) {
+    int statut = 0;
+    pid_t r = 0;
+    for (int i = 0; i < 30 && (r = ::waitpid(e.pid, &statut, WNOHANG)) == 0; ++i) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+    if (r == 0) {
+      ::kill(e.pid, SIGKILL);
+      while (::waitpid(e.pid, &statut, 0) < 0 && errno == EINTR) {
+      }
+      e.code = -1;
+    } else if (r == e.pid)
+      e.code = WIFEXITED(statut) ? WEXITSTATUS(statut) : -1;
+    e.pid = -1;
+  }
+  if (e.lecteur.joinable()) e.lecteur.join();
+  if (e.lecteurErreurs.joinable()) e.lecteurErreurs.join();
+  for (int* f : {&e.sortie, &e.erreur})
+    if (*f >= 0) ::close(*f), *f = -1;
+  e.lance = false;
+  return e.code;
 }
 #endif
 

@@ -593,6 +593,61 @@ std::vector<DefSymbole> construire() {
     d.posValeur = ptMm(0, 6.35);
     v.push_back(d);
   }
+  // ----- 0.34 (14.2) : logique et affichage simulés en continu (modèles XSPICE et sources comportementales) -----
+  {
+    DefSymbole d = S("Compteur_4bits", "Compteur binaire 4 bits", "Logique", "U", "",
+                     "Compteur binaire 4 bits sur front montant (1 horloge, 2 remise à zéro active haute, 3 à 6 Q0 à Q3, 7 VCC, 8 GND) : simulation XSPICE, logique 5 V",
+                     "compteur binaire 74hc393 cd4520 xspice");
+    d.genre = GenreComposant::HorsNomenclature;
+    d.broches = {B("1", "CLK", T::Entree, -7.62, -3.81, 0, 3.81), B("2", "RAZ", T::Entree, -7.62, 1.27, 0, 3.81), B("3", "Q0", T::Sortie, 7.62, -3.81, 2, 3.81),
+                 B("4", "Q1", T::Sortie, 7.62, -1.27, 2, 3.81),  B("5", "Q2", T::Sortie, 7.62, 1.27, 2, 3.81),  B("6", "Q3", T::Sortie, 7.62, 3.81, 2, 3.81),
+                 B("7", "VCC", T::AlimEntree, 0, -10.16, 1, 3.81), B("8", "GND", T::AlimEntree, 0, 10.16, 3, 3.81)};
+    d.traces = {Rect(-3.81, -6.35, 3.81, 6.35, true)};
+    d.posReference = ptMm(5.08, -7.62);
+    d.posValeur = ptMm(5.08, 7.62);
+    v.push_back(d);
+  }
+  {
+    DefSymbole d = S("Decodeur_7seg", "Décodeur BCD sept segments", "Logique", "U", "",
+                     "Décodeur BCD vers sept segments (1 à 4 entrées A à D, 5 à 11 sorties a à g, 12 VCC, 13 GND), sorties par 220 Ω pour un afficheur à cathode commune",
+                     "decodeur bcd sept segments cd4511 74hc4511");
+    d.genre = GenreComposant::HorsNomenclature;
+    const char* entrees[] = {"A", "B", "C", "D"};
+    for (int i = 0; i < 4; ++i) d.broches.push_back(B(std::to_string(i + 1).c_str(), entrees[i], T::Entree, -7.62, -3.81 + 2.54 * i, 0, 3.81));
+    const char* segs[] = {"a", "b", "c", "d", "e", "f", "g"};
+    for (int i = 0; i < 7; ++i) d.broches.push_back(B(std::to_string(i + 5).c_str(), segs[i], T::Sortie, 7.62, -7.62 + 2.54 * i, 2, 3.81));
+    d.broches.push_back(B("12", "VCC", T::AlimEntree, 0, -13.97, 1, 3.81));
+    d.broches.push_back(B("13", "GND", T::AlimEntree, 0, 13.97, 3, 3.81));
+    d.traces = {Rect(-3.81, -10.16, 3.81, 10.16, true)};
+    d.posReference = ptMm(5.08, -11.43);
+    d.posValeur = ptMm(5.08, 11.43);
+    v.push_back(d);
+  }
+  {
+    DefSymbole d = S("Afficheur_7seg", "Afficheur sept segments", "Optoélectronique", "DS", "",
+                     "Afficheur à sept segments à cathode commune (1 à 7 segments a à g, 8 cathode commune) : une LED par segment en simulation",
+                     "afficheur sept segments led display");
+    d.genre = GenreComposant::HorsNomenclature;
+    const char* segs[] = {"a", "b", "c", "d", "e", "f", "g"};
+    for (int i = 0; i < 7; ++i) d.broches.push_back(B(std::to_string(i + 1).c_str(), segs[i], T::Passive, -7.62, -7.62 + 2.54 * i, 0, 3.81));
+    d.broches.push_back(B("8", "COM", T::Passive, 1.27, 13.97, 3, 3.81));
+    d.traces = {Rect(-3.81, -10.16, 6.35, 10.16), Ligne({{-0.762, -6.35}, {3.81, -6.35}}), Ligne({{3.81, -6.35}, {3.81, 0}}), Ligne({{3.81, 0}, {3.81, 6.35}}),
+                Ligne({{-0.762, 6.35}, {3.81, 6.35}}), Ligne({{-0.762, 0}, {-0.762, 6.35}}), Ligne({{-0.762, -6.35}, {-0.762, 0}}), Ligne({{-0.762, 0}, {3.81, 0}})};
+    d.posReference = ptMm(1.27, -11.43);
+    d.posValeur = ptMm(1.27, 11.43);
+    v.push_back(d);
+  }
+  {
+    DefSymbole d = S("Instrument", "Instrument de mesure", "Simulation", "INS", "",
+                     "Instrument posé au schéma (1 entrée +, 2 entrée −) : sa valeur dit lequel (« oscilloscope », « multimètre », « fréquencemètre », « wattmètre », « compteur ») ; un champ Instrument.Script donne un instrument écrit en Python",
+                     "instrument sonde oscilloscope multimetre frequencemetre");
+    d.genre = GenreComposant::HorsNomenclature;
+    d.broches = {B("1", "+", T::Entree, -7.62, -1.27, 0, 3.81), B("2", "-", T::Entree, -7.62, 1.27, 0, 3.81)};
+    d.traces = {Rect(-3.81, -3.81, 5.08, 3.81, true), Rond(0.635, 0, 2.032)};
+    d.posReference = ptMm(0.635, -5.08);
+    d.posValeur = ptMm(0.635, 5.08);
+    v.push_back(d);
+  }
   {
     DefSymbole s = S("Drapeau_alim", "Drapeau d’alimentation", "Alimentations", "#FLG", "", "Déclare le réseau alimenté (vérification électrique)", "pwr_flag drapeau");
     s.drapeau = true;

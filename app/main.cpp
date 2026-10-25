@@ -26,6 +26,7 @@
 #include <cstdio>
 
 #include "promethee/csv.hpp"
+#include "promethee/micro_simulation.hpp"
 #include "Accueil.hpp"
 #include "ChienDeGarde.hpp"
 #include "Document.hpp"
@@ -129,6 +130,17 @@ int main(int argc, char** argv) {
       std::printf("%s\nidentifiant %s\n", prom::ligneVersion().c_str(), prom::infosVersion().identifiant);
       std::fflush(stdout);
       return 0;
+    }
+  // --robot programme.elf [--piste p.pgm] [--attendre texte] [--duree s] [--frequence Hz] (15.8) : robot simulé sans
+  // écran ; 0 quand le texte attendu arrive sur la liaison série
+  for (int i = 1; i < argc; ++i)
+    if (std::strcmp(argv[i], "--robot") == 0) {
+      std::vector<std::string> a(argv + 1, argv + argc);
+      std::string sortie;
+      const int code = prom::ecad::commandeRobot(a, &sortie);
+      std::fputs(sortie.c_str(), stdout);
+      std::fflush(stdout);
+      return code;
     }
   // Mode portable (9.11) : avant le journal, pour que rien ne s'écrive dans le profil
   portable::initialiser(argc > 0 ? argv[0] : nullptr);

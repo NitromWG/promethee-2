@@ -1556,6 +1556,85 @@ VueSchema::CleCache VueSchema::cleCache() const {
   return k;
 }
 
+// Retour visuel de la simulation continue (14.3), dessiné par-dessus l'image gardée
+void VueSchema::setRetourVisuel(const RetourVisuel& r, double tensionMax) {
+  m_retour = r;
+  m_retourVmax = tensionMax;
+  m_retourActif = true;
+  if (!m_animationRetour) {
+    m_animationRetour = new QTimer(this);
+    m_animationRetour->setInterval(40);
+    connect(m_animationRetour, &QTimer::timeout, this, [this] {
+      m_phaseRetour += 0.04;
+      update();
+    });
+  }
+  m_animationRetour->start();
+  update();
+}
+
+void VueSchema::effacerRetourVisuel() {
+  m_retourActif = false;
+  m_retour = {};
+  if (m_animationRetour) m_animationRetour->stop();
+  update();
+}
+
+void VueSchema::dessinerRetourVisuel(QPainter& g) {
+  const Feuille* f = feuilleCourante();
+  const ConceptionElec* c = conception();
+  if (!f || !c) return;
+  std::map<std::string, const CourantFil*> parFil;
+  for (const auto& x : m_retour.fils) parFil[x.fil] = &x;
+  g.save();
+  for (const auto& w : f->fils) {
+    const auto it = parFil.find(w.uuid);
+    if (it == parFil.end()) continue;
+    const CourantFil& x = *it->second;
+    const auto teinte = couleurTension(x.tension, m_retourVmax);
+    const QPointF a = ecran(w.a), b = ecran(w.b);
+    g.setPen(QPen(QColor(teinte[0], teinte[1], teinte[2], 170), std::max(2.0, 0.45 * m_echelle), Qt::SolidLine, Qt::RoundCap));
+    g.drawLine(a, b);
+    // Points mobiles : un tous les 2,5 mm, d'autant plus vifs que le courant est fort
+    if (x.courant < 1e-5 || x.sens == 0) continue;
+    const double longueur = std::hypot(b.x() - a.x(), b.y() - a.y());
+    if (longueur < 1) continue;
+    const double espace = std::max(6.0, 2.5 * m_echelle);
+    const double vitesse = std::clamp(1 + std::log10(x.courant / 1e-5), 0.5, 8.0) * espace;
+    double decalage = std::fmod(m_phaseRetour * vitesse, espace);
+    g.setPen(Qt::NoPen);
+    g.setBrush(QColor(0xFF, 0xD5, 0x4F));
+    const double rayon = std::max(1.5, 0.35 * m_echelle);
+    for (double d = decalage; d < longueur; d += espace) {
+      const double u = x.sens > 0 ? d / longueur : 1 - d / longueur;
+      g.drawEllipse(QPointF(a.x() + (b.x() - a.x()) * u, a.y() + (b.y() - a.y()) * u), rayon, rayon);
+    }
+  }
+  // Fumées : nuage gris au-dessus du composant, la grandeur dépassée écrite en rouge
+  for (const auto& fu : m_retour.fumees)
+    for (const auto& s : f->symboles) {
+      if (s.composant != fu.composant) continue;
+      const DefSymbole* d = c->symbole(s.symbole);
+      if (!d) continue;
+      const Boite bx = boiteSymbole(s, *d);
+      const QRectF r(ecran({bx.x0, bx.y0}), ecran({bx.x1, bx.y1}));
+      g.setPen(Qt::NoPen);
+      for (int i = 0; i < 4; ++i) {
+        const double t = std::fmod(m_phaseRetour * 0.8 + i * 0.25, 1.0);
+        g.setBrush(QColor(110, 110, 110, static_cast<int>(150 * (1 - t))));
+        const double rr = (0.4 + 0.8 * t) * std::max(6.0, r.width() / 3);
+        g.drawEllipse(QPointF(r.center().x() + (i % 2 ? 1 : -1) * rr * 0.4, r.top() - rr * (0.5 + 1.5 * t)), rr, rr);
+      }
+      QFont fo = font();
+      fo.setPixelSize(12);
+      fo.setBold(true);
+      g.setFont(fo);
+      g.setPen(QColor(0xB3, 0x26, 0x1E));
+      g.drawText(QPointF(r.left(), r.bottom() + 16), QString::fromStdString(fu.message));
+    }
+  g.restore();
+}
+
 // Le dessin fixe (feuille, fils, symboles, textes, sélection, surlignage, marques) vient de l'image gardée tant que
 // rien ne l'a changé ; le survol, l'outil armé, le menu à marques et le liseré sont dessinés par-dessus (2.4, A10)
 void VueSchema::paintEvent(QPaintEvent*) {
@@ -1573,6 +1652,7 @@ void VueSchema::paintEvent(QPaintEvent*) {
   QPainter g(this);
   g.drawPixmap(0, 0, m_cache);
   g.setRenderHint(QPainter::Antialiasing);
+  if (m_retourActif && !m_impression) dessinerRetourVisuel(g);
   if (!m_impression) {
     dessinerSurvol(g);
     m_outils.actif()->dessiner(g);

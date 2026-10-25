@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <functional>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -36,6 +37,9 @@ struct OptionsScript {
   const std::atomic<bool>* arret = nullptr;
   std::string nom = "script";       // nom du fichier dans les messages
   int conception = -1;              // conception visée par les requêtes qui n'en nomment pas (−1 : la première)
+  // Hôte du script (14.5, instruments) : il répond aux méthodes qu'il connaît (« instrument.echantillons »…) avant
+  // l'API du projet ; rien rendu : la méthode passe à l'API
+  std::function<std::optional<nlohmann::ordered_json>(const std::string& methode, const nlohmann::ordered_json& params)> hote;
 };
 
 struct ViolationScript {

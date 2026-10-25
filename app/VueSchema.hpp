@@ -24,6 +24,7 @@
 #include "OutilVue.hpp"
 #include "promethee/electrique.hpp"
 #include "promethee/electronique.hpp"
+#include "promethee/simulation_continue.hpp"
 
 class AppuiLong;
 class CadreVue;
@@ -332,6 +333,14 @@ class VueSchema : public QWidget {
   void proposition(const QString& html, std::function<void()> faire);
   void circuitDemande(const QString& composant);  // « Montrer sur le circuit » (menu contextuel)
 
+ public:
+  // Retour visuel de la simulation (0.34, 14.3) : chaque fil prend la couleur de sa tension, des points mobiles y
+  // suivent le courant, un composant hors de ses limites fume avec la grandeur dépassée ; rien n'est caché
+  void setRetourVisuel(const prom::ecad::RetourVisuel& r, double tensionMax);
+  void effacerRetourVisuel();
+  bool retourVisuelActif() const { return m_retourActif; }
+  const prom::ecad::RetourVisuel& retourVisuel() const { return m_retour; }
+  double phaseRetour() const { return m_phaseRetour; }
  protected:
   void paintEvent(QPaintEvent*) override;
   void mousePressEvent(QMouseEvent*) override;
@@ -391,6 +400,11 @@ class VueSchema : public QWidget {
   QPointF m_origine{20, 20};
 
  private:
+  void dessinerRetourVisuel(class QPainter& g);
+  prom::ecad::RetourVisuel m_retour;
+  double m_retourVmax = 0, m_phaseRetour = 0;
+  bool m_retourActif = false;
+  class QTimer* m_animationRetour = nullptr;
   class OutilBase;
   class OutilSelection;
   class OutilPose;

@@ -71,6 +71,18 @@ struct OptionsSimulation {
   std::vector<LiaisonCoupee> liaisons;                // bouclage des réseaux coupés de la partie
   bool autoriserControle = false;                     // bloc .control des directives permis (jamais « shell »)
   std::vector<ParametreGlobal> parametres;            // paramètres du projet, repris de son classeur
+  // 0.34 (14.2, 14.3) : simulation continue — boutons et interrupteurs commandés pendant le calcul, sources de
+  // tension « externe » lues à chaque pas (générateurs) ; vecteurs gardés en plus des tensions (courants des
+  // composants : « @dd1[id] », « vbt1#branch »)
+  bool continu = false;
+  std::vector<std::string> sauvegardes;
+  // 0.34 (14.11) : nœud propre à une broche (composant UUID, broche) et éléments ajoutés à la netlist (cellules des
+  // pistes routées entre ce nœud et celui du réseau)
+  std::map<std::pair<std::string, std::string>, std::string> noeudsBroches;
+  std::vector<std::string> elementsEnPlus;
+  // 0.34 (15.4, 15.7) : composants co-simulés pendant une simulation continue (repère → « micro » ou « hdl ») :
+  // leurs broches reliées deviennent des sources externes tenues par un participant de la session
+  std::map<std::string, std::string> cosimulation;
   friend bool operator==(const OptionsSimulation&, const OptionsSimulation&) = default;
 };
 
@@ -92,6 +104,13 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a);
 NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const OptionsSimulation& o);
 // Nœud SPICE d'un réseau (« v(n_sortie) ») ; vide s'il n'est pas dans la netlist
 std::string vecteurTension(const NetlistSpice& n, const std::string& reseau);
+// Simulation continue (14.2) : source de commande d'un bouton ou d'un interrupteur (« vsw1_c » : 1 fermé, 0 ouvert),
+// source externe d'une source de tension réglée « externe » (« vvg1 »)
+std::string sourceCommande(const std::string& reference);
+std::string sourceExterne(const std::string& reference);
+// Co-simulation (15.4, 15.7) : sources d'une broche d'un composant co-simulé, « d » niveau de la sortie, « c »
+// validation de la sortie (1 : sortie, 0 : entrée), « p » tirage (« vu1_19d »)
+std::string sourceBrocheCosimulee(const std::string& reference, const std::string& numero, char genre);
 // Modèles fournis (555, LED, 1N4148, BC547, amplificateur opérationnel, régulateur) : texte SPICE
 const std::map<std::string, std::string>& modelesFournis();
 // Modèle d'un autre simulateur ramené à ce que lit ngspice (11.5) : IF(c, a, b) en (c ? a : b), LIMIT(x, a, b) en

@@ -94,12 +94,70 @@ Ro o1 vo 0.1
 )";
 }  // namespace
 
+// Compteur binaire 4 bits (14.2) : quatre bascules T de XSPICE en cascade, horloge et remise à zéro par des ponts
+// analogique-numérique, sorties par des ponts numérique-analogique en logique 5 V
+const char* const MODELE_COMPTEUR4 = R"(.subckt COMPTEUR4 clk raz q0 q1 q2 q3 vcc gnd
+a_in [clk raz] [d_clk d_raz] pont_entree_c4
+a_un d_un un_c4
+a0 d_un d_clk null d_raz d_q0 d_nq0 bascule_t_c4
+a1 d_un d_nq0 null d_raz d_q1 d_nq1 bascule_t_c4
+a2 d_un d_nq1 null d_raz d_q2 d_nq2 bascule_t_c4
+a3 d_un d_nq2 null d_raz d_q3 d_nq3 bascule_t_c4
+a_out [d_q0 d_q1 d_q2 d_q3] [q0 q1 q2 q3] pont_sortie_c4
+r_vcc vcc gnd 1meg
+.model pont_entree_c4 adc_bridge(in_low=1.5 in_high=3.5)
+.model pont_sortie_c4 dac_bridge(out_low=0 out_high=5 out_undef=2.5 t_rise=1n t_fall=1n)
+.model bascule_t_c4 d_tff(clk_delay=10n set_delay=10n reset_delay=10n)
+.model un_c4 d_pullup
+.ends COMPTEUR4
+)";
+namespace {
+// Décodeur BCD vers sept segments (14.2) : sources comportementales, somme de produits d'entrées seuillées en douceur
+// (aucun saut de dérivée), sorties par 220 Ω
+std::string decodeur7() {
+  static const char* segments[7] = {"0,2,3,5,6,7,8,9", "0,1,2,3,4,7,8,9", "0,1,3,4,5,6,7,8,9", "0,2,3,5,6,8,9", "0,2,6,8", "0,4,5,6,8,9", "2,3,4,5,6,8,9"};
+  static const char* noms[7] = {"a", "b", "c", "d", "e", "f", "g"};
+  std::string t = ".subckt DECODEUR7 ea eb ec ed sa sb sc sd se sf sg vcc gnd\n";
+  const char* entrees[4] = {"ea", "eb", "ec", "ed"};
+  for (int i = 0; i < 4; ++i)
+    t += std::string("b_x") + std::to_string(i) + " x" + std::to_string(i) + " gnd v = (1 + tanh(40 * (v(" + entrees[i] + ", gnd) - v(vcc, gnd) / 2))) / 2\n";
+  for (int s = 0; s < 7; ++s) {
+    std::string e;
+    std::string liste = segments[s];
+    std::size_t p = 0;
+    while (p <= liste.size()) {
+      const std::size_t q = liste.find(',', p);
+      const int k = std::stoi(liste.substr(p, q == std::string::npos ? std::string::npos : q - p));
+      std::string terme;
+      for (int i = 0; i < 4; ++i) terme += std::string(terme.empty() ? "" : " * ") + (((k >> i) & 1) ? "v(x" + std::to_string(i) + ", gnd)" : "(1 - v(x" + std::to_string(i) + ", gnd))");
+      e += (e.empty() ? "" : " + ") + terme;
+      if (q == std::string::npos) break;
+      p = q + 1;
+    }
+    t += std::string("b_") + noms[s] + " i" + noms[s] + " gnd v = v(vcc, gnd) * (" + e + ")\n";
+    t += std::string("r_") + noms[s] + " i" + noms[s] + " s" + noms[s] + " 220\n";
+  }
+  for (int i = 0; i < 4; ++i) t += std::string("r_e") + std::to_string(i) + " " + entrees[i] + " gnd 1meg\n";
+  t += ".ends DECODEUR7\n";
+  return t;
+}
+const std::string MODELE_DECODEUR7 = decodeur7();
+}  // namespace
+
 const std::map<std::string, std::string>& modelesFournis() {
   static const std::map<std::string, std::string> m = {
       {"NE555", MODELE_555},
       {"AOP", MODELE_AOP},
       {"REGULATEUR", MODELE_REGULATEUR},
       {"DLED", ".model DLED D(IS=1e-22 N=1.5 RS=2 BV=5 IBV=10u CJO=10p)\n"},
+      {"COMPTEUR4", MODELE_COMPTEUR4},
+      {"DECODEUR7", MODELE_DECODEUR7},
+      {"SWCOMMANDE", ".model SWCOMMANDE sw(vt=0.5 vh=0.2 ron=0.01 roff=1e9)\n"},
+      // Broche d'un microcontrôleur co-simulé (15.4) : sortie de 25 Ω, tirage de 35 kΩ
+      {"SWBROCHE", ".model SWBROCHE sw(vt=0.5 vh=0.2 ron=25 roff=1e10)\n"},
+      {"SWTIRAGE", ".model SWTIRAGE sw(vt=0.5 vh=0.2 ron=35k roff=1e10)\n"},
+      {"MOTEURCC", ".subckt MOTEURCC p n w params: r=2 l=1m ke=0.01 kt=0.01 j=1e-5 b=1e-6 tl=0\nr_a p a {r}\nl_a a c {l}\nv_i c d 0\ne_fcem d n w 0 {ke}\n"
+                   "f_couple 0 w v_i {kt}\nc_j w 0 {j}\nr_b w 0 {1/b}\ni_tl w 0 dc {tl}\n.ends MOTEURCC\n"},
       {"D1N4148", ".model D1N4148 D(IS=2.52n RS=0.568 N=1.752 CJO=4p M=0.4 TT=20n BV=100 IBV=100u)\n"},
       {"DZENER", ".model DZENER D(IS=1e-14 RS=5 BV=5.1 IBV=5m)\n"},
       {"DSCHOTTKY", ".model DSCHOTTKY D(IS=1e-5 RS=0.05 N=1.05 CJO=100p BV=40)\n"},
@@ -415,6 +473,7 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
   // Une broche sans liaison reçoit un nœud propre (elle ne touche rien)
   int libres = 0;
   auto noeudBroche = [&](const ComposantElec& x, const std::string& broche) {
+    if (const auto it = o.noeudsBroches.find({x.uuid, broche}); it != o.noeudsBroches.end()) return it->second;
     const std::string r = k.nom(x.uuid, broche);
     return r.empty() ? "nc_" + std::to_string(++libres) : noeud(r);
   };
@@ -452,6 +511,41 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
     if (const auto it = x.champs.find("Sim.Exclure"); it != x.champs.end() && (it->second == "1" || minuscules(it->second) == "oui")) {
       n.avertissements.push_back(ref + " écarté de la simulation (champ Sim.Exclure)");
       continue;
+    }
+    // Co-simulation (15.4, 15.7) : microcontrôleur émulé ou composant décrit en HDL. Chaque broche reliée est tenue
+    // par des sources externes que le participant règle à chaque pas : niveau et validation de la sortie, tirage
+    // (microcontrôleur) ; sortie de 50 Ω ou entrée à haute impédance (HDL)
+    if (const auto ic = o.cosimulation.find(ref); o.continu && ic != o.cosimulation.end()) {
+      if (const DefSymbole* d = c.symbole(x.symbole)) {
+        const bool micro = ic->second == "micro";
+        std::string vcc;
+        for (const auto& b : d->broches)
+          if ((b.type == TypeBroche::AlimEntree || b.type == TypeBroche::AlimSortie) && (minuscules(b.nom) == "vcc" || minuscules(b.nom) == "vdd") && !k.nom(x.uuid, b.numero).empty())
+            vcc = noeudBroche(x, b.numero);
+        for (const auto& b : d->broches) {
+          if (b.type == TypeBroche::AlimEntree || b.type == TypeBroche::AlimSortie || k.nom(x.uuid, b.numero).empty()) continue;
+          const std::string nd = noeudBroche(x, b.numero), base = ref + "_" + b.numero, interne = "cs_" + minuscules(base);
+          if (micro) {
+            el << "V" << base << "d " << interne << "d 0 dc 0 external\n";
+            el << "S" << base << " " << interne << "d " << nd << " " << interne << "c 0 SWBROCHE\n";
+            el << "V" << base << "c " << interne << "c 0 dc 0 external\n";
+            if (!vcc.empty()) {
+              el << "S" << base << "p " << vcc << " " << nd << " " << interne << "p 0 SWTIRAGE\n";
+              el << "V" << base << "p " << interne << "p 0 dc 0 external\n";
+            }
+            modeles.insert("SWBROCHE");
+            modeles.insert("SWTIRAGE");
+          } else if (b.type == TypeBroche::Sortie || b.type == TypeBroche::TroisEtats || b.type == TypeBroche::Bidirectionnelle) {
+            el << "V" << base << "d " << interne << "d 0 dc 0 external\n";
+            el << "R" << base << " " << interne << "d " << nd << " 50\n";
+          } else
+            el << "R" << base << "e " << nd << " 0 1e9\n";
+          liaisonsContinu.push_back({nd, "0"});
+        }
+        noterInstances();
+        poses.insert(ref);
+        continue;
+      }
     }
     // Élément écrit à la main : « XU1 {1} {2} MONMODELE », les numéros de broches remplacés par leurs nœuds
     if (const auto it = x.champs.find("Sim.Modele"); it != x.champs.end() && !it->second.empty()) {
@@ -582,10 +676,49 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
       if (const auto ic = x.champs.find("Sim.IC"); ic != x.champs.end() && !ic->second.empty()) el << " IC=" << ic->second;
       el << "\n";
     } else if (s == "Fusible" || s == "Liaison_reseaux") el << "R" << ref << " " << deux("1", "2") << " 1m\n";
-    else if (s == "Buzzer" || s == "Moteur") el << "R" << ref << " " << deux("1", "2") << " 50\n";
+    else if (s == "Buzzer") el << "R" << ref << " " << deux("1", "2") << " 50\n";
+    else if (s == "Moteur") {
+      // Moteur à courant continu (14.11) : induit, force contre-électromotrice, inertie et frottement ; sa vitesse
+      // (rad/s) est la tension du nœud « w_<repère> »
+      auto champ = [&](const char* cle, double defaut) {
+        const auto it = x.champs.find(cle);
+        return it == x.champs.end() ? defaut : nombreSpice(it->second);
+      };
+      el << "X" << ref << " " << deux("1", "2") << " w_" << minuscules(ref) << " MOTEURCC params: r=" << nb(champ("Sim.R", 2)) << " l=" << nb(champ("Sim.L", 1e-3))
+         << " ke=" << nb(champ("Sim.Ke", 0.01)) << " kt=" << nb(champ("Sim.Kt", 0.01)) << " j=" << nb(champ("Sim.J", 1e-5)) << " b=" << nb(std::max(1e-12, champ("Sim.B", 1e-6)))
+         << " tl=" << nb(champ("Sim.Couple", 0)) << "\n";
+      modeles.insert("MOTEURCC");
+    }
     else if (s == "Bouton" || s == "Interrupteur") {
       const bool ferme = x.champs.count("Sim.Ferme") && x.champs.at("Sim.Ferme") == "1";
-      el << "R" << ref << " " << deux("1", "2") << " " << (ferme ? "1m" : "1e9") << "\n";
+      if (o.continu) {
+        // Simulation continue (14.2) : interrupteur commandé par une source externe, réglée pendant le calcul
+        const std::string commande = "c_" + minuscules(ref);
+        el << "S" << ref << " " << deux("1", "2") << " " << commande << " 0 SWCOMMANDE\n";
+        el << "V" << ref << "_c " << commande << " 0 dc " << (ferme ? "1" : "0") << " external\n";
+        modeles.insert("SWCOMMANDE");
+      } else
+        el << "R" << ref << " " << deux("1", "2") << " " << (ferme ? "1m" : "1e9") << "\n";
+    } else if (s == "Compteur_4bits") {
+      el << "X" << ref;
+      for (const char* p : {"1", "2", "3", "4", "5", "6", "7", "8"}) el << " " << N(p);
+      el << " COMPTEUR4\n";
+      for (const char* p : {"1", "2", "3", "4", "5", "6", "7"}) liaisonsContinu.push_back({N("8"), N(p)});
+      modeles.insert("COMPTEUR4");
+    } else if (s == "Decodeur_7seg") {
+      el << "X" << ref;
+      for (const char* p : {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13"}) el << " " << N(p);
+      el << " DECODEUR7\n";
+      for (const char* p : {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"}) liaisonsContinu.push_back({N("13"), N(p)});
+      modeles.insert("DECODEUR7");
+    } else if (s == "Afficheur_7seg") {
+      const char* segments = "abcdefg";
+      int i = 0;
+      for (const char* p : {"1", "2", "3", "4", "5", "6", "7"}) {
+        el << "D" << ref << "_" << segments[i++] << " " << N(p) << " " << N("8") << " DLED\n";
+        liaisonsContinu.push_back({N(p), N("8")});
+      }
+      modeles.insert("DLED");
     } else if (s == "Potentiometre") {
       const double r = valeurDe(x, 10'000);
       double pos = 0.5;
@@ -635,6 +768,18 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
       std::string v = x.valeur.empty() ? std::string("0") : x.valeur;
       std::string err;
       const std::string vm = minuscules(v);
+      // Source « externe » (14.4) : générateur réglé pendant une simulation continue
+      if (vm == "externe" || vm == "external" || vm.rfind("generateur", 0) == 0 || vm.rfind("générateur", 0) == 0) {
+        if (o.continu) el << "V" << ref << " " << deux("1", "2") << " dc 0 external\n";
+        else {
+          el << "V" << ref << " " << deux("1", "2") << " dc 0\n";
+          n.avertissements.push_back(ref + " : source externe (générateur) à 0 V hors de la simulation continue");
+        }
+        sourcesPositives.insert(N("1"));
+        noterInstances();
+        poses.insert(ref);
+        continue;
+      }
       if (vm.find("pendant") != std::string::npos || vm.find("rampe") != std::string::npos || vm.find("puis") != std::string::npos) {
         if (const std::string p = sourcePwl(v, &err); !p.empty()) v = p;
         else n.erreurs.push_back(ref + " : source non comprise (" + err + ")");
@@ -653,7 +798,7 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
     } else {
       // Mécanique, connecteurs, points de test : sans effet sur le calcul ; un circuit intégré sans modèle est signalé
       const bool silencieux = s.rfind("Conn_", 0) == 0 || s.rfind("Bornier_", 0) == 0 || s == "Trou_fixation" || s == "Trou_fixation_masse" || s == "Entretoise" || s == "Vis" ||
-                              s == "Dissipateur" || s == "Point_test" || s == "Quartz";
+                              s == "Dissipateur" || s == "Point_test" || s == "Quartz" || s == "Instrument";
       if (!silencieux) n.avertissements.push_back(ref + " (" + s + ") écarté : pas de modèle de simulation ; un champ Sim.Modele le donne");
       continue;
     }
@@ -749,6 +894,7 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
   t << "* " << (c.nom.empty() ? std::string("Conception") : c.nom) << " — netlist écrite par Prométhée\n";
   for (const auto& p : parametres) t << ".param " << p.nom << "=" << (p.expression.find_first_of("+-*/()") != std::string::npos ? "{" + p.expression + "}" : p.expression) << "\n";
   t << el.str() << coupures.str() << implicites.str();
+  for (const auto& l : o.elementsEnPlus) t << l << "\n";
   for (const auto& m : modeles) t << modelesFournis().at(m);
   for (const auto& [nom, texte] : modelesArticles) t << texte << (texte.empty() || texte.back() == '\n' ? "" : "\n");
   // Conditions initiales, point de départ, options du moteur
@@ -766,6 +912,11 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
     t << "\n";
   }
   for (const auto& l : directives) t << l << "\n";
+  if (!o.sauvegardes.empty()) {
+    t << (o.continu ? ".save" : ".save all");
+    for (const auto& v : o.sauvegardes) t << " " << v;
+    t << "\n";
+  }
   if (!analyseEcrite) {
     std::string carte = a.carte();
     if (a.type == AnalyseSpice::Type::Transitoire && (o.pasMax > 0 || o.sansPointRepos)) {
@@ -778,6 +929,10 @@ NetlistSpice netlistSpice(const ConceptionElec& c, const AnalyseSpice& a, const 
   n.texte = t.str();
   return n;
 }
+
+std::string sourceCommande(const std::string& reference) { return "v" + minuscules(reference) + "_c"; }
+std::string sourceExterne(const std::string& reference) { return "v" + minuscules(reference); }
+std::string sourceBrocheCosimulee(const std::string& reference, const std::string& numero, char genre) { return "v" + minuscules(reference) + "_" + minuscules(numero) + genre; }
 
 std::string vecteurTension(const NetlistSpice& n, const std::string& reseau) {
   const auto it = n.noeuds.find(reseau);

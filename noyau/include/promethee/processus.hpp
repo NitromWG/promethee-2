@@ -8,6 +8,7 @@
 #include <atomic>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -38,6 +39,30 @@ ResultatProcessus executerProcessus(const std::vector<std::string>& argv, const 
 // d'une fin de ligne ; std::nullopt : la ligne va dans « sortie ». « arret » mis à vrai arrête le programme.
 ResultatProcessus dialoguerProcessus(const std::vector<std::string>& argv, const OptionsProcessus& o,
                                      const std::function<std::optional<std::string>(const std::string& ligne)>& repondre, const std::atomic<bool>* arret = nullptr);
+
+// Programme qui reste lancé et dialogue à la demande (simulateur de logique en pas à pas, GDB en GDB/MI, 15.5 et
+// 15.7) : l'appelant écrit quand il veut et attend la ligne suivante ; la sortie est lue par un fil à part, les
+// erreurs gardées. Arrêté à la destruction.
+class ProcessusInteractif {
+ public:
+  ProcessusInteractif();
+  ~ProcessusInteractif();
+  ProcessusInteractif(const ProcessusInteractif&) = delete;
+  ProcessusInteractif& operator=(const ProcessusInteractif&) = delete;
+  bool demarrer(const std::vector<std::string>& argv, const OptionsProcessus& o = {}, std::string* erreur = nullptr);
+  bool enCours() const;
+  bool ecrire(const std::string& texte);  // tel quel (ajouter la fin de ligne)
+  // Ligne suivante de la sortie standard (sans sa fin de ligne), au plus « delai » secondes ; nullopt : rien venu
+  // ou programme terminé
+  std::optional<std::string> lireLigne(double delai = 10);
+  std::string erreurs() const;
+  void fermerEntree();
+  int arreter();  // tue le programme s'il tourne encore ; rend son code de sortie
+  struct Etat;
+
+ private:
+  std::shared_ptr<Etat> m_etat;
+};
 
 // Chemin complet d'un programme du PATH (« git », « ghdl », « avr-gcc »…), vide s'il n'y est pas
 std::string programmeDuPoste(const std::string& nom);

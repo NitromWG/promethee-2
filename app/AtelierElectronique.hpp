@@ -284,6 +284,13 @@ class AtelierElectronique : public QWidget {
   class PanneauPropositions* propositions();
   class DialogueRequetes* requetes();
   class DialogueConceptionGuidee* conceptionGuidee();
+  // 0.34, lot L14 (Laboratoire034.cpp) : laboratoire de simulation (continue, instruments, logique, symbolique,
+  // réseau, alimentation, mesures), montré sur l'onglet voulu
+  class FenetreLaboratoire* laboratoire(const QString& onglet = {});
+  // 0.34, lot L15 (Embarque034.cpp) : programme, co-simulation du microcontrôleur, organigrammes, HDL, machines à
+  // états, robot, logique programmable ; et la broche d'un composant montrée sur le schéma (écart du programme)
+  class FenetreEmbarque* embarque(const QString& onglet = {});
+  void montrerBroche(const std::string& composant, const std::string& numero);
   void demanderAssistant(const prom::ecad::Violation& v);  // « Demander à l'assistant » sur une violation
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
   void creerEmpreinte(const std::string& composant);
@@ -395,6 +402,8 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandesL10();     // imports des autres logiciels (0.34, ImportsTiers034.cpp)
   void enregistrerCommandesL11();     // calculateurs et modèles de simulation (0.34, OutilsSimulation034.cpp)
   void enregistrerCommandesL13();     // automatisation et assistant (0.34, Automatisation034.cpp)
+  void enregistrerCommandesL14();     // laboratoire de simulation (0.34, Laboratoire034.cpp)
+  void enregistrerCommandesL15();     // programme, logique et machines à états (0.34, Embarque034.cpp)
   QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
   QPointer<class DialogueConversionSerie> m_conversionSerie;
   QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
@@ -447,6 +456,8 @@ class AtelierElectronique : public QWidget {
   QPointer<class QDockWidget> m_dockPython, m_dockAssistant, m_dockPropositions;
   QPointer<class DialogueRequetes> m_requetes;
   QPointer<class DialogueConceptionGuidee> m_conceptionGuidee;
+  QPointer<class FenetreLaboratoire> m_laboratoire;
+  QPointer<class FenetreEmbarque> m_embarque;
   QPointer<class FenetreOutilsConception> m_outilsConception;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;
