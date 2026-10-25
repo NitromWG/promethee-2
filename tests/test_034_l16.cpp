@@ -431,8 +431,9 @@ TEST_CASE("16.10 · réglages de l'établissement lus et appliqués, recueil d'e
   CHECK_FALSE(lireReglagesEtablissement(R"({"profilFabricant": "Fabricant imaginaire"})", &e));
   CHECK(e.find("Fabricant imaginaire") != std::string::npos);
   CHECK_FALSE(lireReglagesEtablissement("{pas du json"));
-  CHECK(resoudreDossier("/opt/promethee", "bibliotheques") == "/opt/promethee/bibliotheques");
-  CHECK(resoudreDossier("/opt/promethee", "/srv/biblio") == "/srv/biblio");
+  // Comparés en chemins : sous Windows, le séparateur rendu est la barre inverse
+  CHECK(std::filesystem::path(resoudreDossier("/opt/promethee", "bibliotheques")) == std::filesystem::path("/opt/promethee/bibliotheques"));
+  CHECK(std::filesystem::path(resoudreDossier("/opt/promethee", "/srv/biblio")) == std::filesystem::path("/srv/biblio"));
   // Recueil : six thèmes, chaque exemple expliqué et prêt à simuler
   std::set<std::string> themes;
   for (const auto& x : recueilExemples()) {
