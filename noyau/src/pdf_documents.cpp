@@ -960,4 +960,136 @@ std::string textePdfSimple(const std::string& pdf) {
   return r;
 }
 
+// ---------- Schéma en PDF ----------
+std::string pdfSchema(const ConceptionElec& c, const OptionsPdfSchema& o) {
+  EcrivainPdf w;
+  const int catalogue = w.reserver(), arbre = w.reserver(), f1 = w.reserver(), info = w.reserver();
+  w.objet(f1, "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>");
+  std::vector<std::size_t> feuilles = o.feuilles;
+  if (feuilles.empty())
+    for (std::size_t i = 0; i < c.feuilles.size(); ++i) feuilles.push_back(i);
+  const std::string encreFil = o.couleurs ? "0 0.45 0.1" : "0 0 0", encreSymbole = o.couleurs ? "0.55 0.1 0.1" : "0 0 0", encreTexte = o.couleurs ? "0.1 0.2 0.5" : "0 0 0";
+  std::vector<int> pages;
+  int numero = 0;
+  for (const std::size_t fi : feuilles) {
+    if (fi >= c.feuilles.size()) continue;
+    ++numero;
+    const Feuille& F = c.feuilles[fi];
+    Boite cadre = cadreFeuille(F.format);
+    if (F.format == "libre" && F.largeurLibre > 0 && F.hauteurLibre > 0) cadre = {0, 0, F.largeurLibre, F.hauteurLibre};
+    const double Wmm = mm(cadre.largeur()), Hmm = mm(cadre.hauteur());
+    auto X = [&](Nm x) { return (mm(x) - mm(cadre.x0)) * PT_PAR_MM; };
+    auto Y = [&](Nm y) { return (Hmm - (mm(y) - mm(cadre.y0))) * PT_PAR_MM; };
+    auto P = [&](Pt q) { return nb(X(q.x)) + " " + nb(Y(q.y)); };
+    std::string s = "1 J 1 j\n";
+    auto texte = [&](Pt q, const std::string& t, double tailleMm, const std::string& encre, double dx = 0, double dy = 0) {
+      if (t.empty()) return;
+      s += encre + " rg BT /F1 " + nb(std::max(4.0, tailleMm * PT_PAR_MM)) + " Tf " + nb(X(q.x) + dx) + " " + nb(Y(q.y) + dy) + " Td " + litteral(t) + " Tj ET\n";
+    };
+    auto ligne = [&](const std::vector<Pt>& pts, bool fermer, bool remplir, const std::string& encre, double epaisseurMm) {
+      if (pts.size() < 2) return;
+      s += encre + " RG " + encre + " rg " + nb(epaisseurMm * PT_PAR_MM) + " w " + P(pts[0]) + " m";
+      for (std::size_t k = 1; k < pts.size(); ++k) s += " " + P(pts[k]) + " l";
+      s += fermer || remplir ? " h" : "";
+      s += remplir ? " B\n" : " S\n";
+    };
+    // Cadre et cartouche
+    const Nm marge = 5 * NM_PAR_MM;
+    ligne({{cadre.x0 + marge, cadre.y0 + marge}, {cadre.x1 - marge, cadre.y0 + marge}, {cadre.x1 - marge, cadre.y1 - marge}, {cadre.x0 + marge, cadre.y1 - marge}}, true, false, "0 0 0", 0.3);
+    {
+      const Nm L = 110 * NM_PAR_MM, Hc = 24 * NM_PAR_MM;
+      const Pt a{cadre.x1 - marge - L, cadre.y1 - marge - Hc}, b{cadre.x1 - marge, cadre.y1 - marge};
+      ligne({a, {b.x, a.y}, b, {a.x, b.y}}, true, false, "0 0 0", 0.3);
+      ligne({{a.x, a.y + Hc / 3}, {b.x, a.y + Hc / 3}}, false, false, "0 0 0", 0.2);
+      ligne({{a.x, a.y + 2 * Hc / 3}, {b.x, a.y + 2 * Hc / 3}}, false, false, "0 0 0", 0.2);
+      const Cartouche& k = c.cartouche;
+      texte({a.x + NM_PAR_MM * 2, a.y + Hc / 3 - NM_PAR_MM * 2}, k.titre.empty() ? c.nom : k.titre, 3.2, "0 0 0");
+      texte({a.x + NM_PAR_MM * 2, a.y + 2 * Hc / 3 - NM_PAR_MM * 2}, (k.societe.empty() ? std::string() : k.societe + " — ") + (k.auteur.empty() ? std::string() : k.auteur), 2.2, "0 0 0");
+      texte({a.x + NM_PAR_MM * 2, b.y - NM_PAR_MM * 2}, "Révision " + k.revision + (k.date.empty() ? std::string() : "  ·  " + k.date) + "  ·  " + F.nom + "  ·  feuille " + std::to_string(numero) + " / " + std::to_string(feuilles.size()), 2.2, "0 0 0");
+    }
+    // Fils et jonctions
+    for (const auto& f : F.fils) ligne({f.a, f.b}, false, false, encreFil, 0.25);
+    for (const auto& j : F.jonctions) ligne(cercle(j.p, NM_PAR_MM / 2), true, true, encreFil, 0.1);
+    for (const auto& n : F.nonConnexions) {
+      const Nm d = NM_PAR_MM;
+      ligne({{n.p.x - d, n.p.y - d}, {n.p.x + d, n.p.y + d}}, false, false, "0 0 0.8", 0.25);
+      ligne({{n.p.x - d, n.p.y + d}, {n.p.x + d, n.p.y - d}}, false, false, "0 0 0.8", 0.25);
+    }
+    // Symboles
+    for (const auto& sp : F.symboles) {
+      const DefSymbole* d = c.symbole(sp.symbole);
+      if (!d) continue;
+      for (const auto& t : d->traces) {
+        if (t.unite != 0 && t.unite != sp.unite) continue;
+        if (t.vue != 0 && t.vue != sp.vue) continue;
+        if (t.forme == Trace::Forme::Texte) {
+          if (!t.points.empty()) texte(transformer(sp, t.points[0]), t.texte, mm(t.taille), encreSymbole);
+          continue;
+        }
+        if (t.forme == Trace::Forme::Image) continue;
+        std::vector<Pt> pts;
+        for (const Pt q : contourTrace(t)) pts.push_back(transformer(sp, q));
+        const bool fermee = t.ferme || t.forme == Trace::Forme::Rectangle || t.forme == Trace::Forme::Cercle || t.forme == Trace::Forme::Ellipse || t.forme == Trace::Forme::CadreTexte;
+        ligne(pts, fermee, t.rempli, encreSymbole, t.epaisseur > 0 ? mm(t.epaisseur) : 0.25);
+        if (t.forme == Trace::Forme::CadreTexte && !t.points.empty()) texte(transformer(sp, t.points[0]), t.texte, mm(t.taille), encreSymbole, 2, -10);
+      }
+      for (const auto& b : brochesPlacees(sp, *d)) {
+        if (b.broche->unite != 0 && b.broche->unite != sp.unite) continue;
+        const Pt dir = b.direction == 0 ? Pt{1, 0} : b.direction == 1 ? Pt{0, 1} : b.direction == 2 ? Pt{-1, 0} : Pt{0, -1};
+        const Pt fin{b.p.x + dir.x * b.broche->longueur, b.p.y + dir.y * b.broche->longueur};
+        ligne({b.p, fin}, false, false, encreSymbole, 0.2);
+        if (d->alimentation) continue;
+        const auto it = sp.numeros.find(b.broche->numero);
+        const std::string numeroBroche = it == sp.numeros.end() ? b.broche->numero : it->second;
+        if (b.broche->numeroVisible && d->broches.size() > 2) texte({(b.p.x + fin.x) / 2, (b.p.y + fin.y) / 2}, numeroBroche, 1.1, encreSymbole, -2, 1.5);
+        if (b.broche->nomVisible && !sp.nomsMasques && b.broche->nom != b.broche->numero && d->broches.size() > 2 && b.broche->nom.rfind("Pin_", 0) != 0)
+          texte(fin, b.broche->nom, 1.2, encreSymbole, dir.x > 0 ? 2 : dir.x < 0 ? -2 - static_cast<double>(b.broche->nom.size()) * 2.6 : -3, dir.y == 0 ? -1.5 : (dir.y > 0 ? -4 : 3));
+      }
+      const ComposantElec* k = sp.composant.empty() ? nullptr : c.composant(sp.composant);
+      if (d->alimentation) {
+        texte(ancrageChamp(sp, *d, false), sp.nomAlim.empty() ? d->nom : sp.nomAlim, 1.4, encreTexte, -4, 2);
+        continue;
+      }
+      if (k) {
+        const bool plusieurs = std::any_of(d->broches.begin(), d->broches.end(), [](const Broche& x) { return x.unite > 1; });
+        texte(ancrageChamp(sp, *d, false), k->reference + (plusieurs ? lettreUnite(sp.unite) : std::string()), 1.5, encreTexte);
+        texte(ancrageChamp(sp, *d, true), k->valeur, 1.3, encreTexte);
+      }
+    }
+    // Étiquettes et textes
+    for (const auto& e : F.etiquettes) {
+      if (e.type != TypeEtiquette::Locale) {
+        const Nm h = 1'200'000, l = static_cast<Nm>(e.texte.size() + 2) * 1'000'000;
+        ligne({e.p, {e.p.x + h, e.p.y - h}, {e.p.x + h + l, e.p.y - h}, {e.p.x + h + l, e.p.y + h}, {e.p.x + h, e.p.y + h}}, true, false, encreTexte, 0.2);
+        texte(e.p, e.texte, 1.4, encreTexte, h / 1e6 * PT_PAR_MM + 3, -1.5);
+      } else
+        texte(e.p, e.texte, 1.4, encreTexte, 0, 2);
+    }
+    for (const auto& t : F.textes) {
+      std::size_t debut = 0;
+      int rang = 0;
+      while (debut <= t.texte.size()) {
+        const std::size_t fin = t.texte.find('\n', debut);
+        texte(t.p, t.texte.substr(debut, fin == std::string::npos ? std::string::npos : fin - debut), mm(t.taille), "0 0 0", 0, -rang * mm(t.taille) * 1.3 * PT_PAR_MM);
+        ++rang;
+        if (fin == std::string::npos) break;
+        debut = fin + 1;
+      }
+    }
+    const int contenu = w.reserver(), page = w.reserver();
+    w.flux(contenu, "", s);
+    w.objet(page, "<< /Type /Page /Parent " + std::to_string(arbre) + " 0 R /MediaBox [0 0 " + nb(Wmm * PT_PAR_MM) + " " + nb(Hmm * PT_PAR_MM) + "] /Resources << /Font << /F1 " +
+                      std::to_string(f1) + " 0 R >> >> /Contents " + std::to_string(contenu) + " 0 R >>");
+    pages.push_back(page);
+  }
+  std::string kids;
+  for (int p : pages) kids += std::to_string(p) + " 0 R ";
+  w.objet(arbre, "<< /Type /Pages /Kids [" + kids + "] /Count " + std::to_string(pages.size()) + " >>");
+  w.objet(catalogue, "<< /Type /Catalog /Pages " + std::to_string(arbre) + " 0 R >>");
+  const MetaPdf meta = metaDepuisCartouche(c);
+  w.objet(info, "<< /Title " + texteUnicode(meta.titre.empty() ? c.nom : meta.titre) + " /Author " + texteUnicode(meta.auteur) + " /Subject " + texteUnicode("Schéma") +
+                    " /Creator " + texteUnicode("Prométhée") + " /Producer " + texteUnicode("Prométhée") + " >>");
+  return w.terminer(catalogue, info);
+}
+
 }  // namespace prom::ecad

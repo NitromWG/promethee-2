@@ -1,4 +1,6 @@
 // Prométhée : jeux de sorties (lot L13). Licence GPL-3.0-only.
+#include "promethee/pdf_documents.hpp"
+#include "promethee/rendu_png.hpp"
 #include "promethee/sorties.hpp"
 #include "promethee/sorties_fabricant.hpp"
 
@@ -86,6 +88,8 @@ const std::vector<std::pair<std::string, std::string>>& sortiesConnues() {
       {"placement-macrofab", "Placement MacroFab (XYRS)"},
       {"recapitulatif", "Récapitulatif de fabrication"},
       {"statistiques", "Statistiques de fabrication (JSON)"},
+      {"rendu", "Rendu de la carte, dessus et dessous (PNG)"},
+      {"schema-pdf", "Schéma en PDF"},
       {"ipc356", "Liste de réseaux IPC-D-356A"},
       {"ipc2581", "IPC-2581"},
       {"netlist", "Liste de réseaux KiCad"},
@@ -165,7 +169,9 @@ std::string dossierDuJeu(const JeuSorties& j, const ConceptionElec& c, const std
 ResultatJeu executerJeu(const ConceptionElec& c0, const JeuSorties& j, const std::string& base, const std::string& projet, const std::string& version,
                         const std::map<std::string, std::string>& variables) {
   ResultatJeu res;
-  const ConceptionElec c = conceptionPourVariante(c0, j.variante);
+  ConceptionElec c = conceptionPourVariante(c0, j.variante);
+  // -D REVISION=C : la révision écrite dans les sorties (cartouche du schéma, attributs des fichiers, statistiques)
+  if (const auto it = variables.find("REVISION"); it != variables.end() && !it->second.empty()) c.cartouche.revision = it->second;
   fs::path cible = cheminFichier(dossierDuJeu(j, c, projet, variables));
   if (cible.is_relative()) cible = cheminFichier(base) / cible;
   cible.make_preferred();  // « sorties/x » écrit avec les séparateurs du système (\ sous Windows)
@@ -266,6 +272,15 @@ ResultatJeu executerJeu(const ConceptionElec& c0, const JeuSorties& j, const std
              ecrirePositions(positions(c, op), g, static_cast<double>(boite(c.circuit.contour.polygone()).largeur()) * 1e-6));
     } else if (s == "statistiques") {
       ecrire(nom + "-statistiques.json", statistiquesJson(statistiquesFabrication(c)));
+    } else if (s == "rendu") {
+      OptionsRendu o;
+      if (const auto it = variables.find("VERNIS"); it != variables.end()) o.vernis = it->second;
+      if (const auto it = variables.find("FINITION"); it != variables.end()) o.finition = it->second;
+      ecrire("Rendu/" + nom + "-dessus.png", pngCarte(c, o));
+      o.dessous = true;
+      ecrire("Rendu/" + nom + "-dessous.png", pngCarte(c, o));
+    } else if (s == "schema-pdf") {
+      ecrire(nom + "-schema.pdf", pdfSchema(c));
     } else if (s == "recapitulatif") {
       // Écrit en dernier : il liste les fichiers du dossier
       continue;
@@ -340,6 +355,15 @@ ResultatJeu executerJeu(const ConceptionElec& c0, const JeuSorties& j, const std
   res.publie = true;
   res.journal.push_back(std::to_string(res.fichiers.size()) + " fichier(s) livrés");
   return res;
+}
+
+JeuSorties jeuDocumentation() {
+  JeuSorties j;
+  j.nom = "Documentation";
+  j.dossier = "sorties/{carte}-{revision}-documentation";
+  j.sorties = {"rendu", "statistiques", "schema-pdf", "nomenclature"};
+  j.controler = false;
+  return j;
 }
 
 JeuSorties jeuJlcpcb() {

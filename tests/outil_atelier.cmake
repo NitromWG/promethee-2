@@ -24,3 +24,23 @@ execute_process(COMMAND ${OUTIL} comparer ${DOSSIER}/ex.prom ${DOSSIER}/fine.pro
 if(NOT r5 EQUAL 0 OR NOT r6 EQUAL 1 OR NOT o6 MATCHES "piste ajouté")
   message(FATAL_ERROR "valider ou comparer : ${r5} ${r6}\n${o5}\n${o6}")
 endif()
+# 13.6 · Machine sans écran : documentation (rendu PNG des deux faces, statistiques JSON, schéma en PDF), révision par -D
+execute_process(COMMAND ${OUTIL} sorties ${DOSSIER}/ex.prom documentation -D REVISION=C RESULT_VARIABLE r7 OUTPUT_VARIABLE o7 ERROR_VARIABLE e7)
+set(doc ${DOSSIER}/sorties/Clignotant_555-C-documentation)
+if(NOT r7 EQUAL 0 OR NOT EXISTS ${doc}/Rendu/Clignotant_555-dessus.png OR NOT EXISTS ${doc}/Rendu/Clignotant_555-dessous.png
+   OR NOT EXISTS ${doc}/Clignotant_555-statistiques.json OR NOT EXISTS ${doc}/Clignotant_555-schema.pdf)
+  message(FATAL_ERROR "Documentation sans écran : ${r7}\n${o7}\n${e7}")
+endif()
+file(READ ${doc}/Rendu/Clignotant_555-dessus.png png HEX LIMIT 8)
+file(READ ${doc}/Clignotant_555-schema.pdf pdf LIMIT 8)
+if(NOT png STREQUAL "89504e470d0a1a0a" OR NOT pdf MATCHES "^%PDF")
+  message(FATAL_ERROR "Rendu ou schéma illisible : ${png} ${pdf}")
+endif()
+# 13.4 · Serveur MCP : l'assistant lit et propose ; le projet n'est pas modifié, la proposition attend
+file(SHA256 ${DOSSIER}/ex.prom avant)
+file(WRITE ${DOSSIER}/mcp.jsonl "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"initialize\",\"params\":{\"protocolVersion\":\"2024-11-05\",\"capabilities\":{},\"clientInfo\":{\"name\":\"essai\",\"version\":\"1\"}}}\n{\"jsonrpc\":\"2.0\",\"method\":\"notifications/initialized\"}\n{\"jsonrpc\":\"2.0\",\"id\":2,\"method\":\"tools/list\"}\n{\"jsonrpc\":\"2.0\",\"id\":3,\"method\":\"tools/call\",\"params\":{\"name\":\"proposer\",\"arguments\":{\"methode\":\"composant.valeur\",\"params\":{\"ref\":\"R1\",\"valeur\":\"4k7\"},\"raison\":\"essai\"}}}\n")
+execute_process(COMMAND ${OUTIL} mcp ${DOSSIER}/ex.prom INPUT_FILE ${DOSSIER}/mcp.jsonl RESULT_VARIABLE r8 OUTPUT_VARIABLE o8)
+file(SHA256 ${DOSSIER}/ex.prom apres)
+if(NOT r8 EQUAL 0 OR NOT o8 MATCHES "serverInfo" OR NOT o8 MATCHES "proposer" OR NOT o8 MATCHES "en attente" OR NOT avant STREQUAL apres OR NOT EXISTS ${DOSSIER}/ex.prom.propositions.json)
+  message(FATAL_ERROR "Serveur MCP : ${r8}\n${o8}")
+endif()

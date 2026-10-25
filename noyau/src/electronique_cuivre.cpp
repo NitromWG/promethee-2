@@ -469,6 +469,9 @@ Remplissages remplirZones(const ConceptionElec& c, const Connectivite& k) {
     }
     if (contourZone.size() < 3) { r[z->uuid] = {}; continue; }
     Polygones base = intersecter({orienter(contourZone)}, interieur);
+    // Zones interdites au cuivre coulé (5.4, 13.14 : bande d'antenne d'un module) : leur région est retirée
+    for (const auto& zr : c.circuit.zonesRegles)
+      if (zr.interditZones && zr.contour.size() >= 3 && (zr.couches == 0 || (zr.couches & bit(z->couche)))) base = soustraire(base, gonfler({orienter(zr.contour)}, MARGE_REMPLISSAGE));
     // Plan partagé (5.25) : la cellule de Voronoi de son réseau parmi les zones de la même partition
     if (!z->partition.empty()) {
       std::vector<Pt> siens, autres;
@@ -1478,6 +1481,10 @@ std::vector<Violation> verifierDRC(const ConceptionElec& c, const Connectivite& 
     for (const auto& p : pp) {
       if (p.reseau != z.reseau || !(p.couches & bit(z.couche)) || !boiteZone.contient(p.pastille.position) || !dedans(contourZone, p.pastille.position)) continue;
       const Pastille& pa = p.pastille;
+      // Raccord réel, comme au remplissage : une pastille raccordée pleine (ou isolée) n'a pas de rayons à compter
+      ConnexionZone cx = pa.connexion;
+      if (cx == ConnexionZone::Heritee) cx = (!z.thermiquesTraversantsSeuls || pa.type == TypePastille::Traversante) ? ConnexionZone::Thermique : ConnexionZone::Pleine;
+      if (cx != ConnexionZone::Thermique) continue;
       const double a = pa.rotation * 3.141592653589793 / 180;
       const double ux = std::cos(a), uy = std::sin(a);
       int rayons = 0;

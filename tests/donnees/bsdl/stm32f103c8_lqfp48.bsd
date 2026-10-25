@@ -1,0 +1,49 @@
+-- Fichier BSDL d'essai écrit pour Prométhée : brochage du STM32F103C8 en boîtier LQFP48, dans la forme d'un fichier
+-- BSDL (IEEE 1149.1-2001). Il ne reprend pas le fichier du fabricant : seules l'entité, la liste des ports et la
+-- chaîne de brochage sont écrites, ce qu'il faut pour lire les broches. Licence GPL-3.0-only (données d'essai).
+
+entity STM32F103_LQFP48 is
+
+  generic (PHYSICAL_PIN_MAP : string := "LQFP48");
+
+  port (
+    BOOT0  : in      bit;
+    JTMS   : in      bit;   -- PA13
+    JTCK   : in      bit;   -- PA14
+    JTDI   : in      bit;   -- PA15
+    JTDO   : out     bit;   -- PB3
+    JNTRST : in      bit;   -- PB4
+    NRST   : inout   bit;
+    PA     : inout   bit_vector (0 to 12);
+    PB0, PB1, PB2, PB5, PB6, PB7, PB8, PB9, PB10, PB11, PB12, PB13, PB14, PB15 : inout bit;
+    PC13, PC14, PC15 : inout bit;
+    PD0, PD1 : inout bit;
+    VBAT   : linkage bit;
+    VDDA   : linkage bit;
+    VSSA   : linkage bit;
+    VDD    : linkage bit_vector (1 to 3);
+    VSS    : linkage bit_vector (1 to 3)
+  );
+
+  use STD_1149_1_2001.all;
+
+  attribute COMPONENT_CONFORMANCE of STM32F103_LQFP48 : entity is "STD_1149_1_2001";
+  attribute PIN_MAP of STM32F103_LQFP48 : entity is PHYSICAL_PIN_MAP;
+
+  constant LQFP48 : PIN_MAP_STRING :=
+    "VBAT : 1, PC13 : 2, PC14 : 3, PC15 : 4, PD0 : 5, PD1 : 6, NRST : 7, " &
+    "VSSA : 8, VDDA : 9, " &
+    "PA : (10, 11, 12, 13, 14, 15, 16, 17, 29, 30, 31, 32, 33), " &
+    "PB0 : 18, PB1 : 19, PB2 : 20, PB10 : 21, PB11 : 22, " &
+    "VSS : (23, 35, 47), VDD : (24, 36, 48), " &
+    "PB12 : 25, PB13 : 26, PB14 : 27, PB15 : 28, " &
+    "JTMS : 34, JTCK : 37, JTDI : 38, JTDO : 39, JNTRST : 40, " &
+    "PB5 : 41, PB6 : 42, PB7 : 43, BOOT0 : 44, PB8 : 45, PB9 : 46";
+
+  attribute TAP_SCAN_IN    of JTDI   : signal is true;
+  attribute TAP_SCAN_MODE  of JTMS   : signal is true;
+  attribute TAP_SCAN_OUT   of JTDO   : signal is true;
+  attribute TAP_SCAN_CLOCK of JTCK   : signal is (10.0e6, BOTH);
+  attribute TAP_SCAN_RESET of JNTRST : signal is true;
+
+end STM32F103_LQFP48;

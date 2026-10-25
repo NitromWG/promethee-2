@@ -199,6 +199,19 @@ RegistreActions::RegistreActions() {
   ajouter("simulation.calculateurs", QStringLiteral("Calculateurs de l’électronique"), P::Atelier, {});
   ajouter("simulation.modele", QStringLiteral("Modèle de simulation du composant"), P::Atelier, {});
   ajouter("outils.conception", QStringLiteral("Outils de conception (variantes, revue, système, essais, intégrité, logique, atelier, exigences)"), P::Atelier, {});
+  // 0.34, lot L13 : automatisation et assistant
+  ajouter("automatisation.ligne", QStringLiteral("Ligne de commande"), P::Atelier, QKeySequence(Qt::CTRL | Qt::Key_Colon));
+  ajouter("automatisation.macro", QStringLiteral("Enregistrer une macro (commandes réussies)"), P::Atelier, {});
+  ajouter("automatisation.rejouer", QStringLiteral("Rejouer une macro"), P::Atelier, {});
+  ajouter("automatisation.python", QStringLiteral("Console Python"), P::Atelier, {});
+  ajouter("assistant.ouvrir", QStringLiteral("Assistant de conception"), P::Atelier, {});
+  ajouter("assistant.expliquer", QStringLiteral("Expliquer ce bloc (assistant)"), P::Atelier, {});
+  ajouter("assistant.propositions", QStringLiteral("Propositions de l’assistant (MCP)"), P::Atelier, {});
+  ajouter("assistant.fiche", QStringLiteral("Interroger une fiche technique"), P::Atelier, {});
+  ajouter("regles.requetes", QStringLiteral("Requêtes sur les objets et règles"), P::Atelier, {});
+  ajouter("conception.guidee", QStringLiteral("Conception guidée par modules"), P::Atelier, {});
+  ajouter("conception.circuitsTypes", QStringLiteral("Circuits types proposés"), P::Atelier, {});
+  ajouter("composant.brochage", QStringLiteral("Composant depuis un brochage (BSDL, tableau de fiche)"), P::Atelier, {});
   ajouter("schema.alimentation.gnd", QStringLiteral("Alimentation GND"), P::Schema, {});
   ajouter("schema.alimentation.5v", QStringLiteral("Alimentation +5V"), P::Schema, {});
   ajouter("schema.alimentation.3v3", QStringLiteral("Alimentation +3V3"), P::Schema, {});
@@ -468,6 +481,18 @@ RegistreActions::RegistreActions() {
       {"simulation.calculateurs", "Calculateurs…", "proprietes", "pistes, vias, isolement, filtres, atténuateurs, couleurs des résistances, autonomie, radiateur"},
       {"simulation.modele", "Modèle SPICE…", "composants", "modèle intégré, tiré de la fiche technique, IBIS ou fichier d’un autre simulateur, rattaché à l’article"},
       {"outils.conception", "Outils…", "proprietes", "variantes et coût, revue, comparaison, système, notes, historique, mise en service, intégrité, logique, atelier, exigences"},
+      {"automatisation.ligne", "Commande", "texte", "chaque action a sa forme écrite, avec complétion et historique ; Ctrl+: y mène"},
+      {"automatisation.macro", "Macro", "repetition-lineaire", "les commandes réussies s’enregistrent, la macro se rejoue d’un coup"},
+      {"automatisation.rejouer", "Rejouer…", "repetition-lineaire", "une macro écrite ou enregistrée, en un seul pas d’annulation"},
+      {"automatisation.python", "Python", "texte", "console et éditeur de scripts : points d’arrêt, pas à pas, courbes"},
+      {"assistant.ouvrir", "Assistant", "aide", "modèle local ou programme du poste ; propositions acceptées une à une"},
+      {"assistant.expliquer", "Expliquer", "aide", "ce que fait le bloc choisi, d’après ses composants et ses réseaux"},
+      {"assistant.propositions", "Propositions", "valider", "ce que propose un assistant relié par MCP, accepté ou refusé une à une"},
+      {"assistant.fiche", "Fiche…", "rapport", "une question sur une fiche technique : la réponse et la page qui la dit"},
+      {"regles.requetes", "Requêtes…", "selection", "objets visés comptés, requête invalide marquée, règle tirée de la requête"},
+      {"conception.guidee", "Guidée…", "pcb", "gabarit, module et interfaces : blocs posés, reliés, placés, routés et vérifiés"},
+      {"conception.circuitsTypes", "Circuits types…", "composants", "découplages, tirages et protections proposés, posés d’un clic"},
+      {"composant.brochage", "Brochage…", "creer-composant", "symbole tiré d’un fichier BSDL ou du tableau de brochage d’une fiche"},
       {"schema.fil", "Fil", "fil", "en équerre, d’une broche à l’autre"},
       {"schema.etiquette", "Étiquette", "etiquette", "relie les fils du même nom sur la feuille"},
       {"schema.etiquetteGlobale", "Étiquette globale", "etiquette", "relie les fils du même nom sur toutes les feuilles"},

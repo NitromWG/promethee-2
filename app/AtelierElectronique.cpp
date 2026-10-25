@@ -3,6 +3,7 @@
 // publication (PublicationElectronique.cpp) ont leurs fichiers (1.15, A1). Licence GPL-3.0-only.
 #include "FilDeFond.hpp"
 #include "AtelierElectronique.hpp"
+#include "Automatisation034.hpp"
 #include <TopoDS_Compound.hxx>
 #include <BRep_Builder.hxx>
 #include "FenetresBibliotheque.hpp"
@@ -179,7 +180,16 @@ AtelierElectronique::AtelierElectronique(Document* doc, QWidget* parent) : QWidg
   m_vues->ajouter(m_3d);
   m_tableauObjets = new TableauObjets(*this);
   m_vues->ajouter(m_tableauObjets, false);
-  m_fenetre->setCentralWidget(m_vues);
+  {  // Ligne de commande sous le canevas (13.8)
+    auto* centre = new QWidget;
+    auto* pile = new QVBoxLayout(centre);
+    pile->setContentsMargins(0, 0, 0, 0);
+    pile->setSpacing(0);
+    pile->addWidget(m_vues, 1);
+    m_ligneCommandes = new LigneCommandes(*this, centre);
+    pile->addWidget(m_ligneCommandes);
+    m_fenetre->setCentralWidget(centre);
+  }
   // Mosaïque : un clic dans la vue d'un autre mode y passe (le ruban suit) ; la sélection croisée y cadre l'objet
   connect(m_vues, &MosaiqueVues::activeDemandee, this, [this](QWidget* v) {
     if (v == m_schema) setMode(Schema);

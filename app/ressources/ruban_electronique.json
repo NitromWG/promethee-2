@@ -21,6 +21,7 @@
         {"titre": "Vérifier", "forme": "grand", "actions": ["schema.erc", "regles.contraintes"]},
         {"titre": "Simuler", "forme": "grand", "actions": ["simulation.ouvrir", "simulation.modele", "simulation.calculateurs"]},
         {"titre": "Outils", "forme": "grand", "actions": ["outils.conception"]},
+        {"titre": "Automatiser", "forme": "grille", "actions": ["automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]},
         {"titre": "Mettre à jour", "forme": "grand", "actions": ["atelier.synchroniser"]},
         {"titre": "Circuit", "forme": "grand", "actions": ["schema.creerCircuit"]},
         {"titre": "Feuille", "forme": "grand", "actions": ["schema.feuilleNouvelle", "schema.feuilleSuivante", "schema.feuillePrecedente", "schema.feuilleSupprimer"]},
@@ -50,7 +51,8 @@
         {"titre": "Grille et unité", "forme": "controle", "actions": ["circuit.grilleUnite"]},
         {"titre": "DRC", "forme": "grand", "actions": ["circuit.drc", "verification.rapport", "regles.contraintes", "regles.signauxSerie", "regles.gabaritInterface", "regles.profilImpedance"]},
         {"titre": "Réseaux", "forme": "grand", "actions": ["vue.reseaux"]},
-        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf", "carte.importerDansCarte", "carte.importerDessin", "carte.exporterDxfCouches", "carte.exporter3D", "carte.idxEnvoyer", "carte.idxRecevoir", "carte.idxHistorique"]}
+        {"titre": "Mécanique", "forme": "grille", "actions": ["carte.modelesDossier", "carte.exporterStep", "carte.contourEsquisse", "boitier.facade", "boitier.impression", "carte.boitierCommerce", "carte.pieceMontee", "carte.exporterIdf", "carte.importerIdf", "carte.importerDansCarte", "carte.importerDessin", "carte.exporterDxfCouches", "carte.exporter3D", "carte.idxEnvoyer", "carte.idxRecevoir", "carte.idxHistorique"]},
+        {"titre": "Automatiser", "forme": "grille", "actions": ["automatisation.ligne", "automatisation.macro", "automatisation.rejouer", "automatisation.python", "assistant.ouvrir", "assistant.expliquer", "assistant.propositions", "assistant.fiche", "regles.requetes", "conception.guidee", "conception.circuitsTypes", "composant.brochage"]}
       ]
     },
     {

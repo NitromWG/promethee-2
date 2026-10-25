@@ -82,6 +82,16 @@ struct Terrain {
       if (x.boite.touche(zone)) obs.push_back(std::move(x));
     }
     bords = c.circuit.contour.aretes();
+    // Zones interdites aux pistes de cette couche (5.4) : obstacles sans réseau
+    for (const auto& z : c.circuit.zonesRegles) {
+      if (!z.interditPistes || z.contour.size() < 3 || (z.couches != 0 && !(z.couches & bit(o.couche)))) continue;
+      Obstacle x;
+      x.genre = Obstacle::Genre::Pastille;
+      x.nom = "la zone interdite aux pistes « " + (z.nom.empty() ? std::string("sans nom") : z.nom) + " »";
+      x.forme = z.contour;
+      x.boite = boite(z.contour);
+      if (x.boite.touche(zone)) obs.push_back(std::move(x));
+    }
   }
   double iso(const std::string& r) const { return static_cast<double>(isolementEntre(c.circuit.regles, o.reseau, r)); }
   // Distance du point (ou du segment) à l'obstacle, moins l'isolement voulu : négative s'il gêne

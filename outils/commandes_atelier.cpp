@@ -13,6 +13,11 @@
 #include <nlohmann/json.hpp>
 
 #include "promethee/api_commandes.hpp"
+#include "promethee/assistant.hpp"
+#include "promethee/assistant_mcp.hpp"
+#include "promethee/brochages.hpp"
+#include "promethee/commandes_texte.hpp"
+#include "promethee/scripts_python.hpp"
 #include "promethee/collaboration.hpp"
 #include "promethee/comparaison.hpp"
 #include "promethee/electronique.hpp"
@@ -168,6 +173,7 @@ int commandeAtelier(const std::vector<std::string>& a) {
     for (const auto& j : ce.jeuxSorties)
       if (j.nom == pos[1]) jeu = j;
     if (!jeu && (pos[1] == "jlcpcb" || pos[1] == "Dossier JLCPCB")) jeu = ecad::jeuJlcpcb();
+    if (!jeu && (pos[1] == "documentation" || pos[1] == "Documentation")) jeu = ecad::jeuDocumentation();
     if (!jeu) {
       std::cerr << "Jeu de sorties « " << pos[1] << " » inconnu de la conception « " << ce.nom << " ».\n";
       return 64;
@@ -178,6 +184,67 @@ int commandeAtelier(const std::vector<std::string>& a) {
     for (const auto& x : r.refus) l.push_back("  refus : " + x);
     return rendre(o, c, {{"jeu", jeu->nom}, {"publie", r.publie}, {"dossier", r.dossier}, {"fichiers", r.fichiers}, {"refus", r.refus}, {"journal", r.journal}},
                   static_cast<int>(r.refus.size()), l);
+  }
+  // ---------- 0.34, lot L13 ----------
+  if (c == "mcp" && pos.size() == 1) return servirMcp(pos[0], std::cin, std::cout);  // serveur MCP sur l'entrée et la sortie
+  if (c == "script" && (pos.size() == 2 || pos.size() == 3)) {
+    // promethee script <projet> <script.py> [sortie.prom] : le script tourne sur le projet, le résultat est écrit à part
+    Projet p = lireProjet(pos[0]);
+    OptionsScript os;
+    os.nom = utf8(cheminFichier(pos[1]).stem());
+    os.sortie = [&](const std::string& l) {
+      if (!o.json) std::cout << l << "\n";
+    };
+    const ResultatScript r = executerScript(p, lireFichier(cheminFichier(pos[1])), os);
+    if (r.reussi && pos.size() == 3) ecrireProjet(p, pos[2]);
+    std::vector<std::string> l;
+    if (!r.erreurs.empty()) l.push_back(r.erreurs);
+    l.push_back(std::to_string(r.requetes) + " requête(s), " + std::to_string(r.modifications) + " modification(s)");
+    J courbes = J::array();
+    for (const auto& k : r.courbes) courbes.push_back({{"nom", k.nom}, {"x", k.x}, {"y", k.y}});
+    return rendre(o, c, {{"reussi", r.reussi}, {"modifications", r.modifications}, {"erreurs", r.erreurs}, {"courbes", courbes}}, r.reussi ? 0 : 1, l);
+  }
+  if (c == "macro" && pos.size() == 3) {
+    // promethee macro <projet> <macro.txt> <sortie.prom> : la macro rejouée en un lot
+    Projet p = lireProjet(pos[0]);
+    std::vector<std::string> erreurs;
+    const ReponseApi r = executerMacro(p, lireMacro(lireFichier(cheminFichier(pos[1]))), &erreurs);
+    if (r.modifie) ecrireProjet(p, pos[2]);
+    return rendre(o, c, {{"modifie", r.modifie}, {"erreurs", erreurs}}, erreurs.empty() ? 0 : 1, erreurs.empty() ? std::vector<std::string>{r.nomPas} : erreurs);
+  }
+  if (c == "bsdl" && pos.size() == 1) {
+    std::string erreur;
+    const auto b = ecad::lireBsdl(lireFichier(cheminFichier(pos[0])), &erreur);
+    if (!b) {
+      std::cerr << erreur << "\n";
+      return 2;
+    }
+    J broches = J::array();
+    std::vector<std::string> l{b->entite + " (" + b->boitier + ") : " + std::to_string(b->broches.size()) + " broches"};
+    for (const auto& x : b->broches) {
+      broches.push_back({{"numero", x.numero}, {"nom", x.nom}, {"direction", x.direction}});
+      l.push_back("  " + x.numero + "  " + x.nom + "  (" + x.direction + ")");
+    }
+    for (const auto& a1 : b->alertes) l.push_back("  alerte : " + a1);
+    return rendre(o, c, {{"entite", b->entite}, {"boitier", b->boitier}, {"broches", broches}, {"alertes", b->alertes}}, static_cast<int>(b->alertes.size() ? 1 : 0), l);
+  }
+  if (c == "fiche" && pos.size() == 2) {
+    // promethee fiche <fiche.pdf> "<question>" : réponse tirée de la fiche, page citée
+    std::string erreur;
+    const auto f = lireFicheTechnique(lireFichier(cheminFichier(pos[0])), utf8(cheminFichier(pos[0]).filename()), &erreur);
+    if (!f) {
+      std::cerr << erreur << "\n";
+      return 2;
+    }
+    const ReponseFiche r = repondreSurFiche(*f, pos[1]);
+    return rendre(o, c, {{"trouvee", r.trouvee}, {"valeur", r.valeur}, {"unite", r.unite}, {"page", r.extrait.page}, {"extrait", r.extrait.passage}, {"texte", r.texte}}, r.trouvee ? 0 : 1, {r.texte});
+  }
+  if (c == "demander" && pos.size() == 2) {
+    // promethee demander <projet> "<question>" : question de simulation confiée à l'assistant
+    const Projet p = lireProjet(pos[0]);
+    const ReponseSimulation r = repondreSimulation(conceptionDe(p, o.conception), pos[1]);
+    return rendre(o, c, {{"ok", r.ok}, {"valeur", r.valeur}, {"unite", r.unite}, {"reseau", r.reseau}, {"texte", r.ok ? r.texte : r.erreur}, {"journal", r.journal}}, r.ok ? 0 : 1,
+                  {r.ok ? r.texte : r.erreur});
   }
   if (c == "cout" && (pos.size() == 2 || pos.size() == 3)) {
     const Projet p = lireProjet(pos[0]);
@@ -327,5 +394,12 @@ void aideAtelier() {
                "  promethee placer <projet.prom> <sortie.prom> [-D GRAINE=n]      placement automatique\n"
                "  promethee api <projet.prom> [sortie.prom]                       requêtes JSON-RPC, une par ligne, sur l'entrée\n"
                "  promethee isolement <projet.prom> <dossier> [-D OUTIL=0.2]      G-code de gravure, perçage, découpe, pochoir\n"
-               "  promethee mise-en-service <projet.prom>                         plan de mise sous tension\n";
+               "  promethee mise-en-service <projet.prom>                         plan de mise sous tension\n"
+               "  promethee sorties <projet.prom> documentation [-D REVISION=C]   rendu PNG, statistiques JSON, schéma PDF, sans écran\n"
+               "  promethee mcp <projet.prom>                                     serveur MCP (l'assistant propose, l'atelier accepte)\n"
+               "  promethee script <projet.prom> <script.py> [sortie.prom]        script Python sur le projet\n"
+               "  promethee macro <projet.prom> <macro.txt> <sortie.prom>         macro rejouée en un lot\n"
+               "  promethee bsdl <fichier.bsd>                                    brochage lu d'un fichier BSDL\n"
+               "  promethee fiche <fiche.pdf> \"question\"                        réponse tirée d'une fiche technique, page citée\n"
+               "  promethee demander <projet.prom> \"question\"                   question de simulation confiée à l'assistant\n";
 }

@@ -2,12 +2,16 @@
 #include "promethee/api_commandes.hpp"
 
 #include <cmath>
+#include <cstdio>
 #include <functional>
 #include <map>
 #include <stdexcept>
 
+#include "promethee/circuit_edition.hpp"
 #include "promethee/modele.hpp"
 #include "promethee/revue_conception.hpp"
+#include "promethee/simulation.hpp"
+#include "promethee/simulation_projet.hpp"
 #include "promethee/variantes.hpp"
 #include "promethee/version.hpp"
 
@@ -57,6 +61,48 @@ J violations(const std::vector<Violation>& v) {
     r.push_back({{"gravite", x.gravite == Gravite::Erreur ? "erreur" : "avertissement"}, {"code", x.code}, {"message", x.message}, {"x", static_cast<double>(x.position.x) * 1e-6},
                  {"y", static_cast<double>(x.position.y) * 1e-6}});
   return r;
+}
+
+// Analyse décrite en JSON : {type: "ac"|"tran"|"op"|"dc", debut, fin, points, pas, duree, source, de, a, increment}
+AnalyseSpice analyseDe(const J& a) {
+  AnalyseSpice r;
+  const J x = a.is_object() && a.contains("analyse") && a["analyse"].is_object() ? a["analyse"] : J::object();
+  const std::string t = texte(x, "type", std::string("ac"));
+  if (t == "ac" || t == "alternatif") {
+    r.type = AnalyseSpice::Type::Alternatif;
+    r.fDebut = nombre(x, "debut", 10.0);
+    r.fFin = nombre(x, "fin", 1e6);
+    r.pointsParDecade = static_cast<int>(nombre(x, "points", 50.0));
+  } else if (t == "tran" || t == "transitoire") {
+    r.type = AnalyseSpice::Type::Transitoire;
+    r.pas = nombre(x, "pas", 1e-5);
+    r.duree = nombre(x, "duree", 1e-2);
+  } else if (t == "dc" || t == "balayage") {
+    r.type = AnalyseSpice::Type::Continu;
+    r.source = texte(x, "source", std::string("V1"));
+    r.dcDebut = nombre(x, "de", 0.0);
+    r.dcFin = nombre(x, "a", 5.0);
+    r.dcPas = nombre(x, "increment", 0.1);
+  } else if (t == "op" || t == "repos") {
+    r.type = AnalyseSpice::Type::PointDeRepos;
+  } else
+    throw ErreurApi(-32602, "analyse inconnue : " + t);
+  return r;
+}
+// Le calcul de ngspice sur la conception (sans la modifier)
+std::pair<ResultatSimulation, NetlistSpice> calculer(const ConceptionElec& c, const AnalyseSpice& an) {
+  if (!ngspiceDisponible()) throw ErreurApi(-32010, "ngspice n'est pas installé sur ce poste");
+  OptionsSimulation o;
+  NetlistSpice n = netlistSpice(c, an, o);
+  if (!n.valide()) throw ErreurApi(-32011, "netlist refusée : " + (n.erreurs.empty() ? std::string("?") : n.erreurs.front()));
+  ResultatSimulation r = simuler(n);
+  if (!r.reussi()) {
+    // Remèdes de convergence essayés dans l'ordre (11.9)
+    EssaiRemedes e = simulerAvecRemedes(c, an, o);
+    if (!e.resultat.reussi()) throw ErreurApi(-32012, "calcul de ngspice en échec : " + analyserEchec(r, n).cause);
+    return {e.resultat, e.netlist};
+  }
+  return {r, n};
 }
 
 using Methode = std::function<J(Projet&, const J&, bool& modifie, std::string& pas)>;
@@ -171,6 +217,98 @@ const std::map<std::string, std::pair<std::string, Methode>>& table() {
                      r.push_back({{"regle", x.regle}, {"gravite", x.gravite}, {"objet", x.objet}, {"message", x.message}, {"correction", x.correction}});
                    return r;
                  }}},
+      // ---------- 0.34 (13.8, 13.9, 13.17) : simulation, format de la carte ----------
+      {"simulation.mesurer", {"mesure par ngspice : {analyse:{type, debut, fin…}, mesure, reseau, parametre?} → {valeur, unite}", [](Projet& p, const J& a, bool&, std::string&) {
+                                const ConceptionElec& c = conception(p, a);
+                                const auto g = mesureDepuisNom(texte(a, "mesure", std::string("coupure")));
+                                if (!g) throw ErreurApi(-32602, "mesure inconnue : " + texte(a, "mesure", std::string()));
+                                const auto [r, n] = calculer(c, analyseDe(a));
+                                const ResultatMesure m = mesurer({*g, texte(a, "reseau"), nombre(a, "parametre", 0.0)}, r, n);
+                                if (!m.valide) throw ErreurApi(-32013, "mesure impossible sur « " + texte(a, "reseau") + " »");
+                                return J{{"valeur", m.valeur}, {"unite", m.unite}, {"nom", m.nom}};
+                              }}},
+      {"simulation.courbe", {"courbe calculée par ngspice : {analyse, expression} → {x, y}", [](Projet& p, const J& a, bool&, std::string&) {
+                               const ConceptionElec& c = conception(p, a);
+                               const auto [r, n] = calculer(c, analyseDe(a));
+                               const CourbeCalculee k = evaluerCourbe(texte(a, "expression"), r, n);
+                               if (!k.valide()) throw ErreurApi(-32013, "expression impossible : " + k.erreur);
+                               return J{{"x", k.x}, {"y", k.complexe ? k.modules() : k.reels()}, {"echelle", r.echelle}};
+                             }}},
+      {"ngspice.commande", {"commande de lecture de ngspice sur le dernier calcul : {commande} (« shell » et l'écriture sont refusées)", [](Projet&, const J& a, bool&, std::string&) {
+                              std::string refus;
+                              const auto lignes = commandeConsole(texte(a, "commande"), &refus);
+                              if (!refus.empty()) throw ErreurApi(-32014, refus);
+                              return J(lignes);
+                            }}},
+      {"carte.contour", {"contour rectangulaire de la carte : {largeur, hauteur, rayon?} (mm)", [](Projet& p, const J& a, bool& m, std::string& pas) {
+                           ConceptionElec& c = conception(p, a);
+                           if (c.verrouillee) throw ErreurApi(-32003, "conception publiée : nouvelle révision nécessaire");
+                           const double L = nombre(a, "largeur"), H = nombre(a, "hauteur"), R = nombre(a, "rayon", 0.0);
+                           if (L <= 0 || H <= 0 || R < 0 || 2 * R > std::min(L, H)) throw ErreurApi(-32602, "dimensions du contour incohérentes");
+                           c.circuit.contour.libre.clear();
+                           c.circuit.contour.largeur = static_cast<Nm>(std::llround(L * 1e6));
+                           c.circuit.contour.hauteur = static_cast<Nm>(std::llround(H * 1e6));
+                           c.circuit.contour.rayon = static_cast<Nm>(std::llround(R * 1e6));
+                           m = true;
+                           pas = "Contour de la carte";
+                           return J(true);
+                         }}},
+      {"carte.trou", {"trou de fixation non métallisé : {x, y, diametre} (mm, depuis le coin haut gauche du contour)", [](Projet& p, const J& a, bool& m, std::string& pas) {
+                        ConceptionElec& c = conception(p, a);
+                        if (c.verrouillee) throw ErreurApi(-32003, "conception publiée : nouvelle révision nécessaire");
+                        const double d = nombre(a, "diametre");
+                        if (d <= 0 || d > 20) throw ErreurApi(-32602, "diamètre attendu (mm)");
+                        char id[48];
+                        std::snprintf(id, sizeof id, "MountingHole_%g", d);
+                        const Pt q{c.circuit.contour.origine.x + static_cast<Nm>(std::llround(nombre(a, "x") * 1e6)), c.circuit.contour.origine.y + static_cast<Nm>(std::llround(nombre(a, "y") * 1e6))};
+                        const std::string u = poserEmpreinteSeule(c, id, q, 0, false, "H");
+                        if (u.empty()) throw ErreurApi(-32602, std::string("trou impossible : ") + id);
+                        m = true;
+                        pas = "Trou de fixation";
+                        const ComposantElec* k = c.composant(u);
+                        return J(k ? k->reference : u);
+                      }}},
+      {"carte.texte", {"texte sur la carte : {texte, x, y, hauteur?, couche?} (mm ; sérigraphie du dessus par défaut)", [](Projet& p, const J& a, bool& m, std::string& pas) {
+                         ConceptionElec& c = conception(p, a);
+                         if (c.verrouillee) throw ErreurApi(-32003, "conception publiée : nouvelle révision nécessaire");
+                         TexteCircuit t;
+                         t.uuid = nouvelUuid();
+                         t.texte = texte(a, "texte");
+                         t.p = {c.circuit.contour.origine.x + static_cast<Nm>(std::llround(nombre(a, "x") * 1e6)), c.circuit.contour.origine.y + static_cast<Nm>(std::llround(nombre(a, "y") * 1e6))};
+                         t.hauteur = static_cast<Nm>(std::llround(nombre(a, "hauteur", 1.0) * 1e6));
+                         const auto couche = coucheDepuisCode(texte(a, "couche", std::string("F.SilkS")));
+                         if (!couche) throw ErreurApi(-32602, "couche inconnue");
+                         t.couche = *couche;
+                         c.circuit.textes.push_back(t);
+                         m = true;
+                         pas = "Texte « " + t.texte + " »";
+                         return J(t.uuid);
+                       }}},
+      {"carte.regles", {"règles de la carte : {isolement?, largeur?, via?, percage?, bord?} (mm)", [](Projet& p, const J& a, bool& m, std::string& pas) {
+                          ConceptionElec& c = conception(p, a);
+                          if (c.verrouillee) throw ErreurApi(-32003, "conception publiée : nouvelle révision nécessaire");
+                          Regles& r = c.circuit.regles;
+                          auto mm = [&](const char* k, Nm& v) {
+                            if (a.contains(k)) v = static_cast<Nm>(std::llround(nombre(a, k) * 1e6));
+                          };
+                          mm("isolement", r.isolement);
+                          mm("largeur", r.largeur);
+                          mm("via", r.viaDiametre);
+                          mm("percage", r.viaPercage);
+                          mm("bord", r.bord);
+                          m = true;
+                          pas = "Règles de la carte";
+                          return J(true);
+                        }}},
+      {"cartouche", {"cartouche : {titre?, societe?, auteur?, revision?, date?, commentaire?}", [](Projet& p, const J& a, bool& m, std::string& pas) {
+                       ConceptionElec& c = conception(p, a);
+                       for (const auto& [k, champ] : std::initializer_list<std::pair<const char*, std::string*>>{{"titre", &c.cartouche.titre}, {"societe", &c.cartouche.societe}, {"auteur", &c.cartouche.auteur},
+                                                                                                          {"revision", &c.cartouche.revision}, {"date", &c.cartouche.date}, {"commentaire", &c.cartouche.commentaire}})
+                         if (a.contains(k)) *champ = texte(a, k);
+                       m = true;
+                       pas = "Cartouche";
+                       return J(true);
+                     }}},
       {"cout", {"coût de la nomenclature : {cartes?, variante?}", [](Projet& p, const J& a, bool&, std::string&) {
                   const CoutNomenclature n = coutNomenclature(conception(p, a), static_cast<int>(nombre(a, "cartes", 1.0)), texte(a, "variante", std::string()));
                   return J{{"total", n.total}, {"parCarte", n.parCarte}, {"devise", n.devise}, {"lignesSansPrix", n.lignesSansPrix}};

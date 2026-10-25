@@ -56,6 +56,7 @@ Proprietes proprietesPiste(const ConceptionElec& c, const Piste& p) {
     if (nom == "genre" || nom == "type") return ValeurExpression{std::string("piste")};
     if (nom == "couche" || nom == "layer") return ValeurExpression{std::string(codeCouche(p.couche))};
     if (nom == "interne") return ValeurExpression{estCuivreInterne(p.couche) ? 1.0 : 0.0};
+    if (nom == "externe") return ValeurExpression{estCuivreInterne(p.couche) ? 0.0 : 1.0};
     if (nom == "largeur" || nom == "width") return ValeurExpression{static_cast<double>(p.largeur)};
     if (nom == "longueur" || nom == "length") return ValeurExpression{longueurPiste(p)};
     if (nom == "region") {

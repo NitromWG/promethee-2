@@ -39,6 +39,9 @@ struct ResultatJeu {
 ResultatJeu executerJeu(const ConceptionElec& c, const JeuSorties& j, const std::string& base, const std::string& projet, const std::string& version,
                         const std::map<std::string, std::string>& variables = {});
 
+// Jeu « Documentation » (13.6) : rendu PNG des deux faces, statistiques JSON, schéma en PDF, nomenclature ; il
+// tourne sur une machine sans écran
+JeuSorties jeuDocumentation();
 // Jeu « Dossier JLCPCB » prêt à l'emploi : Gerber, perçages, placement et nomenclature aux noms attendus, en zip
 JeuSorties jeuJlcpcb();
 

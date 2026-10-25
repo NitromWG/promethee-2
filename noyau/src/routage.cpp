@@ -66,6 +66,9 @@ struct Obstacles {
     if (!dansCarte(a) || !dansCarte(b)) return "le bord de la carte (tracé hors de la matière)";
     for (const auto& [u, v] : bords)
       if (distanceSegments(u, v, a, b) - w < static_cast<double>(R.bord)) return "le bord de la carte";
+    for (const auto& z : c.circuit.zonesRegles)
+      if (z.interditPistes && (z.couches == 0 || (z.couches & bit(L))) && distancePolygoneSegment(z.contour, a, b) - w <= 0)
+        return "la zone interdite aux pistes « " + (z.nom.empty() ? std::string("sans nom") : z.nom) + " »";
     Boite zone;
     zone.etendre(a);
     zone.etendre(b);
@@ -102,6 +105,8 @@ struct Obstacles {
     if (!dansCarte(p)) return true;
     for (const auto& [u, v] : bords)
       if (distancePointSegment(p, u, v) - r < static_cast<double>(R.bord)) return true;
+    for (const auto& z : c.circuit.zonesRegles)
+      if (z.interditVias && distancePolygoneSegment(z.contour, p, p) - r <= 0) return true;
     Boite zone;
     zone.etendre(p);
     zone = zone.gonflee(diametre / 2 + isolementMax + 1'000);

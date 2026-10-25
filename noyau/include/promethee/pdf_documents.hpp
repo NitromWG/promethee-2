@@ -96,4 +96,13 @@ std::string pdfDocument(const DocumentPdf& d);
 // Texte des chaînes affichées d'un PDF écrit par pdfDocument (flux non compressés) : pour les essais et la recherche
 std::string textePdfSimple(const std::string& pdf);
 
+// ---------- Schéma en PDF sans écran (0.34, 13.6 ; AUT-01) ----------
+// Une page par feuille, au format de la feuille : fils, jonctions, symboles (formes, broches, repères, valeurs),
+// étiquettes, textes, cadre et cartouche ; écrit par le noyau, sans Qt, pour la ligne de commande
+struct OptionsPdfSchema {
+  bool couleurs = true;               // fils verts, symboles bruns comme à l'écran ; sinon noir
+  std::vector<std::size_t> feuilles;  // vide : toutes
+};
+std::string pdfSchema(const ConceptionElec& c, const OptionsPdfSchema& o = {});
+
 }  // namespace prom::ecad

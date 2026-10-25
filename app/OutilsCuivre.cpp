@@ -126,10 +126,6 @@ void AtelierElectronique::enregistrerCommandesCuivre() {
     if (!ok || r.trimmed().isEmpty()) return std::nullopt;
     return r.trimmed().toStdString();
   };
-  auto centreCarte = [this]() -> Pt {
-    const ConceptionElec* x = conceptionCourante();
-    return x ? boite(x->circuit.contour.libre.size() >= 3 ? x->circuit.contour.libre : x->circuit.contour.polygone()).centre() : Pt{};
-  };
 
   c["vue.reseaux"] = [this] {
     if (QDockWidget* d = panneau(Panneau::Reseaux)) {

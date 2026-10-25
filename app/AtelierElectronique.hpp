@@ -276,6 +276,15 @@ class AtelierElectronique : public QWidget {
   class FenetreCalculateurs* calculateurs();  // calculateurs de l'électronique, montrés (11.7)
   // Modèle de simulation du composant (du composant choisi s'il n'est pas donné), montré ; nul sans composant
   class DialogueModeleSimulation* modeleSimulation(const std::string& composant = {});
+  // 0.34, lot L13 (Automatisation034.cpp) : ligne de commande sous le canevas, console Python, assistant et
+  // propositions (panneaux ancrés, créés à la première demande), éditeur de requêtes, conception guidée
+  class LigneCommandes* ligneCommandes() const { return m_ligneCommandes; }
+  class ConsolePython* consolePython();
+  class PanneauAssistant* assistant();
+  class PanneauPropositions* propositions();
+  class DialogueRequetes* requetes();
+  class DialogueConceptionGuidee* conceptionGuidee();
+  void demanderAssistant(const prom::ecad::Violation& v);  // « Demander à l'assistant » sur une violation
   void ajouterEmpreintePerso(const prom::ecad::DefEmpreinte& d, const std::string& composant = {});
   void creerEmpreinte(const std::string& composant);
   // Symbole à plusieurs unités : pose l'unité suivante non posée du composant de ce symbole, à côté de lui
@@ -385,6 +394,7 @@ class AtelierElectronique : public QWidget {
   void enregistrerCommandesL8();      // fabrication, signaux, impédance, routage par stratégies (0.34, OutilsFabrication034.cpp)
   void enregistrerCommandesL10();     // imports des autres logiciels (0.34, ImportsTiers034.cpp)
   void enregistrerCommandesL11();     // calculateurs et modèles de simulation (0.34, OutilsSimulation034.cpp)
+  void enregistrerCommandesL13();     // automatisation et assistant (0.34, Automatisation034.cpp)
   QPointer<class DialogueImportBibliotheques> m_importBibliotheques;
   QPointer<class DialogueConversionSerie> m_conversionSerie;
   QPointer<class DialogueNomenclatureEntree> m_nomenclatureEntree;
@@ -433,6 +443,10 @@ class AtelierElectronique : public QWidget {
   QPointer<class FenetreSimulation> m_simulation;
   QPointer<class FenetreCalculateurs> m_calculateurs;
   QPointer<class DialogueModeleSimulation> m_modeleSimulation;
+  class LigneCommandes* m_ligneCommandes = nullptr;
+  QPointer<class QDockWidget> m_dockPython, m_dockAssistant, m_dockPropositions;
+  QPointer<class DialogueRequetes> m_requetes;
+  QPointer<class DialogueConceptionGuidee> m_conceptionGuidee;
   QPointer<class FenetreOutilsConception> m_outilsConception;
   QPointer<class DialogueContourEsquisse> m_contourEsquisse;
   class PanneauEcarts* m_ecarts = nullptr;
