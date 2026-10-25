@@ -151,6 +151,9 @@ int main(int argc, char** argv) {
   {
     bool essais = false;
     for (int i = 1; i < argc; ++i) essais |= std::strncmp(argv[i], "--essais", 8) == 0;
+    // Pendant les essais, les boîtes de fichier sont celles de Qt : les essais les remplissent comme un utilisateur,
+    // ce que la boîte native de Windows ou de macOS ne permet pas
+    if (essais) QCoreApplication::setAttribute(Qt::AA_DontUseNativeDialogs);
     if (!essais && !qEnvironmentVariableIsSet("QT_SCALE_FACTOR")) {
       const auto s = portable::actif() ? std::make_unique<QSettings>(portable::fichierReglages(), QSettings::IniFormat)
                                        : std::make_unique<QSettings>(QStringLiteral("Prométhée"), QStringLiteral("Prométhée"));
