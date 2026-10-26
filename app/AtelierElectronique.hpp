@@ -101,6 +101,7 @@ class AtelierElectronique : public QWidget {
   bool calculEnCours() const { return m_calculEnCours; }
   int constructions3D() const { return m_constructions3D; }  // nombre de constructions de la vue 3D (essais, 9.5)
   struct Resultat;
+  struct EntreeFabrication;  // conception, connectivité et zones d'un calcul complet, prises sur le fil du calcul
   // Actions (aussi pour les essais)
   void annoter(bool tout);
   void mettreAJourCircuit();
@@ -454,7 +455,8 @@ class AtelierElectronique : public QWidget {
   void recalculerSchema();  // connectivité et ERC seules, sur-le-champ ; le circuit attend
   static bool estGrandeCarte(const prom::ecad::ConceptionElec& c);  // au-delà, le calcul complet part en fond
   void lancerCalcul(int niveau = 2);  // niveau 1 : pendant un geste (chevelu et pastilles), sans zones ni DRC
-  void lancerControlesFabrication();  // après un calcul complet, sur un fil à part (8.17)
+  // Après un calcul complet, sur un fil à part (8.17) ; l'entrée vient du fil du calcul (sans elle : copiée ici)
+  void lancerControlesFabrication(std::shared_ptr<const EntreeFabrication> entree = {});
   void arreterControlesFabrication();  // les fils en route s'arrêtent d'eux-mêmes ; ceux qui ont fini sont repris
   void majEtatCalcul();
 

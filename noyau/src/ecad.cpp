@@ -69,13 +69,21 @@ Pt projeteSurSegment(Pt p, Pt a, Pt b) {
   return {a.x + static_cast<Nm>(std::llround(t * dx)), a.y + static_cast<Nm>(std::llround(t * dy))};
 }
 
-double distancePointSegment(Pt p, Pt a, Pt b) {
+namespace {
+// Carré de la distance d'un point à un segment : la racine n'est prise qu'une fois, au bout des boucles de la DRC
+// (std::hypot, exact au dernier bit, coûtait le quart du temps de la DRC d'une grande carte) ; en nanomètres, les
+// carrés restent loin des limites d'un double
+double distance2PointSegment(Pt p, Pt a, Pt b) {
   const double dx = static_cast<double>(b.x - a.x), dy = static_cast<double>(b.y - a.y), l2 = dx * dx + dy * dy;
   const double px = static_cast<double>(p.x - a.x), py = static_cast<double>(p.y - a.y);
-  if (l2 <= 0) return std::hypot(px, py);
+  if (l2 <= 0) return px * px + py * py;
   const double t = std::clamp((px * dx + py * dy) / l2, 0.0, 1.0);
-  return std::hypot(px - t * dx, py - t * dy);
+  const double ex = px - t * dx, ey = py - t * dy;
+  return ex * ex + ey * ey;
 }
+}  // namespace
+
+double distancePointSegment(Pt p, Pt a, Pt b) { return std::sqrt(distance2PointSegment(p, a, b)); }
 
 namespace {
 // Orientation exacte (9.6, R16) : le produit vectoriel en entiers de 128 bits ; le signe seul compte (-1, 0, 1), sans
@@ -101,10 +109,14 @@ bool segmentsSeCoupent(Pt a1, Pt a2, Pt b1, Pt b2) {
   return sur(d1, a1, b1, b2) || sur(d2, a2, b1, b2) || sur(d3, b1, a1, a2) || sur(d4, b2, a1, a2);
 }
 
-double distanceSegments(Pt a1, Pt a2, Pt b1, Pt b2) {
+namespace {
+double distance2Segments(Pt a1, Pt a2, Pt b1, Pt b2) {
   if (segmentsSeCoupent(a1, a2, b1, b2)) return 0;
-  return std::min({distancePointSegment(a1, b1, b2), distancePointSegment(a2, b1, b2), distancePointSegment(b1, a1, a2), distancePointSegment(b2, a1, a2)});
+  return std::min({distance2PointSegment(a1, b1, b2), distance2PointSegment(a2, b1, b2), distance2PointSegment(b1, a1, a2), distance2PointSegment(b2, a1, a2)});
 }
+}  // namespace
+
+double distanceSegments(Pt a1, Pt a2, Pt b1, Pt b2) { return std::sqrt(distance2Segments(a1, a2, b1, b2)); }
 
 // ---------- Polygones (Clipper2, entiers 64 bits : le nanomètre en est l'unité) ----------
 namespace {
@@ -313,12 +325,12 @@ Polygone oblong(Pt a, Pt b, Nm largeur) {
 double distancePolygoneSegment(const Polygone& p, Pt a, Pt b) {
   if (p.size() < 3) return 1e18;
   if (dedans(p, a) || dedans(p, b)) return 0;
-  double d = 1e18;
+  double d2 = 1e36;
   for (std::size_t i = 0; i < p.size(); ++i) {
-    d = std::min(d, distanceSegments(p[i], p[(i + 1) % p.size()], a, b));
-    if (d <= 0) return 0;
+    d2 = std::min(d2, distance2Segments(p[i], p[(i + 1) % p.size()], a, b));
+    if (d2 <= 0) return 0;
   }
-  return d;
+  return std::sqrt(d2);
 }
 
 double distancePolygones(const Polygone& a, const Polygone& b) {

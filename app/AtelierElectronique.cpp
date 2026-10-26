@@ -744,6 +744,11 @@ namespace {
 constexpr std::size_t GRANDE_CARTE = 200;  // empreintes : au-delà, le calcul d'un geste part en fond (9.4)
 }
 
+struct AtelierElectronique::EntreeFabrication {
+  ConceptionElec conception;
+  Connectivite k;
+  Remplissages zones;
+};
 struct AtelierElectronique::Resultat {
   int niveau = 2;
   std::uint64_t generation = 0;
@@ -751,6 +756,9 @@ struct AtelierElectronique::Resultat {
   std::vector<Violation> erc;
   // Écarts schéma ↔ circuit d'une grande carte, comptés sur le fil du calcul (9.2)
   std::optional<std::vector<EcartSynchro>> ecarts;
+  // Entrée des contrôles de fabrication d'un calcul complet, copiée sur le fil du calcul : l'interface ne copie pas
+  // une grande carte, sa connectivité et ses zones au moment d'appliquer le résultat (9.2)
+  std::shared_ptr<const EntreeFabrication> fabrication;
 };
 
 namespace {
@@ -806,16 +814,17 @@ void AtelierElectronique::arreterControlesFabrication() {
 // Contrôles de fabrication (8.17) sur la connectivité et les zones du calcul complet, sur un fil à part et à la
 // priorité minimale : plus d'une seconde sur une carte de 2 000 composants, plus de 100 ms dès 150. Le fil précédent
 // est arrêté s'il tourne encore, sans être attendu (l'interface ne se fige jamais sur lui)
-void AtelierElectronique::lancerControlesFabrication() {
+void AtelierElectronique::lancerControlesFabrication(std::shared_ptr<const EntreeFabrication> entree) {
   arreterControlesFabrication();
   const ConceptionElec* c = conceptionCourante();
   if (!c || c->schemaSeul) return;
+  if (!entree) entree = std::make_shared<const EntreeFabrication>(EntreeFabrication{*c, m_calculs.k, m_calculs.zones});
   FilFabrication f{{}, std::make_shared<std::atomic<bool>>(false), std::make_shared<std::atomic<bool>>(false)};
   const std::uint64_t generation = m_generation;
   QPointer<AtelierElectronique> moi(this);
-  f.fil = std::thread([copie = *c, k = m_calculs.k, zones = m_calculs.zones, generation, moi, arret = f.arret, fini = f.fini] {
+  f.fil = std::thread([entree, generation, moi, arret = f.arret, fini = f.fini] {
     prioriteMinimale();
-    auto b = std::make_shared<BilanFabrication>(controlerFabrication(copie, k, zones, controlesFabricationParDefaut(), arret.get()));
+    auto b = std::make_shared<BilanFabrication>(controlerFabrication(entree->conception, entree->k, entree->zones, controlesFabricationParDefaut(), arret.get()));
     if (!b->interrompu)
       QMetaObject::invokeMethod(qApp, [moi, b, generation] {
         if (!moi || generation != moi->m_generation) return;
@@ -916,10 +925,12 @@ void AtelierElectronique::lancerCalcul(int niveau) {
   const std::uint64_t generation = m_generation;
   QPointer<AtelierElectronique> moi(this);
   auto zones = niveau == 1 ? std::make_shared<Remplissages>(m_calculs.zones) : std::shared_ptr<Remplissages>();
-  m_fil = std::thread([copie = *c, generation, moi, niveau, zones, generationDoc = m_circuit->generationDoc()] {
+  m_fil = std::thread([copie = *c, generation, moi, niveau, zones, generationDoc = m_circuit->generationDoc()]() mutable {
     prioriteDeFond();  // la saisie garde la main pendant la DRC (9.2)
     auto r = std::make_shared<Resultat>(calculerConception(copie, niveau, zones.get(), generationDoc));
     r->generation = generation;
+    // Les contrôles de fabrication qui suivront un calcul complet prennent leur entrée ici, sur le fil du calcul
+    if (niveau == 2 && !copie.schemaSeul) r->fabrication = std::make_shared<const EntreeFabrication>(EntreeFabrication{std::move(copie), r->calculs.k, r->calculs.zones});
     QMetaObject::invokeMethod(qApp, [moi, r] {
       if (!moi) return;
       moi->m_calculEnCours = false;
@@ -957,7 +968,7 @@ void AtelierElectronique::appliquerResultat(Resultat&& r) {
     // La carte dans le boîtier qu'elle pilote (6.4) : hauteur sous le couvercle, collisions
     for (auto& v : prom::verifierCarteDansBoitier(m_doc->projet(), static_cast<std::size_t>(std::max(0, m_conception)))) m_calculs.drc.push_back(std::move(v));
     m_circuitPerime = false;
-    lancerControlesFabrication();
+    lancerControlesFabrication(std::move(r.fabrication));
   }
   m_schema->setConnectivite(&m_calculs.k);
   m_schema->setViolations(&m_erc);
